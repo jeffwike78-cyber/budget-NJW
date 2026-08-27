@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { todayStr } from '../lib/storage';
 import { categorizeWithAI } from '../lib/aiCategorize';
+import { scanReceipt } from '../lib/receiptsClient';
 import TxList from '../components/TxList';
 
 function normalize(desc) {
@@ -20,6 +21,25 @@ export default function Transactions({ budgetState, setBudgetState, transactions
   });
   const [aiBusy, setAiBusy] = useState(false);
   const [aiStatus, setAiStatus] = useState(null);
+  const [scanBusy, setScanBusy] = useState(false);
+  const [scanMsg, setScanMsg] = useState(null);
+  const scanRef = useRef(null);
+
+  async function onScanFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setScanBusy(true);
+    setScanMsg(null);
+    try {
+      const data = await scanReceipt(file);
+      setScanMsg(`Added: ${data.merchant} — $${Number(data.amount).toFixed(2)}. It now counts toward its envelope and will link to the bank charge when it posts.`);
+    } catch (err) {
+      setScanMsg(err.message);
+    } finally {
+      setScanBusy(false);
+      e.target.value = '';
+    }
+  }
 
   function handleDescriptionChange(value) {
     const remembered = budgetState.merchantMemory[normalize(value)];
@@ -137,6 +157,17 @@ export default function Transactions({ budgetState, setBudgetState, transactions
             Add
           </button>
         </form>
+        <div className="ai-actions">
+          <button type="button" className="secondary-btn" onClick={() => scanRef.current?.click()} disabled={scanBusy}>
+            {scanBusy ? 'Reading receipt…' : '📷 Scan a receipt'}
+          </button>
+          <input ref={scanRef} type="file" accept="image/*" capture="environment" hidden onChange={onScanFile} />
+          {scanMsg && <span className="module-note ai-status">{scanMsg}</span>}
+        </div>
+        <p className="module-note">
+          Snap a photo of a receipt and it&apos;s added instantly (counting toward its envelope), then
+          linked to the bank charge automatically when it posts a few days later.
+        </p>
       </section>
 
       {needsReview.length > 0 && (

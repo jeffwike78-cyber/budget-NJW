@@ -45,7 +45,11 @@ export default function PlaidConnectButton({ label = 'Connect a bank', onLinked 
         const res = await fetch('/api/plaid/exchange-token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ public_token, institution_name: metadata?.institution?.name }),
+          body: JSON.stringify({
+            public_token,
+            institution_name: metadata?.institution?.name,
+            account_kind: metadata?.accounts?.[0]?.type,
+          }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || 'Could not finish linking.');

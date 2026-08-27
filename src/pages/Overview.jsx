@@ -55,6 +55,15 @@ export default function Overview({ budgetState, transactions, setView }) {
   const ageStatus = ageOfMoneyStatus(age);
   const agePct = age == null ? 0 : Math.min(100, (age / 45) * 100);
 
+  const creditOwed = budgetState.accounts.filter((a) => a.type === 'credit').reduce((s, a) => s + Number(a.balance || 0), 0);
+  const cashOnHand = budgetState.accounts
+    .filter((a) => a.type === 'checking' || a.type === 'savings')
+    .reduce((s, a) => s + Number(a.balance || 0), 0);
+  const hasCredit = budgetState.accounts.some((a) => a.type === 'credit');
+  const showPayoff = hasCredit || budgetState.settings?.payMode === 'card';
+  const covered = cashOnHand >= creditOwed;
+  const usd = (n) => `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+
   return (
     <>
       <h1 className="page-title">Welcome!</h1>
@@ -76,6 +85,32 @@ export default function Overview({ budgetState, transactions, setView }) {
         </div>
         <p className="module-note aom-advice">{ageOfMoneyAdvice(age)}</p>
       </section>
+
+      {showPayoff && (
+        <section className={`card payoff-card ${covered ? 'payoff-ok' : 'payoff-bad'}`}>
+          <div className="card-header">
+            <h2>Credit card payoff</h2>
+            <span className={`pill ${covered ? 'pill-good' : 'pill-bad'}`}>
+              {covered ? 'Covered' : `Short ${usd(creditOwed - cashOnHand)}`}
+            </span>
+          </div>
+          <div className="payoff-figures">
+            <div className="payoff-figure">
+              <span className="payoff-label">Card balance owed</span>
+              <span className="payoff-value">{usd(creditOwed)}</span>
+            </div>
+            <div className="payoff-figure">
+              <span className="payoff-label">Cash in checking / savings</span>
+              <span className="payoff-value">{usd(cashOnHand)}</span>
+            </div>
+          </div>
+          <p className="module-note">
+            {covered
+              ? 'You have enough cash to pay the card in full this month.'
+              : 'Heads up — set aside more in checking so you can pay the card off in full.'}
+          </p>
+        </section>
+      )}
 
       <div className="overview-grid">
         <section className="card">
