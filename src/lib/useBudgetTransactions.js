@@ -13,7 +13,8 @@ function rowToTx(row) {
     excluded: row.excluded,
     note: row.note,
     business: row.business,
-    deductible: row.deductible,
+    taxCategory: row.tax_category,
+    receiptPath: row.receipt_path,
   };
 }
 
@@ -104,7 +105,7 @@ export function useBudgetTransactions() {
   }
 
   const setBusiness = (id, value) => setFlag(id, 'business', value);
-  const setDeductible = (id, value) => setFlag(id, 'deductible', value);
+  const setTaxCategory = (id, value) => setFlag(id, 'tax_category', value || null);
 
-  return { transactions, loading, addTransaction, recategorize, setExcluded, setBusiness, setDeductible };
+  return { transactions, loading, addTransaction, recategorize, setExcluded, setBusiness, setTaxCategory };
 }

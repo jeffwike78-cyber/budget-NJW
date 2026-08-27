@@ -1227,3 +1227,40 @@ textarea {
   .app-body, .app-main { display: block; margin: 0; padding: 0; }
   .card { box-shadow: none; border: 1px solid #ddd; }
 }
+
+/* ---------- Tax dropdown on transactions ---------- */
+.tx-tax-select {
+  font: inherit;
+  font-size: 12px;
+  min-height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  padding: 2px 6px;
+  max-width: 130px;
+}
+.tax-label-editors { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; }
+.tax-label-editors label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text); }
+.tax-label-editors input {
+  min-height: 38px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font: inherit;
+}
+
+/* ---------- Age of Money ---------- */
+.aom-card { border-left: 4px solid var(--accent); }
+.aom-card.aom-good { border-left-color: var(--good); }
+.aom-card.aom-warn { border-left-color: var(--warn); }
+.aom-card.aom-bad { border-left-color: var(--bad); }
+.aom-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.aom-label { font-size: 13px; color: var(--text); text-transform: uppercase; letter-spacing: 0.05em; }
+.aom-value { font-size: 34px; font-weight: 800; color: var(--text-h); line-height: 1.1; }
+.aom-unit { font-size: 16px; font-weight: 600; color: var(--text); }
+.aom-advice { margin-top: 10px; }
+.aom-bar-good { background: var(--good); }
+.aom-bar-warn { background: var(--warn); }
+.aom-bar-bad { background: var(--bad); }
+.aom-bar-neutral { background: var(--border-strong); }

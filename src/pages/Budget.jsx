@@ -8,7 +8,7 @@ function monthKey(dateStr = todayStr()) {
   return dateStr.slice(0, 7);
 }
 
-export default function Budget({ budgetState, setBudgetState, transactions, recategorize, setExcluded, setBusiness, setDeductible }) {
+export default function Budget({ budgetState, setBudgetState, transactions, recategorize, setExcluded, setTaxCategory }) {
   const [expandedCategories, setExpandedCategories] = useState(() => new Set());
   const [showAdd, setShowAdd] = useState(false);
 
@@ -180,8 +180,8 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
             categories={budgetState.categories}
             onRecategorize={handleRecategorize}
             onToggleExcluded={setExcluded}
-            onToggleBusiness={setBusiness}
-            onToggleDeductible={setDeductible}
+            onSetTaxCategory={setTaxCategory}
+            taxLabels={budgetState.taxLabels}
             showReceiptLookup
           />
         </section>
@@ -275,8 +275,8 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                         categories={budgetState.categories}
                         onRecategorize={handleRecategorize}
                         onToggleExcluded={setExcluded}
-                        onToggleBusiness={setBusiness}
-                        onToggleDeductible={setDeductible}
+                        onSetTaxCategory={setTaxCategory}
+                        taxLabels={budgetState.taxLabels}
                       />
                     )}
                   </div>

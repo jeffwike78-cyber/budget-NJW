@@ -1,36 +1,57 @@
 import { useState } from 'react';
 import { todayStr } from '../lib/storage';
+import { getReceiptUrl } from '../lib/receiptsClient';
+import { TAX_CATEGORIES, DEFAULT_TAX_LABELS, taxLabel } from '../lib/tax';
 
 function money(n) {
   return `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-// Tax report: charitable giving (any envelope in the "Giving" group) plus
-// anything you've explicitly flagged tax-deductible, for the chosen year. Hit
-// Print for a clean copy for your records.
-export default function TaxReport({ budgetState, transactions, setDeductible }) {
+// Year-end tax report, grouped by tax bucket (Charitable, Medical, Business 1,
+// Business 2) with totals and a CSV export to hand to a CPA.
+export default function TaxReport({ budgetState, setBudgetState, transactions, setTaxCategory }) {
   const years = yearsPresent(transactions);
   const [year, setYear] = useState(String(new Date(todayStr()).getFullYear()));
+  const labels = { ...DEFAULT_TAX_LABELS, ...(budgetState.taxLabels || {}) };
 
-  const categoriesById = Object.fromEntries((budgetState.categories || []).map((c) => [c.id, c]));
   const givingIds = new Set((budgetState.categories || []).filter((c) => c.group === 'Giving').map((c) => c.id));
 
-  const included = transactions.filter((t) => {
-    if (t.excluded || t.business) return false;
-    if (Number(t.amount) <= 0) return false; // spending only
-    if (!t.date.startsWith(year)) return false;
-    return t.deductible || givingIds.has(t.categoryId);
-  });
-
-  // Group by category (name), each with a subtotal.
-  const groups = {};
-  for (const t of included) {
-    const cat = categoriesById[t.categoryId];
-    const label = cat ? cat.name : t.deductible ? 'Other deductible' : 'Uncategorized';
-    (groups[label] = groups[label] || []).push(t);
+  const inYear = transactions.filter((t) => !t.excluded && Number(t.amount) > 0 && t.date.startsWith(year));
+  const byCategory = {};
+  for (const key of TAX_CATEGORIES) {
+    byCategory[key] = inYear.filter((t) => t.taxCategory === key).sort((a, b) => a.date.localeCompare(b.date));
   }
-  const groupNames = Object.keys(groups).sort();
-  const grandTotal = included.reduce((s, t) => s + Number(t.amount), 0);
+  const grandTotal = TAX_CATEGORIES.reduce(
+    (sum, key) => sum + byCategory[key].reduce((s, t) => s + Number(t.amount), 0),
+    0
+  );
+
+  function renameLabel(key, value) {
+    setBudgetState((prev) => ({ ...prev, taxLabels: { ...labels, [key]: value } }));
+  }
+
+  // One-click: tag every Giving-envelope transaction this year as Charitable.
+  async function tagGivingAsCharitable() {
+    const targets = inYear.filter((t) => givingIds.has(t.categoryId) && !t.taxCategory);
+    for (const t of targets) await setTaxCategory(t.id, 'charitable');
+  }
+
+  function exportCsv() {
+    const rows = [['Category', 'Date', 'Payee', 'Detail', 'Amount']];
+    for (const key of TAX_CATEGORIES) {
+      for (const t of byCategory[key]) {
+        rows.push([labels[key], t.date, t.description, t.note || '', Number(t.amount).toFixed(2)]);
+      }
+    }
+    const csv = rows.map((r) => r.map(csvCell).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tax-report-${year}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="tax-report">
@@ -47,6 +68,12 @@ export default function TaxReport({ budgetState, transactions, setDeductible }) 
               ))}
             </select>
           </label>
+          <button type="button" className="secondary-btn" onClick={tagGivingAsCharitable}>
+            Tag Giving → Charitable
+          </button>
+          <button type="button" className="secondary-btn" onClick={exportCsv}>
+            Export CSV
+          </button>
           <button type="button" className="primary-btn" onClick={() => window.print()}>
             Print / Save PDF
           </button>
@@ -57,55 +84,92 @@ export default function TaxReport({ budgetState, transactions, setDeductible }) 
 
       <section className="card">
         <div className="card-header">
-          <h2>Charitable giving &amp; deductible expenses</h2>
+          <h2>Summary</h2>
           <span className="pill">{money(grandTotal)} total</span>
         </div>
+        <table className="tax-table">
+          <tbody>
+            {TAX_CATEGORIES.map((key) => {
+              const subtotal = byCategory[key].reduce((s, t) => s + Number(t.amount), 0);
+              return (
+                <tr key={key}>
+                  <td className="tax-desc">{taxLabel(key, labels)}</td>
+                  <td className="tax-amt">{money(subtotal)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
         <p className="module-note no-print">
-          Includes every transaction in a <strong>Giving</strong> envelope plus anything you tagged{' '}
-          <strong>Tax</strong> on the Transactions page. Use the 🔎 button on a transaction to attach the
-          receipt detail, which shows here too.
+          Tag transactions on the Transactions page (the <strong>Tax</strong> dropdown), or use{' '}
+          <strong>Tag Giving → Charitable</strong> to bulk-tag your giving envelopes. Rename the business
+          buckets below.
         </p>
-
-        {included.length === 0 ? (
-          <p className="module-note">Nothing tagged for {year} yet.</p>
-        ) : (
-          groupNames.map((name) => {
-            const rows = groups[name];
-            const subtotal = rows.reduce((s, t) => s + Number(t.amount), 0);
-            return (
-              <div className="tax-group" key={name}>
-                <div className="tax-group-head">
-                  <h3>{name}</h3>
-                  <span className="tax-group-total">{money(subtotal)}</span>
-                </div>
-                <table className="tax-table">
-                  <tbody>
-                    {rows.map((t) => (
-                      <tr key={t.id}>
-                        <td className="tax-date">{t.date}</td>
-                        <td className="tax-desc">
-                          {t.description}
-                          {t.note && <span className="tax-note"> — {t.note}</span>}
-                        </td>
-                        <td className="tax-amt">{money(t.amount)}</td>
-                        {setDeductible && !givingIds.has(t.categoryId) && (
-                          <td className="no-print">
-                            <button type="button" className="link-btn danger" onClick={() => setDeductible(t.id, false)}>
-                              remove
-                            </button>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            );
-          })
-        )}
+        <div className="tax-label-editors no-print">
+          {['business-1', 'business-2'].map((key) => (
+            <label key={key}>
+              {DEFAULT_TAX_LABELS[key]} name
+              <input value={labels[key]} onChange={(e) => renameLabel(key, e.target.value)} />
+            </label>
+          ))}
+        </div>
       </section>
+
+      {TAX_CATEGORIES.map((key) => {
+        const rows = byCategory[key];
+        if (rows.length === 0) return null;
+        const subtotal = rows.reduce((s, t) => s + Number(t.amount), 0);
+        return (
+          <section className="card" key={key}>
+            <div className="card-header">
+              <h2>{taxLabel(key, labels)}</h2>
+              <span className="pill">{money(subtotal)}</span>
+            </div>
+            <table className="tax-table">
+              <tbody>
+                {rows.map((t) => (
+                  <tr key={t.id}>
+                    <td className="tax-date">{t.date}</td>
+                    <td className="tax-desc">
+                      {t.description}
+                      {t.note && <span className="tax-note"> — {t.note}</span>}
+                    </td>
+                    <td className="tax-amt">{money(t.amount)}</td>
+                    <td className="no-print">
+                      {t.receiptPath && (
+                        <button type="button" className="link-btn" onClick={() => openReceipt(t.id)}>
+                          receipt
+                        </button>
+                      )}
+                    </td>
+                    <td className="no-print">
+                      <button type="button" className="link-btn danger" onClick={() => setTaxCategory(t.id, '')}>
+                        remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        );
+      })}
     </div>
   );
+}
+
+async function openReceipt(transactionId) {
+  try {
+    const url = await getReceiptUrl(transactionId);
+    window.open(url, '_blank', 'noopener');
+  } catch {
+    // ignore — button just won't open anything
+  }
+}
+
+function csvCell(value) {
+  const s = String(value ?? '');
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 function yearsPresent(transactions) {

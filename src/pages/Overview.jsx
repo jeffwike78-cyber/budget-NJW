@@ -4,6 +4,7 @@ import { todayStr, todayLabel } from '../lib/storage';
 import { isPayrollDeposit } from '../lib/income';
 import { netSpentByCategory } from '../lib/spending';
 import { monthlyIncomeTotal, computeCategoryBudgets } from '../lib/budgetMath';
+import { ageOfMoney, ageOfMoneyAdvice, ageOfMoneyStatus } from '../lib/ageOfMoney';
 
 function monthKey(dateStr) {
   return dateStr.slice(0, 7);
@@ -50,9 +51,31 @@ export default function Overview({ budgetState, transactions, setView }) {
 
   const recent = transactions.slice(0, 5);
 
+  const age = ageOfMoney(transactions);
+  const ageStatus = ageOfMoneyStatus(age);
+  const agePct = age == null ? 0 : Math.min(100, (age / 45) * 100);
+
   return (
     <>
       <h1 className="page-title">Welcome!</h1>
+
+      <section className={`card aom-card aom-${ageStatus}`}>
+        <div className="aom-top">
+          <div>
+            <div className="aom-label">Age of Money</div>
+            <div className="aom-value">
+              {age == null ? '—' : age} <span className="aom-unit">days</span>
+            </div>
+          </div>
+          <span className={`pill ${ageStatus === 'good' ? 'pill-good' : ageStatus === 'bad' ? 'pill-bad' : 'pill-warn'}`}>
+            Goal: 45+
+          </span>
+        </div>
+        <div className="bar-track">
+          <div className={`bar-fill aom-bar-${ageStatus}`} style={{ width: `${agePct}%` }} />
+        </div>
+        <p className="module-note aom-advice">{ageOfMoneyAdvice(age)}</p>
+      </section>
 
       <div className="overview-grid">
         <section className="card">
