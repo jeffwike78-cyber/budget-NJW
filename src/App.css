@@ -1152,3 +1152,78 @@ textarea {
   margin-top: 2px;
   font-style: italic;
 }
+
+/* ---------- Multi-source income ---------- */
+.income-sources { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.income-source-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.income-name-input {
+  flex: 1 1 160px;
+  min-width: 0;
+  font: inherit;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+}
+.income-source-row select {
+  min-height: 40px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font: inherit;
+  padding: 4px 8px;
+}
+.income-amount { display: inline-flex; align-items: center; gap: 2px; }
+.income-monthly { font-size: 12px; color: var(--text); min-width: 64px; text-align: right; }
+.income-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.income-total { font-weight: 700; color: var(--text-h); }
+
+/* ---------- Transaction tag buttons + pills ---------- */
+.tx-actions { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tx-tag-btn {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-h);
+  cursor: pointer;
+}
+.tx-tag-btn:hover { border-color: var(--accent-border); }
+.tx-tag-btn.active { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent); }
+.tx-tag-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.tx-biz-pill { background: var(--warn-bg); color: var(--warn); margin-left: 6px; }
+.tx-tax-pill { background: var(--accent-bg); color: var(--accent); margin-left: 6px; }
+.tx-row-business { opacity: 0.7; }
+
+/* ---------- Tax report ---------- */
+.tax-report-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.tax-report-controls { display: flex; align-items: center; gap: 12px; }
+.tax-report-controls label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.tax-report-controls select { min-height: 40px; border-radius: 9px; border: 1px solid var(--border-strong); background: var(--surface); font: inherit; padding: 4px 10px; }
+.tax-group { margin-top: 14px; }
+.tax-group-head { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.tax-group-head h3 { margin: 0; font-size: 15px; }
+.tax-group-total { font-weight: 700; color: var(--text-h); }
+.tax-table { width: 100%; border-collapse: collapse; }
+.tax-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; font-size: 14px; }
+.tax-date { white-space: nowrap; color: var(--text); }
+.tax-note { color: var(--accent); }
+.tax-amt { text-align: right; white-space: nowrap; font-weight: 600; }
+.tax-print-title { font-size: 20px; font-weight: 700; margin-bottom: 12px; }
+
+/* ---------- Print ---------- */
+.print-only { display: none; }
+@media print {
+  .no-print, .sidebar, .top-bar, .mobile-tab-bar { display: none !important; }
+  .print-only { display: block; }
+  .app-body, .app-main { display: block; margin: 0; padding: 0; }
+  .card { box-shadow: none; border: 1px solid #ddd; }
+}

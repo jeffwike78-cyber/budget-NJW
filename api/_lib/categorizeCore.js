@@ -26,8 +26,9 @@ Rules:
 - Use only the category ids given in the list.
 - If a transaction is clearly income, a paycheck, or a transfer between the family's own accounts (not real spending), OR you genuinely cannot tell which envelope fits, use the id "needs-review".
 - Prefer a specific envelope over a generic one when the merchant is recognizable (e.g. a grocery store → the groceries envelope).
+- Set "business": true ONLY when a charge is clearly a business or rental-property expense (not a normal household purchase) — the family tracks those elsewhere. When unsure, use false.
 Respond with ONLY a JSON array (no prose, no code fences) of objects shaped exactly:
-[{"id": <the transaction id>, "categoryId": <a category id>, "confidence": <number 0-1>}]`;
+[{"id": <the transaction id>, "categoryId": <a category id>, "confidence": <number 0-1>, "business": <boolean>}]`;
 
   const userMsg = `Envelopes (id: name [group]):\n${categoryList}\n\nTransactions:\n${txList}\n\nReturn the JSON array now.`;
 

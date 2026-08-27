@@ -1,10 +1,11 @@
-import { OverviewIcon, TransactionsIcon, BudgetIcon, SinkingFundsIcon, AccountsIcon } from './icons';
+import { OverviewIcon, TransactionsIcon, BudgetIcon, SinkingFundsIcon, ReportIcon, AccountsIcon } from './icons';
 
 const NAV_ITEMS = [
   { key: 'overview', label: 'Overview', Icon: OverviewIcon },
   { key: 'transactions', label: 'Transactions', Icon: TransactionsIcon },
   { key: 'budget', label: 'Budget', Icon: BudgetIcon },
   { key: 'sinking', label: 'Sinking Funds', Icon: SinkingFundsIcon },
+  { key: 'reports', label: 'Tax Report', Icon: ReportIcon },
   { key: 'accounts', label: 'Accounts', Icon: AccountsIcon },
 ];
 

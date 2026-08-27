@@ -112,10 +112,20 @@ export const DEFAULT_SINKING_FUNDS = [
   { id: 'sf-bluegreen', name: 'Bluegreen Dues', group: 'Recreation / Travel', targetAmount: 1310, frequency: 'annual', nextDueDate: '2027-01-15', balance: 0 },
 ];
 
-// Your take-home pay, used to show how much of your income is left after every
-// envelope is funded. Seeded as a single monthly figure (your ~$11,168/mo
-// take-home). You can change this in the app under Budget → Income.
+// Your income sources. Each lands on its own cadence — add/rename/remove them
+// in the app under Budget → Income. The app sums their monthly-equivalent to
+// show how much of your income is left after every envelope is funded.
+//   frequency: 'weekly' | 'biweekly' | 'semimonthly' | 'monthly' | 'quarterly' | 'annual' | 'one-time'
+export const DEFAULT_INCOME_SOURCES = [
+  { id: 'inc-jeff', name: 'Jeff paycheck', amount: 3767, frequency: 'semimonthly' },
+  { id: 'inc-kari', name: 'Kari FLOW', amount: 900, frequency: 'monthly' },
+  { id: 'inc-wallst', name: '1427 Wall Street (rental)', amount: 1885, frequency: 'monthly' },
+  { id: 'inc-stophlet', name: '1331 Stophlet (rental)', amount: 1500, frequency: 'monthly' },
+];
+
+// Legacy single-income shape, kept only so state saved before multi-source
+// income still reads. New setups use DEFAULT_INCOME_SOURCES above.
 export const DEFAULT_INCOME = {
   paycheckAmount: 11168,
-  frequency: 'monthly', // 'biweekly' | 'monthly'
+  frequency: 'monthly',
 };

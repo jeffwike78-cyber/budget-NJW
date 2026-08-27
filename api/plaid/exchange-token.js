@@ -4,6 +4,8 @@ import { ensureAccount, setPlaidStatus } from '../_lib/appState.js';
 import { syncItem } from '../_lib/syncTransactions.js';
 import { parseBody, plaidErrorMessage } from '../_lib/http.js';
 
+export const config = { maxDuration: 60 };
+
 // Called right after the user finishes the Plaid login popup. Trades the
 // short-lived public_token for a permanent access_token, stores it server-side
 // (in plaid_items, which the browser can't read), creates an account for the

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { findReceipt } from '../lib/findReceipt';
 
-function TxRow({ t, categories, onRecategorize, onToggleExcluded, showReceiptLookup }) {
+function TxRow({ t, categories, onRecategorize, onToggleExcluded, onToggleBusiness, onToggleDeductible, showReceiptLookup }) {
   const [lookupBusy, setLookupBusy] = useState(false);
   const [lookupMsg, setLookupMsg] = useState(null);
 
@@ -10,11 +10,7 @@ function TxRow({ t, categories, onRecategorize, onToggleExcluded, showReceiptLoo
     setLookupMsg(null);
     try {
       const data = await findReceipt(t.id);
-      setLookupMsg(
-        data.found
-          ? `Found: ${data.detail}`
-          : 'No matching receipt found in your connected inboxes.'
-      );
+      setLookupMsg(data.found ? `Found: ${data.detail}` : 'No matching receipt found in your connected inboxes.');
     } catch (err) {
       setLookupMsg(err.message);
     } finally {
@@ -23,11 +19,13 @@ function TxRow({ t, categories, onRecategorize, onToggleExcluded, showReceiptLoo
   }
 
   return (
-    <div className="tx-row">
+    <div className={`tx-row${t.business ? ' tx-row-business' : ''}`}>
       <span className="tx-date">{t.date.slice(5)}</span>
       <span className="tx-desc">
         {t.description}
         {t.source === 'plaid' && <span className="pill tx-source-pill">Synced</span>}
+        {t.business && <span className="pill tx-biz-pill">Business</span>}
+        {t.deductible && <span className="pill tx-tax-pill">Tax</span>}
         {t.note && <span className="tx-note">{t.note}</span>}
         {lookupMsg && <span className="tx-lookup-msg">{lookupMsg}</span>}
       </span>
@@ -46,19 +44,41 @@ function TxRow({ t, categories, onRecategorize, onToggleExcluded, showReceiptLoo
           </option>
         ))}
       </select>
-      {showReceiptLookup && (
-        <button type="button" className="tx-ignore-btn" onClick={lookUp} disabled={lookupBusy} title="Search your connected email for this receipt">
-          {lookupBusy ? '…' : '🔎 Details'}
+      <div className="tx-actions">
+        {showReceiptLookup && (
+          <button type="button" className="tx-tag-btn" onClick={lookUp} disabled={lookupBusy} title="Search your connected email for this receipt">
+            {lookupBusy ? '…' : '🔎'}
+          </button>
+        )}
+        {onToggleBusiness && (
+          <button
+            type="button"
+            className={`tx-tag-btn${t.business ? ' active' : ''}`}
+            onClick={() => onToggleBusiness(t.id, !t.business)}
+            title="Mark as a business/rental expense — excluded from the household budget"
+          >
+            Biz
+          </button>
+        )}
+        {onToggleDeductible && (
+          <button
+            type="button"
+            className={`tx-tag-btn${t.deductible ? ' active' : ''}`}
+            onClick={() => onToggleDeductible(t.id, !t.deductible)}
+            title="Mark as tax-deductible — included in the Tax Report"
+          >
+            Tax
+          </button>
+        )}
+        <button
+          type="button"
+          className="tx-tag-btn"
+          title="Exclude this transaction from category spending totals without deleting it"
+          onClick={() => onToggleExcluded(t.id, !t.excluded)}
+        >
+          {t.excluded ? 'Include' : 'Ignore'}
         </button>
-      )}
-      <button
-        type="button"
-        className="tx-ignore-btn"
-        title="Exclude this transaction from category spending totals without deleting it"
-        onClick={() => onToggleExcluded(t.id, !t.excluded)}
-      >
-        {t.excluded ? 'Include' : 'Ignore'}
-      </button>
+      </div>
     </div>
   );
 }
@@ -71,12 +91,16 @@ export default function TxList({
   categories,
   onRecategorize,
   onToggleExcluded,
+  onToggleBusiness,
+  onToggleDeductible,
   showReceiptLookup = false,
   emptyLabel = 'Nothing here yet.',
 }) {
   const [showIgnored, setShowIgnored] = useState(false);
   const active = transactions.filter((t) => !t.excluded);
   const ignored = transactions.filter((t) => t.excluded);
+
+  const rowProps = { categories, onRecategorize, onToggleExcluded, onToggleBusiness, onToggleDeductible, showReceiptLookup };
 
   if (active.length === 0 && ignored.length === 0) {
     return <p className="module-note">{emptyLabel}</p>;
@@ -87,14 +111,7 @@ export default function TxList({
       {active.length > 0 ? (
         <div className="tx-table">
           {active.map((t) => (
-            <TxRow
-              key={t.id}
-              t={t}
-              categories={categories}
-              onRecategorize={onRecategorize}
-              onToggleExcluded={onToggleExcluded}
-              showReceiptLookup={showReceiptLookup}
-            />
+            <TxRow key={t.id} t={t} {...rowProps} />
           ))}
         </div>
       ) : (
@@ -109,14 +126,7 @@ export default function TxList({
           {showIgnored && (
             <div className="tx-table category-tx-table">
               {ignored.map((t) => (
-                <TxRow
-                  key={t.id}
-                  t={t}
-                  categories={categories}
-                  onRecategorize={onRecategorize}
-                  onToggleExcluded={onToggleExcluded}
-                  showReceiptLookup={showReceiptLookup}
-                />
+                <TxRow key={t.id} t={t} {...rowProps} />
               ))}
             </div>
           )}
