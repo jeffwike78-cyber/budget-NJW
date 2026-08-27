@@ -1120,3 +1120,20 @@ textarea {
   margin: 4px 0 14px;
 }
 .ai-status { margin: 0; }
+
+/* ---------- Plaid bank sync ---------- */
+.bank-list { list-style: none; margin: 4px 0 14px; padding: 0; }
+.bank-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.bank-row:last-child { border-bottom: none; }
+.bank-info { display: flex; flex-direction: column; gap: 2px; }
+.bank-name { font-weight: 600; color: var(--text-h); }
+.bank-synced { font-size: 12px; color: var(--text); }
+.bank-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.plaid-connect { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }

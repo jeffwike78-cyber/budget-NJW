@@ -1,62 +1,71 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
-import { supabase } from '../lib/supabaseClient';
 
-// Chase is an OAuth institution, so completing login sends the browser away
-// and back (see plaid-create-link-token's redirect_uri). The link_token has
-// to survive that round trip, hence sessionStorage rather than plain state —
-// a fresh page load wipes React state but not this. Keyed per target so
-// linking Chase and Schwab in separate tabs/attempts can't clobber each other.
-function linkTokenKey(target) {
-  return `plaid_link_token_${target}`;
-}
+// The link_token has to survive an OAuth round-trip (some banks send the
+// browser away to log in and back), so it's stashed in sessionStorage rather
+// than plain React state, which a page reload would wipe.
+const STORAGE_KEY = 'plaid_link_token';
 
 function isResumingOAuth() {
   return window.location.href.includes('oauth_state_id=');
 }
 
-export default function PlaidConnectButton({ target, label, onLinked }) {
-  const storageKey = linkTokenKey(target);
-  const [linkToken, setLinkToken] = useState(() => (isResumingOAuth() ? sessionStorage.getItem(storageKey) : null));
-  const [status, setStatus] = useState(() => (isResumingOAuth() && sessionStorage.getItem(storageKey) ? 'linking' : 'idle'));
+export default function PlaidConnectButton({ label = 'Connect a bank', onLinked }) {
+  const [linkToken, setLinkToken] = useState(() => (isResumingOAuth() ? sessionStorage.getItem(STORAGE_KEY) : null));
+  const [status, setStatus] = useState(() =>
+    isResumingOAuth() && sessionStorage.getItem(STORAGE_KEY) ? 'linking' : 'idle'
+  );
+  const [error, setError] = useState(null);
 
   async function startConnect() {
     setStatus('loading');
-    const { data, error } = await supabase.functions.invoke('plaid-create-link-token', { body: { target } });
-    if (error || !data?.link_token) {
-      console.error('Failed to create link token:', error);
+    setError(null);
+    try {
+      const res = await fetch('/api/plaid/create-link-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.link_token) throw new Error(data.error || 'Could not start Plaid.');
+      sessionStorage.setItem(STORAGE_KEY, data.link_token);
+      setLinkToken(data.link_token);
+    } catch (err) {
+      setError(err.message);
       setStatus('error');
-      return;
     }
-    sessionStorage.setItem(storageKey, data.link_token);
-    setLinkToken(data.link_token);
   }
 
   const onPlaidSuccess = useCallback(
-    async (public_token) => {
+    async (public_token, metadata) => {
       setStatus('linking');
-      sessionStorage.removeItem(storageKey);
-      const { error } = await supabase.functions.invoke('plaid-exchange-token', { body: { public_token, target } });
-      setLinkToken(null);
-      if (error) {
-        console.error('Failed to exchange token:', error);
+      setError(null);
+      sessionStorage.removeItem(STORAGE_KEY);
+      try {
+        const res = await fetch('/api/plaid/exchange-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ public_token, institution_name: metadata?.institution?.name }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Could not finish linking.');
+        setLinkToken(null);
+        setStatus('idle');
+        onLinked?.(data);
+      } catch (err) {
+        setLinkToken(null);
+        setError(err.message);
         setStatus('error');
-        return;
       }
-      setStatus('idle');
-      onLinked?.();
     },
-    [onLinked, storageKey, target]
+    [onLinked]
   );
 
-  const onPlaidExit = useCallback(
-    (err) => {
-      sessionStorage.removeItem(storageKey);
-      setLinkToken(null);
-      setStatus(err ? 'error' : 'idle');
-    },
-    [storageKey]
-  );
+  const onPlaidExit = useCallback((err) => {
+    sessionStorage.removeItem(STORAGE_KEY);
+    setLinkToken(null);
+    setStatus(err ? 'error' : 'idle');
+  }, []);
 
   const { open, ready } = usePlaidLink({
     token: linkToken,
@@ -69,8 +78,8 @@ export default function PlaidConnectButton({ target, label, onLinked }) {
     if (linkToken && ready) open();
   }, [linkToken, ready, open]);
 
-  // Once handled, drop the oauth_state_id query param so refreshing this page
-  // doesn't try to resume the same (likely already-finished) OAuth flow again.
+  // Once handled, drop the oauth_state_id param so a refresh doesn't try to
+  // resume an already-finished OAuth flow.
   useEffect(() => {
     if (isResumingOAuth() && ready) {
       const url = new URL(window.location.href);
@@ -79,13 +88,26 @@ export default function PlaidConnectButton({ target, label, onLinked }) {
     }
   }, [ready]);
 
-  const idleLabel = label || 'Connect';
   const buttonLabel =
-    status === 'loading' ? 'Connecting…' : status === 'linking' ? 'Finishing up…' : status === 'error' ? 'Try again' : idleLabel;
+    status === 'loading'
+      ? 'Starting…'
+      : status === 'linking'
+      ? 'Finishing…'
+      : status === 'error'
+      ? 'Try again'
+      : label;
 
   return (
-    <button className="secondary-btn" type="button" onClick={startConnect} disabled={status === 'loading' || status === 'linking'}>
-      {buttonLabel}
-    </button>
+    <div className="plaid-connect">
+      <button
+        className="primary-btn"
+        type="button"
+        onClick={startConnect}
+        disabled={status === 'loading' || status === 'linking'}
+      >
+        {buttonLabel}
+      </button>
+      {error && <span className="module-note form-error">{error}</span>}
+    </div>
   );
 }

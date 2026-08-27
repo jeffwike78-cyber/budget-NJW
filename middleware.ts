@@ -5,6 +5,11 @@ export const config = { matcher: '/:path*' };
 // login (see supabase/schema.sql), so the deployed URL + this password are
 // the only things gating access to real financial data.
 export default function middleware(request: Request) {
+  // Plaid calls /api/plaid/webhook directly and has no site password to send,
+  // so that one route is exempt. It only re-pulls from Plaid using tokens
+  // already stored server-side, exposing nothing to a caller.
+  if (new URL(request.url).pathname === '/api/plaid/webhook') return;
+
   const password = process.env.SITE_PASSWORD;
   if (!password) return; // not configured — fail open rather than lock the owner out
 
