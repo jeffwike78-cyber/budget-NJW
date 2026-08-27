@@ -1,20 +1,40 @@
 import { useState } from 'react';
+import { findReceipt } from '../lib/findReceipt';
 
-function TxRow({ t, categories, onRecategorize, onToggleExcluded }) {
+function TxRow({ t, categories, onRecategorize, onToggleExcluded, showReceiptLookup }) {
+  const [lookupBusy, setLookupBusy] = useState(false);
+  const [lookupMsg, setLookupMsg] = useState(null);
+
+  async function lookUp() {
+    setLookupBusy(true);
+    setLookupMsg(null);
+    try {
+      const data = await findReceipt(t.id);
+      setLookupMsg(
+        data.found
+          ? `Found: ${data.detail}`
+          : 'No matching receipt found in your connected inboxes.'
+      );
+    } catch (err) {
+      setLookupMsg(err.message);
+    } finally {
+      setLookupBusy(false);
+    }
+  }
+
   return (
     <div className="tx-row">
       <span className="tx-date">{t.date.slice(5)}</span>
       <span className="tx-desc">
         {t.description}
         {t.source === 'plaid' && <span className="pill tx-source-pill">Synced</span>}
+        {t.note && <span className="tx-note">{t.note}</span>}
+        {lookupMsg && <span className="tx-lookup-msg">{lookupMsg}</span>}
       </span>
       <span className={`tx-amount ${t.amount < 0 ? 'good' : ''}`}>
         {t.amount < 0 ? '+' : '-'}${Math.abs(Number(t.amount)).toFixed(2)}
       </span>
       <select value={t.categoryId || ''} onChange={(e) => onRecategorize(t.id, e.target.value)}>
-        {/* A null categoryId (income deliberately left uncategorized) has no matching
-            option below — without this, the browser silently selects the first real
-            category instead, which looks like a lie about what this transaction is. */}
         {!t.categoryId && (
           <option value="" disabled>
             Uncategorized (income)
@@ -26,6 +46,11 @@ function TxRow({ t, categories, onRecategorize, onToggleExcluded }) {
           </option>
         ))}
       </select>
+      {showReceiptLookup && (
+        <button type="button" className="tx-ignore-btn" onClick={lookUp} disabled={lookupBusy} title="Search your connected email for this receipt">
+          {lookupBusy ? '…' : '🔎 Details'}
+        </button>
+      )}
       <button
         type="button"
         className="tx-ignore-btn"
@@ -41,7 +66,14 @@ function TxRow({ t, categories, onRecategorize, onToggleExcluded }) {
 // Splits any transaction list into what's actually active vs. what's been
 // marked Ignored, so ignored transactions drop into their own collapsed
 // "N ignored" drawer instead of cluttering the main list they came from.
-export default function TxList({ transactions, categories, onRecategorize, onToggleExcluded, emptyLabel = 'Nothing here yet.' }) {
+export default function TxList({
+  transactions,
+  categories,
+  onRecategorize,
+  onToggleExcluded,
+  showReceiptLookup = false,
+  emptyLabel = 'Nothing here yet.',
+}) {
   const [showIgnored, setShowIgnored] = useState(false);
   const active = transactions.filter((t) => !t.excluded);
   const ignored = transactions.filter((t) => t.excluded);
@@ -55,7 +87,14 @@ export default function TxList({ transactions, categories, onRecategorize, onTog
       {active.length > 0 ? (
         <div className="tx-table">
           {active.map((t) => (
-            <TxRow key={t.id} t={t} categories={categories} onRecategorize={onRecategorize} onToggleExcluded={onToggleExcluded} />
+            <TxRow
+              key={t.id}
+              t={t}
+              categories={categories}
+              onRecategorize={onRecategorize}
+              onToggleExcluded={onToggleExcluded}
+              showReceiptLookup={showReceiptLookup}
+            />
           ))}
         </div>
       ) : (
@@ -70,7 +109,14 @@ export default function TxList({ transactions, categories, onRecategorize, onTog
           {showIgnored && (
             <div className="tx-table category-tx-table">
               {ignored.map((t) => (
-                <TxRow key={t.id} t={t} categories={categories} onRecategorize={onRecategorize} onToggleExcluded={onToggleExcluded} />
+                <TxRow
+                  key={t.id}
+                  t={t}
+                  categories={categories}
+                  onRecategorize={onRecategorize}
+                  onToggleExcluded={onToggleExcluded}
+                  showReceiptLookup={showReceiptLookup}
+                />
               ))}
             </div>
           )}
