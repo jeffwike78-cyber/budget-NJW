@@ -65,6 +65,16 @@ export function SinkingFundsIcon(props) {
   );
 }
 
+export function ReportIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M6 2h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" />
+      <path d="M14 2v6h6" />
+      <path d="M8 13h8M8 17h6" />
+    </Icon>
+  );
+}
+
 export function UserIcon(props) {
   return (
     <Icon {...props}>

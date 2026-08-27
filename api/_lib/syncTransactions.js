@@ -1,21 +1,25 @@
 import { categorizeTransactions } from './categorizeCore.js';
+import { lookupReceiptForTx } from './receipts.js';
 import { loadBudget, setAccountBalance, setPlaidStatus } from './appState.js';
 
 // Confidence below this and the transaction lands in "Needs Review" instead of
 // being auto-filed — so only things the AI is unsure about need a human look.
 const CONFIDENCE_THRESHOLD = 0.6;
+// Cap on how many still-unclear transactions we chase receipts for per sync,
+// to bound cost and stay under the function time limit.
+const MAX_RECEIPT_LOOKUPS = 10;
 
-// Decide a category for each new/changed transaction:
+// Decide a category (and business flag) for each new/changed transaction:
 //   1. a merchant the user has corrected before (merchantMemory) → reuse it
 //   2. otherwise ask the AI (one batched call) and take confident answers
 //   3. anything left over → 'needs-review'
-async function assignCategories(supabaseAdmin, changed) {
+async function assignCategories(supabaseAdmin, changed, categories) {
   const budget = await loadBudget(supabaseAdmin);
   const merchantMemory = budget.merchantMemory || {};
-  const categories = (budget.categories || []).filter((c) => c.id !== 'needs-review');
   const validIds = new Set(categories.map((c) => c.id));
 
   const assignments = {};
+  const businessSet = new Set();
   const toAI = [];
   for (const txn of changed) {
     const desc = (txn.merchant_name || txn.name || '').trim();
@@ -35,6 +39,7 @@ async function assignCategories(supabaseAdmin, changed) {
         apiKey: process.env.ANTHROPIC_API_KEY,
       });
       for (const r of results) {
+        if (r?.business) businessSet.add(String(r.id));
         const confident = typeof r?.confidence !== 'number' || r.confidence >= CONFIDENCE_THRESHOLD;
         if (r?.categoryId && r.categoryId !== 'needs-review' && validIds.has(r.categoryId) && confident) {
           assignments[String(r.id)] = r.categoryId;
@@ -45,13 +50,43 @@ async function assignCategories(supabaseAdmin, changed) {
     }
   }
 
-  return assignments; // missing entries fall back to 'needs-review' at upsert time
+  return { assignments, businessSet }; // missing assignment → 'needs-review' at upsert
 }
 
 async function syncBalance(supabaseAdmin, plaid, item) {
   const { data } = await plaid.accountsBalanceGet({ access_token: item.access_token });
   const total = data.accounts.reduce((sum, a) => sum + (a.balances.available ?? a.balances.current ?? 0), 0);
   await setAccountBalance(supabaseAdmin, item.account_id, total);
+}
+
+// After the normal import, chase email receipts for the transactions that
+// landed in Needs Review, so they get filled in without a button press.
+async function autoLookupReceipts(supabaseAdmin, needsReviewPlaidIds, categories) {
+  if (needsReviewPlaidIds.length === 0 || !process.env.ANTHROPIC_API_KEY) return;
+  const { count } = await supabaseAdmin.from('gmail_accounts').select('id', { count: 'exact', head: true });
+  if (!count) return; // no inboxes connected
+
+  const ids = needsReviewPlaidIds.slice(0, MAX_RECEIPT_LOOKUPS);
+  const { data: rows } = await supabaseAdmin
+    .from('budget_transactions')
+    .select('id, date, description, amount')
+    .in('plaid_transaction_id', ids);
+
+  for (const t of rows || []) {
+    try {
+      const r = await lookupReceiptForTx(supabaseAdmin, t, categories);
+      if (!r.found) continue;
+      const update = {};
+      if (r.detail) update.note = String(r.detail).slice(0, 500);
+      if (r.categoryId && categories.some((c) => c.id === r.categoryId)) update.category_id = r.categoryId;
+      if (r.business) update.business = true;
+      if (Object.keys(update).length > 0) {
+        await supabaseAdmin.from('budget_transactions').update(update).eq('id', t.id);
+      }
+    } catch (err) {
+      console.error('auto receipt lookup failed:', err?.message || err);
+    }
+  }
 }
 
 // Pulls whatever changed since the stored cursor (everything, on first run),
@@ -89,21 +124,29 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
     }
 
     const changed = [...added, ...modified];
-    const assignments = await assignCategories(supabaseAdmin, changed);
+    const budget = await loadBudget(supabaseAdmin);
+    const categories = (budget.categories || []).filter((c) => c.id !== 'needs-review');
+    const { assignments, businessSet } = await assignCategories(supabaseAdmin, changed, categories);
 
+    const needsReviewPlaidIds = [];
     for (const txn of changed) {
-      const { error } = await supabaseAdmin.from('budget_transactions').upsert(
-        {
-          plaid_transaction_id: txn.transaction_id,
-          date: txn.date,
-          description: txn.merchant_name || txn.name,
-          amount: txn.amount, // Plaid: positive = money out, matches this app's convention
-          category_id: assignments[txn.transaction_id] || 'needs-review',
-          account_id: item.account_id,
-          source: 'plaid',
-        },
-        { onConflict: 'plaid_transaction_id' }
-      );
+      const categoryId = assignments[txn.transaction_id] || 'needs-review';
+      if (categoryId === 'needs-review') needsReviewPlaidIds.push(txn.transaction_id);
+      const row = {
+        plaid_transaction_id: txn.transaction_id,
+        date: txn.date,
+        description: txn.merchant_name || txn.name,
+        amount: txn.amount, // Plaid: positive = money out, matches this app's convention
+        category_id: categoryId,
+        account_id: item.account_id,
+        source: 'plaid',
+      };
+      // Only set business when detected — never write false, so a re-sync of a
+      // modified transaction can't clear a flag the user set by hand.
+      if (businessSet.has(txn.transaction_id)) row.business = true;
+      const { error } = await supabaseAdmin
+        .from('budget_transactions')
+        .upsert(row, { onConflict: 'plaid_transaction_id' });
       if (error) console.error('Failed to upsert transaction:', error);
     }
 
@@ -121,6 +164,12 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
       await syncBalance(supabaseAdmin, plaid, item);
     } catch (err) {
       console.error('Failed to sync balance:', err?.response?.data ?? err?.message ?? err);
+    }
+
+    try {
+      await autoLookupReceipts(supabaseAdmin, needsReviewPlaidIds, categories);
+    } catch (err) {
+      console.error('Auto receipt lookup phase failed:', err?.message || err);
     }
 
     await setPlaidStatus(supabaseAdmin, itemRowId, { linked: true, lastSyncedAt: new Date().toISOString() });

@@ -3,6 +3,8 @@ import { getSupabaseAdmin } from '../_lib/supabaseAdmin.js';
 import { syncItem } from '../_lib/syncTransactions.js';
 import { parseBody, plaidErrorMessage } from '../_lib/http.js';
 
+export const config = { maxDuration: 60 };
+
 // Manual "Sync now" trigger. Pass { itemId } to refresh one bank, or nothing
 // to refresh every linked bank.
 export default async function handler(req, res) {

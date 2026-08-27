@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { todayStr } from '../lib/storage';
 import { netSpentByCategory } from '../lib/spending';
-import { monthlyIncome, computeCategoryBudgets } from '../lib/budgetMath';
+import { monthlyIncome, monthlyIncomeTotal, sourceMonthly, computeCategoryBudgets, INCOME_FREQUENCIES } from '../lib/budgetMath';
 import TxList from '../components/TxList';
 
 function monthKey(dateStr = todayStr()) {
   return dateStr.slice(0, 7);
 }
 
-export default function Budget({ budgetState, setBudgetState, transactions, recategorize, setExcluded }) {
+export default function Budget({ budgetState, setBudgetState, transactions, recategorize, setExcluded, setBusiness, setDeductible }) {
   const [expandedCategories, setExpandedCategories] = useState(() => new Set());
   const [showAdd, setShowAdd] = useState(false);
 
@@ -25,7 +25,14 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
   const monthTx = transactions.filter((t) => monthKey(t.date) === month);
   const spentByCategory = netSpentByCategory(monthTx);
 
-  const income = monthlyIncome(budgetState.income);
+  // Income sources — migrate the legacy single income into one source the first
+  // time, so nothing is lost for setups saved before multi-source income.
+  const incomeSources =
+    budgetState.incomeSources ||
+    (monthlyIncome(budgetState.income) > 0
+      ? [{ id: 'inc-legacy', name: 'Income', amount: monthlyIncome(budgetState.income), frequency: 'monthly' }]
+      : []);
+  const income = monthlyIncomeTotal({ ...budgetState, incomeSources });
   // Needs Review isn't a real spending category — it's a flag, not something to
   // set a dollar target for — so it's excluded from the budget-bar list.
   const budgetableCategories = budgetState.categories.filter((c) => c.id !== 'needs-review');
@@ -68,8 +75,23 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
     setShowAdd(false);
   }
 
-  function updateIncome(field, value) {
-    setBudgetState((prev) => ({ ...prev, income: { ...prev.income, [field]: value } }));
+  function updateSource(id, patch) {
+    setBudgetState((prev) => ({
+      ...prev,
+      incomeSources: (prev.incomeSources || incomeSources).map((s) => (s.id === id ? { ...s, ...patch } : s)),
+    }));
+  }
+
+  function deleteSource(id) {
+    setBudgetState((prev) => ({
+      ...prev,
+      incomeSources: (prev.incomeSources || incomeSources).filter((s) => s.id !== id),
+    }));
+  }
+
+  function addSource() {
+    const src = { id: `inc-${Date.now()}`, name: '', amount: 0, frequency: 'monthly' };
+    setBudgetState((prev) => ({ ...prev, incomeSources: [...(prev.incomeSources || incomeSources), src] }));
   }
 
   async function handleRecategorize(txId, categoryId) {
@@ -98,26 +120,49 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
             </span>
           )}
         </div>
-        <div className="income-form">
-          <label>
-            Monthly take-home
-            <input
-              type="number"
-              inputMode="decimal"
-              value={budgetState.income?.paycheckAmount ?? 0}
-              onChange={(e) => updateIncome('paycheckAmount', e.target.value)}
-            />
-          </label>
-          <label>
-            How often
-            <select value={budgetState.income?.frequency ?? 'monthly'} onChange={(e) => updateIncome('frequency', e.target.value)}>
-              <option value="monthly">Once a month (total take-home)</option>
-              <option value="biweekly">Every 2 weeks (per paycheck)</option>
-            </select>
-          </label>
+        <div className="income-sources">
+          {incomeSources.map((s) => (
+            <div className="income-source-row" key={s.id}>
+              <input
+                className="income-name-input"
+                placeholder="Source name"
+                value={s.name}
+                onChange={(e) => updateSource(s.id, { name: e.target.value })}
+              />
+              <span className="income-amount">
+                $
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  className="budget-input"
+                  value={s.amount}
+                  onChange={(e) => updateSource(s.id, { amount: e.target.value })}
+                />
+              </span>
+              <select value={s.frequency} onChange={(e) => updateSource(s.id, { frequency: e.target.value })}>
+                {INCOME_FREQUENCIES.map((f) => (
+                  <option key={f.value} value={f.value}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+              <span className="income-monthly">${sourceMonthly(s).toFixed(0)}/mo</span>
+              <button type="button" className="link-btn danger" onClick={() => deleteSource(s.id)}>
+                ✕
+              </button>
+            </div>
+          ))}
+          {incomeSources.length === 0 && <p className="module-note">No income sources yet — add one below.</p>}
+        </div>
+        <div className="income-footer">
+          <button type="button" className="secondary-btn" onClick={addSource}>
+            + Add income source
+          </button>
+          <span className="income-total">Total: ${income.toFixed(0)}/mo</span>
         </div>
         <p className="module-note">
-          This is just used to show how much of your income is left after every envelope is funded.
+          Each source lands on its own cadence; the app sums their monthly-equivalent to show how much
+          is left to budget.
         </p>
       </section>
 
@@ -135,6 +180,8 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
             categories={budgetState.categories}
             onRecategorize={handleRecategorize}
             onToggleExcluded={setExcluded}
+            onToggleBusiness={setBusiness}
+            onToggleDeductible={setDeductible}
             showReceiptLookup
           />
         </section>
@@ -228,6 +275,8 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                         categories={budgetState.categories}
                         onRecategorize={handleRecategorize}
                         onToggleExcluded={setExcluded}
+                        onToggleBusiness={setBusiness}
+                        onToggleDeductible={setDeductible}
                       />
                     )}
                   </div>

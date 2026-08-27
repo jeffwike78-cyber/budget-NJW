@@ -12,6 +12,8 @@ function rowToTx(row) {
     source: row.source,
     excluded: row.excluded,
     note: row.note,
+    business: row.business,
+    deductible: row.deductible,
   };
 }
 
@@ -92,5 +94,17 @@ export function useBudgetTransactions() {
     }
   }
 
-  return { transactions, loading, addTransaction, recategorize, setExcluded };
+  async function setFlag(id, field, value) {
+    try {
+      const { error } = await supabase.from('budget_transactions').update({ [field]: value }).eq('id', id);
+      if (error) console.error(`Failed to update ${field} flag:`, error);
+    } catch (err) {
+      console.error(`Failed to update ${field} flag:`, err);
+    }
+  }
+
+  const setBusiness = (id, value) => setFlag(id, 'business', value);
+  const setDeductible = (id, value) => setFlag(id, 'deductible', value);
+
+  return { transactions, loading, addTransaction, recategorize, setExcluded, setBusiness, setDeductible };
 }

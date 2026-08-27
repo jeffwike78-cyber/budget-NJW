@@ -26,7 +26,7 @@ function isKnownRefund(description) {
 export function netSpentByCategory(transactions) {
   const totals = {};
   for (const t of transactions) {
-    if (t.excluded) continue; // user manually marked this as not real spending
+    if (t.excluded || t.business) continue; // not real household spending (ignored, or a business/rental expense tracked elsewhere)
     const amount = Number(t.amount);
     if (amount > 0) {
       totals[t.categoryId] = (totals[t.categoryId] || 0) + amount;

@@ -7,19 +7,23 @@ import Transactions from './pages/Transactions';
 import Budget from './pages/Budget';
 import SinkingFunds from './pages/SinkingFunds';
 import Accounts from './pages/Accounts';
+import TaxReport from './pages/TaxReport';
 import { useBudgetState } from './lib/useBudgetState';
 import { useBudgetTransactions } from './lib/useBudgetTransactions';
 
 function App() {
   const [view, setView] = useState('overview');
   const [budgetState, setBudgetState, budgetLoading] = useBudgetState();
-  const { transactions, addTransaction, recategorize, setExcluded } = useBudgetTransactions();
+  const { transactions, addTransaction, recategorize, setExcluded, setBusiness, setDeductible } =
+    useBudgetTransactions();
 
   if (budgetLoading) {
     return <div className="loading-screen">Loading your budget…</div>;
   }
 
   const totalBalance = budgetState.accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
+
+  const txActions = { recategorize, setExcluded, setBusiness, setDeductible };
 
   return (
     <div className="app-shell">
@@ -36,8 +40,7 @@ function App() {
               setBudgetState={setBudgetState}
               transactions={transactions}
               addTransaction={addTransaction}
-              recategorize={recategorize}
-              setExcluded={setExcluded}
+              {...txActions}
             />
           )}
           {view === 'budget' && (
@@ -45,12 +48,14 @@ function App() {
               budgetState={budgetState}
               setBudgetState={setBudgetState}
               transactions={transactions}
-              recategorize={recategorize}
-              setExcluded={setExcluded}
+              {...txActions}
             />
           )}
           {view === 'sinking' && (
             <SinkingFunds budgetState={budgetState} setBudgetState={setBudgetState} />
+          )}
+          {view === 'reports' && (
+            <TaxReport budgetState={budgetState} transactions={transactions} {...txActions} />
           )}
           {view === 'accounts' && (
             <Accounts budgetState={budgetState} setBudgetState={setBudgetState} />
