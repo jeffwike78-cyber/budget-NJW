@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { todayStr } from '../lib/storage';
+import { categorizeWithAI } from '../lib/aiCategorize';
 import TxList from '../components/TxList';
 
 function normalize(desc) {
@@ -17,6 +18,8 @@ export default function Transactions({ budgetState, setBudgetState, transactions
     categoryId: budgetState.categories[0].id,
     accountId: budgetState.accounts[0].id,
   });
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiStatus, setAiStatus] = useState(null);
 
   function handleDescriptionChange(value) {
     const remembered = budgetState.merchantMemory[normalize(value)];
@@ -45,6 +48,50 @@ export default function Transactions({ budgetState, setBudgetState, transactions
     await recategorize(txId, categoryId);
     if (tx) {
       setBudgetState((prev) => ({ ...prev, merchantMemory: { ...prev.merchantMemory, [normalize(tx.description)]: categoryId } }));
+    }
+  }
+
+  // Send everything in "Needs Review" to Claude, apply the confident matches,
+  // and remember them so the same merchant is auto-placed next time.
+  async function autoCategorize() {
+    if (needsReview.length === 0 || aiBusy) return;
+    setAiBusy(true);
+    setAiStatus(null);
+    try {
+      const spendingCategories = budgetState.categories.filter((c) => c.id !== 'needs-review');
+      const validIds = new Set(spendingCategories.map((c) => c.id));
+      const results = await categorizeWithAI(needsReview, spendingCategories);
+
+      const memoryUpdates = {};
+      let applied = 0;
+      await Promise.all(
+        results.map(async (r) => {
+          const tx = needsReview.find((t) => String(t.id) === String(r.id));
+          if (!tx) return;
+          if (!r.categoryId || r.categoryId === 'needs-review' || !validIds.has(r.categoryId)) return;
+          if (typeof r.confidence === 'number' && r.confidence < 0.45) return;
+          await recategorize(tx.id, r.categoryId);
+          memoryUpdates[normalize(tx.description)] = r.categoryId;
+          applied += 1;
+        })
+      );
+
+      if (Object.keys(memoryUpdates).length > 0) {
+        setBudgetState((prev) => ({
+          ...prev,
+          merchantMemory: { ...prev.merchantMemory, ...memoryUpdates },
+        }));
+      }
+
+      setAiStatus(
+        applied === 0
+          ? 'The AI reviewed them but wasn’t confident enough to place any — please sort these by hand.'
+          : `The AI sorted ${applied} of ${needsReview.length} into envelopes. Anything still here needs a manual pick.`
+      );
+    } catch (err) {
+      setAiStatus(err.message || 'Something went wrong reaching the AI.');
+    } finally {
+      setAiBusy(false);
     }
   }
 
@@ -99,8 +146,14 @@ export default function Transactions({ budgetState, setBudgetState, transactions
             <span className="pill">{needsReview.length} flagged</span>
           </div>
           <p className="module-note">
-            Paul couldn&apos;t confidently place these — take a look and pick the right category.
+            These couldn&apos;t be placed automatically — let the AI take a pass, or pick a category yourself.
           </p>
+          <div className="ai-actions">
+            <button type="button" className="primary-btn" onClick={autoCategorize} disabled={aiBusy}>
+              {aiBusy ? 'Categorizing…' : '✨ Auto-categorize with AI'}
+            </button>
+            {aiStatus && <span className="module-note ai-status">{aiStatus}</span>}
+          </div>
           <TxList
             transactions={needsReview}
             categories={budgetState.categories}
