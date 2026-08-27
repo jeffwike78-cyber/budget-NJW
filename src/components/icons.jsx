@@ -55,6 +55,16 @@ export function AccountsIcon(props) {
   );
 }
 
+export function SinkingFundsIcon(props) {
+  return (
+    <Icon {...props}>
+      <ellipse cx="12" cy="6" rx="7" ry="3" />
+      <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
+      <path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3" />
+    </Icon>
+  );
+}
+
 export function UserIcon(props) {
   return (
     <Icon {...props}>

@@ -10,15 +10,13 @@ function monthKey(dateStr = todayStr()) {
 
 export default function Budget({ budgetState, setBudgetState, transactions, recategorize, setExcluded }) {
   const [expandedCategories, setExpandedCategories] = useState(() => new Set());
+  const [showAdd, setShowAdd] = useState(false);
 
   function toggleCategory(categoryId) {
     setExpandedCategories((prev) => {
       const next = new Set(prev);
-      if (next.has(categoryId)) {
-        next.delete(categoryId);
-      } else {
-        next.add(categoryId);
-      }
+      if (next.has(categoryId)) next.delete(categoryId);
+      else next.add(categoryId);
       return next;
     });
   }
@@ -28,11 +26,9 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
   const spentByCategory = netSpentByCategory(monthTx);
 
   const income = monthlyIncome(budgetState.income);
-  // Needs Review isn't a real spending category — it's a flag, not something to set a
-  // dollar target for — so it's excluded from the budget-bar list and shown separately.
+  // Needs Review isn't a real spending category — it's a flag, not something to
+  // set a dollar target for — so it's excluded from the budget-bar list.
   const budgetableCategories = budgetState.categories.filter((c) => c.id !== 'needs-review');
-  // Needs Review is for unclear spending, not unclear deposits — money coming in
-  // (amount < 0) never belongs here, even if it somehow got flagged that way.
   const needsReview = transactions.filter((t) => t.categoryId === 'needs-review' && Number(t.amount) > 0);
   const effectiveBudgets = computeCategoryBudgets(budgetableCategories, income);
   const hasRemainderCategory = budgetableCategories.some((c) => c.budgetType === 'remainder');
@@ -40,11 +36,36 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
   const totalSpent = Object.values(spentByCategory).reduce((a, b) => a + b, 0);
   const leftToBudget = income - totalBudgeted;
 
+  // Group the envelopes for display (Giving, Housing, Food…), preserving the
+  // order groups first appear in.
+  const groupOrder = [];
+  const byGroup = {};
+  for (const c of budgetableCategories) {
+    const g = c.group || 'Other';
+    if (!byGroup[g]) {
+      byGroup[g] = [];
+      groupOrder.push(g);
+    }
+    byGroup[g].push(c);
+  }
+
   function updateCategory(categoryId, field, value) {
     setBudgetState((prev) => ({
       ...prev,
       categories: prev.categories.map((c) => (c.id === categoryId ? { ...c, [field]: value } : c)),
     }));
+  }
+
+  function deleteCategory(categoryId) {
+    setBudgetState((prev) => ({
+      ...prev,
+      categories: prev.categories.filter((c) => c.id !== categoryId),
+    }));
+  }
+
+  function addCategory(cat) {
+    setBudgetState((prev) => ({ ...prev, categories: [...prev.categories, cat] }));
+    setShowAdd(false);
   }
 
   function updateIncome(field, value) {
@@ -77,44 +98,27 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
             </span>
           )}
         </div>
-        {budgetState.income?.auto ? (
-          <>
-            <p className="module-note">
-              Auto-detected from your paycheck deposits — average of the last few: <strong>${Number(budgetState.income.paycheckAmount).toFixed(0)}</strong> every 2 weeks.
-            </p>
-            {income > 0 && (
-              <p className="module-note">
-                ≈ ${income.toFixed(0)}/month averaged (26 paychecks a year, not exactly 24, so most months get 2 but some get 3).
-                Transfers you move around for investing (Zelle, Venmo, wires) aren't counted here.
-              </p>
-            )}
-          </>
-        ) : (
-          <>
-            <div className="income-form">
-              <label>
-                Paycheck amount
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={budgetState.income?.paycheckAmount ?? 0}
-                  onChange={(e) => updateIncome('paycheckAmount', e.target.value)}
-                />
-              </label>
-              <label>
-                How often
-                <select value={budgetState.income?.frequency ?? 'biweekly'} onChange={(e) => updateIncome('frequency', e.target.value)}>
-                  <option value="biweekly">Every 2 weeks</option>
-                  <option value="monthly">Once a month</option>
-                </select>
-              </label>
-            </div>
-            <p className="module-note">
-              No payroll deposits detected yet — this will switch to auto-detected once a transaction with "payroll" in the
-              description syncs in.
-            </p>
-          </>
-        )}
+        <div className="income-form">
+          <label>
+            Monthly take-home
+            <input
+              type="number"
+              inputMode="decimal"
+              value={budgetState.income?.paycheckAmount ?? 0}
+              onChange={(e) => updateIncome('paycheckAmount', e.target.value)}
+            />
+          </label>
+          <label>
+            How often
+            <select value={budgetState.income?.frequency ?? 'monthly'} onChange={(e) => updateIncome('frequency', e.target.value)}>
+              <option value="monthly">Once a month (total take-home)</option>
+              <option value="biweekly">Every 2 weeks (per paycheck)</option>
+            </select>
+          </label>
+        </div>
+        <p className="module-note">
+          This is just used to show how much of your income is left after every envelope is funded.
+        </p>
       </section>
 
       {needsReview.length > 0 && (
@@ -124,8 +128,7 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
             <span className="pill">{needsReview.length} flagged</span>
           </div>
           <p className="module-note">
-            Paul couldn&apos;t confidently place these — not a budget line, just sort them into the
-            right category below.
+            These couldn&apos;t be confidently placed — sort each one into the right envelope below.
           </p>
           <TxList
             transactions={needsReview}
@@ -138,86 +141,146 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
 
       <section className="card">
         <div className="card-header">
-          <h2>Category budgets</h2>
-          <span className="pill">{totalBudgeted > 0 ? `$${totalSpent.toFixed(0)} of $${totalBudgeted.toFixed(0)} this month` : 'Set budgets below to get started'}</span>
+          <h2>Envelopes</h2>
+          <span className="pill">
+            {totalBudgeted > 0 ? `$${totalSpent.toFixed(0)} of $${totalBudgeted.toFixed(0)} this month` : 'Set budgets below to get started'}
+          </span>
         </div>
-        <div className="category-bars">
-          {budgetableCategories.map((c) => {
-            const spent = spentByCategory[c.id] || 0;
-            const budget = effectiveBudgets[c.id] || 0;
-            const remaining = budget - spent;
-            const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
-            const over = budget > 0 && spent > budget;
-            const categoryTx = monthTx.filter((t) => t.categoryId === c.id);
-            const isExpanded = expandedCategories.has(c.id);
-            return (
-              <div className="category-row" key={c.id}>
-                <div className="category-row-header">
-                  <span className="category-row-name">{c.name}</span>
-                  <div className="category-type-control">
-                    <select value={c.budgetType} onChange={(e) => updateCategory(c.id, 'budgetType', e.target.value)}>
-                      <option value="fixed">Fixed $</option>
-                      <option value="percent">% of income</option>
-                      <option value="remainder">Whatever's left</option>
-                    </select>
-                    {c.budgetType !== 'remainder' && (
-                      <span className="category-type-value">
-                        {c.budgetType === 'percent' ? null : '$'}
-                        <input
-                          type="number"
-                          className="budget-input"
-                          value={c.budgetValue}
-                          onChange={(e) => updateCategory(c.id, 'budgetValue', e.target.value)}
-                        />
-                        {c.budgetType === 'percent' ? '%' : null}
+
+        {groupOrder.map((group) => (
+          <div className="category-group" key={group}>
+            <h3 className="category-group-title">{group}</h3>
+            <div className="category-bars">
+              {byGroup[group].map((c) => {
+                const spent = spentByCategory[c.id] || 0;
+                const budget = effectiveBudgets[c.id] || 0;
+                const remaining = budget - spent;
+                const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
+                const over = budget > 0 && spent > budget;
+                const categoryTx = monthTx.filter((t) => t.categoryId === c.id);
+                const isExpanded = expandedCategories.has(c.id);
+                return (
+                  <div className="category-row" key={c.id}>
+                    <div className="category-row-header">
+                      <input
+                        className="category-name-input"
+                        value={c.name}
+                        onChange={(e) => updateCategory(c.id, 'name', e.target.value)}
+                      />
+                      <div className="category-type-control">
+                        <select value={c.budgetType} onChange={(e) => updateCategory(c.id, 'budgetType', e.target.value)}>
+                          <option value="fixed">Fixed $</option>
+                          <option value="percent">% of income</option>
+                          <option value="remainder">Whatever's left</option>
+                        </select>
+                        {c.budgetType !== 'remainder' && (
+                          <span className="category-type-value">
+                            {c.budgetType === 'percent' ? null : '$'}
+                            <input
+                              type="number"
+                              className="budget-input"
+                              value={c.budgetValue}
+                              onChange={(e) => updateCategory(c.id, 'budgetValue', e.target.value)}
+                            />
+                            {c.budgetType === 'percent' ? '%' : null}
+                          </span>
+                        )}
+                        <button type="button" className="link-btn danger" onClick={() => deleteCategory(c.id)}>
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="category-row-figures">
+                      <span className="category-figure">
+                        <span className="category-figure-label">Budget</span>
+                        <span className="category-figure-value">${budget.toFixed(0)}</span>
                       </span>
+                      <span className="category-figure">
+                        <span className="category-figure-label">Spent</span>
+                        <span className="category-figure-value">${spent.toFixed(0)}</span>
+                      </span>
+                      <span className={`category-figure ${remaining < 0 ? 'over-budget' : ''}`}>
+                        <span className="category-figure-label">Remaining</span>
+                        <span className="category-figure-value">${remaining.toFixed(0)}</span>
+                      </span>
+                    </div>
+
+                    <div className="bar-track">
+                      <div className={`bar-fill${over ? ' over' : ''}`} style={{ width: `${pct}%` }} />
+                    </div>
+
+                    <button
+                      type="button"
+                      className="category-expand-toggle"
+                      onClick={() => toggleCategory(c.id)}
+                      disabled={categoryTx.length === 0}
+                    >
+                      {categoryTx.length === 0
+                        ? 'No transactions this month'
+                        : `${isExpanded ? 'Hide' : 'Show'} ${categoryTx.length} transaction${categoryTx.length === 1 ? '' : 's'} ${isExpanded ? '▴' : '▾'}`}
+                    </button>
+
+                    {isExpanded && categoryTx.length > 0 && (
+                      <TxList
+                        transactions={categoryTx}
+                        categories={budgetState.categories}
+                        onRecategorize={handleRecategorize}
+                        onToggleExcluded={setExcluded}
+                      />
                     )}
                   </div>
-                </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
 
-                <div className="category-row-figures">
-                  <span className="category-figure">
-                    <span className="category-figure-label">Budget</span>
-                    <span className="category-figure-value">${budget.toFixed(0)}</span>
-                  </span>
-                  <span className="category-figure">
-                    <span className="category-figure-label">Spent</span>
-                    <span className="category-figure-value">${spent.toFixed(0)}</span>
-                  </span>
-                  <span className={`category-figure ${remaining < 0 ? 'over-budget' : ''}`}>
-                    <span className="category-figure-label">Remaining</span>
-                    <span className="category-figure-value">${remaining.toFixed(0)}</span>
-                  </span>
-                </div>
-
-                <div className="bar-track">
-                  <div className={`bar-fill${over ? ' over' : ''}`} style={{ width: `${pct}%` }} />
-                </div>
-
-                <button
-                  type="button"
-                  className="category-expand-toggle"
-                  onClick={() => toggleCategory(c.id)}
-                  disabled={categoryTx.length === 0}
-                >
-                  {categoryTx.length === 0
-                    ? 'No transactions this month'
-                    : `${isExpanded ? 'Hide' : 'Show'} ${categoryTx.length} transaction${categoryTx.length === 1 ? '' : 's'} ${isExpanded ? '▴' : '▾'}`}
-                </button>
-
-                {isExpanded && categoryTx.length > 0 && (
-                  <TxList
-                    transactions={categoryTx}
-                    categories={budgetState.categories}
-                    onRecategorize={handleRecategorize}
-                    onToggleExcluded={setExcluded}
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
+        {showAdd ? (
+          <AddCategoryForm groups={groupOrder} onAdd={addCategory} onCancel={() => setShowAdd(false)} />
+        ) : (
+          <button type="button" className="secondary-btn" onClick={() => setShowAdd(true)}>
+            + Add envelope
+          </button>
+        )}
       </section>
     </>
+  );
+}
+
+function AddCategoryForm({ groups, onAdd, onCancel }) {
+  const [name, setName] = useState('');
+  const [group, setGroup] = useState(groups[0] || 'Other');
+  const [budgetValue, setBudgetValue] = useState('');
+
+  function submit(e) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    onAdd({
+      id: `cat-${Date.now()}`,
+      name: name.trim(),
+      group,
+      budgetType: 'fixed',
+      budgetValue: Number(budgetValue || 0),
+    });
+  }
+
+  return (
+    <form className="add-inline-form" onSubmit={submit}>
+      <input placeholder="Envelope name" value={name} onChange={(e) => setName(e.target.value)} />
+      <input list="budget-groups" placeholder="Group" value={group} onChange={(e) => setGroup(e.target.value)} />
+      <datalist id="budget-groups">
+        {groups.map((g) => (
+          <option key={g} value={g} />
+        ))}
+      </datalist>
+      <input type="number" placeholder="Monthly $" value={budgetValue} onChange={(e) => setBudgetValue(e.target.value)} />
+      <button type="submit" className="primary-btn">
+        Add
+      </button>
+      <button type="button" className="link-btn" onClick={onCancel}>
+        Cancel
+      </button>
+    </form>
   );
 }

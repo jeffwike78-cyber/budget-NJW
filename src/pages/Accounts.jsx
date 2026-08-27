@@ -1,132 +1,144 @@
 import { useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
-import { useInvestmentHoldings } from '../lib/useInvestmentHoldings';
-import PlaidConnectButton from '../components/PlaidConnectButton';
 
-function timeAgo(isoString) {
-  if (!isoString) return null;
-  const minutes = Math.round((Date.now() - new Date(isoString).getTime()) / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.round(hours / 24)}d ago`;
+const ACCOUNT_TYPES = ['checking', 'savings', 'investing', 'credit'];
+
+function money(n) {
+  return `$${Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
-function BankConnectionCard({ title, target, plaid }) {
-  const [syncing, setSyncing] = useState(false);
-  const { linked, lastSyncedAt, reload } = plaid;
+export default function Accounts({ budgetState, setBudgetState }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const accounts = budgetState.accounts || [];
+  const total = accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
 
-  async function syncNow() {
-    setSyncing(true);
-    const { error } = await supabase.functions.invoke('plaid-sync-transactions', { body: { target } });
-    if (error) console.error('Manual sync failed:', error);
-    await reload();
-    setSyncing(false);
-  }
-
-  return (
-    <section className="card">
-      <div className="card-header">
-        <h2>{title}</h2>
-        {linked && <span className="pill pill-good">Connected</span>}
-      </div>
-      <div className="car-actions">
-        {linked ? (
-          <>
-            <button className="secondary-btn" type="button" onClick={syncNow} disabled={syncing}>
-              {syncing ? 'Syncing…' : 'Sync now'}
-            </button>
-            {lastSyncedAt && <span className="module-note">Last synced {timeAgo(lastSyncedAt)}</span>}
-          </>
-        ) : (
-          <PlaidConnectButton target={target} label={`Connect ${title}`} onLinked={reload} />
-        )}
-      </div>
-    </section>
-  );
-}
-
-function HoldingsCard({ linked }) {
-  const { holdings, loading } = useInvestmentHoldings('schwab');
-
-  if (!linked) return null;
-
-  const total = holdings.reduce((sum, h) => sum + h.value, 0);
-
-  return (
-    <section className="card">
-      <div className="card-header">
-        <h2>Schwab holdings</h2>
-        <span className="pill">${total.toLocaleString(undefined, { maximumFractionDigits: 0 })} total</span>
-      </div>
-      {loading ? (
-        <p className="module-note">Loading holdings…</p>
-      ) : holdings.length === 0 ? (
-        <p className="module-note">No holdings synced yet — click Sync now above.</p>
-      ) : (
-        <div className="holdings-list">
-          {holdings.map((h) => (
-            <div className="holdings-row" key={h.id}>
-              <div className="holdings-name">
-                <span>{h.securityName}</span>
-                {h.ticker && <span className="holdings-ticker">{h.ticker}</span>}
-              </div>
-              {h.quantity != null && <span className="holdings-qty">{h.quantity.toLocaleString()} sh</span>}
-              <span className="holdings-value">${h.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-export default function Accounts({ budgetState, setBudgetState, chasePlaid, schwabPlaid, marcusPlaid }) {
-  function updateBalance(accountId, value) {
+  function updateAccount(id, patch) {
     setBudgetState((prev) => ({
       ...prev,
-      accounts: prev.accounts.map((a) => (a.id === accountId ? { ...a, balance: value } : a)),
+      accounts: prev.accounts.map((a) => (a.id === id ? { ...a, ...patch } : a)),
     }));
   }
 
-  const total = budgetState.accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
+  function deleteAccount(id) {
+    setBudgetState((prev) => ({ ...prev, accounts: prev.accounts.filter((a) => a.id !== id) }));
+  }
+
+  function addAccount(account) {
+    setBudgetState((prev) => ({ ...prev, accounts: [...(prev.accounts || []), account] }));
+    setShowAdd(false);
+  }
 
   return (
     <>
       <h1 className="page-title">Accounts</h1>
 
-      <BankConnectionCard title="Chase" target="chase" plaid={chasePlaid} />
-      <BankConnectionCard title="Schwab" target="schwab" plaid={schwabPlaid} />
-      <HoldingsCard linked={schwabPlaid.linked} />
-      <BankConnectionCard title="Marcus by Goldman Sachs" target="marcus" plaid={marcusPlaid} />
+      <section className="card info-card">
+        <div className="card-header">
+          <h2>Automatic bank sync</h2>
+          <span className="pill">Coming soon</span>
+        </div>
+        <p className="module-note">
+          Connecting your real banks and cards (so transactions import and categorize themselves) is
+          Phase 3 of your setup. Until it's turned on, add your accounts here and keep their balances
+          current — everything else in the app already works.
+        </p>
+      </section>
 
       <section className="card">
         <div className="card-header">
-          <h2>Account balances</h2>
-          <span className="pill">${total.toLocaleString(undefined, { maximumFractionDigits: 0 })} total</span>
+          <h2>Your accounts</h2>
+          <span className="pill">{money(total)} total</span>
         </div>
+
         <div className="accounts-editor">
-          {budgetState.accounts.map((a) => (
+          {accounts.map((a) => (
             <div className="accounts-editor-row" key={a.id}>
-              <div>
-                <div className="accounts-editor-name">{a.name}</div>
-                <div className="accounts-editor-type">{a.type}</div>
-              </div>
+              <input
+                className="account-name-input"
+                value={a.name}
+                onChange={(e) => updateAccount(a.id, { name: e.target.value })}
+              />
+              <select
+                className="account-type-select"
+                value={a.type}
+                onChange={(e) => updateAccount(a.id, { type: e.target.value })}
+              >
+                {ACCOUNT_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
               <span className="accounts-editor-balance">
                 $
                 <input
                   type="number"
                   className="budget-input"
                   value={a.balance}
-                  onChange={(e) => updateBalance(a.id, e.target.value)}
+                  onChange={(e) => updateAccount(a.id, { balance: e.target.value })}
                 />
               </span>
+              <button type="button" className="link-btn danger" onClick={() => deleteAccount(a.id)}>
+                Remove
+              </button>
             </div>
           ))}
+          {accounts.length === 0 && <p className="module-note">No accounts yet — add one below.</p>}
         </div>
-        <p className="module-note">Balances sync automatically for connected accounts above; edit here for anything unconnected.</p>
+
+        {showAdd ? (
+          <AddAccountForm onAdd={addAccount} onCancel={() => setShowAdd(false)} />
+        ) : (
+          <button type="button" className="secondary-btn" onClick={() => setShowAdd(true)}>
+            + Add account
+          </button>
+        )}
       </section>
     </>
+  );
+}
+
+function AddAccountForm({ onAdd, onCancel }) {
+  const [name, setName] = useState('');
+  const [type, setType] = useState('checking');
+  const [balance, setBalance] = useState('');
+
+  function submit(e) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    onAdd({
+      id: `acct-${Date.now()}`,
+      name: name.trim(),
+      type,
+      balance: Number(balance || 0),
+    });
+  }
+
+  return (
+    <form className="add-inline-form" onSubmit={submit}>
+      <input
+        placeholder="Account name (e.g. Chase Checking)"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <select value={type} onChange={(e) => setType(e.target.value)}>
+        {ACCOUNT_TYPES.map((t) => (
+          <option key={t} value={t}>
+            {t}
+          </option>
+        ))}
+      </select>
+      <input
+        type="number"
+        placeholder="Balance"
+        value={balance}
+        onChange={(e) => setBalance(e.target.value)}
+      />
+      <button type="submit" className="primary-btn">
+        Add
+      </button>
+      <button type="button" className="link-btn" onClick={onCancel}>
+        Cancel
+      </button>
+    </form>
   );
 }

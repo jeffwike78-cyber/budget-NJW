@@ -5,18 +5,15 @@ import Sidebar, { MobileTabBar } from './components/Sidebar';
 import Overview from './pages/Overview';
 import Transactions from './pages/Transactions';
 import Budget from './pages/Budget';
+import SinkingFunds from './pages/SinkingFunds';
 import Accounts from './pages/Accounts';
 import { useBudgetState } from './lib/useBudgetState';
 import { useBudgetTransactions } from './lib/useBudgetTransactions';
-import { usePlaidStatus } from './lib/usePlaidStatus';
 
 function App() {
   const [view, setView] = useState('overview');
   const [budgetState, setBudgetState, budgetLoading] = useBudgetState();
   const { transactions, addTransaction, recategorize, setExcluded } = useBudgetTransactions();
-  const chasePlaid = usePlaidStatus('chase');
-  const schwabPlaid = usePlaidStatus('schwab');
-  const marcusPlaid = usePlaidStatus('marcus');
 
   if (budgetLoading) {
     return <div className="loading-screen">Loading your budget…</div>;
@@ -52,14 +49,11 @@ function App() {
               setExcluded={setExcluded}
             />
           )}
+          {view === 'sinking' && (
+            <SinkingFunds budgetState={budgetState} setBudgetState={setBudgetState} />
+          )}
           {view === 'accounts' && (
-            <Accounts
-              budgetState={budgetState}
-              setBudgetState={setBudgetState}
-              chasePlaid={chasePlaid}
-              schwabPlaid={schwabPlaid}
-              marcusPlaid={marcusPlaid}
-            />
+            <Accounts budgetState={budgetState} setBudgetState={setBudgetState} />
           )}
         </main>
       </div>
