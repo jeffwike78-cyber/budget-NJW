@@ -7,7 +7,7 @@ function normalize(desc) {
   return desc.trim().toLowerCase();
 }
 
-export default function Transactions({ budgetState, setBudgetState, transactions, addTransaction, recategorize, setExcluded, setBusiness, setDeductible }) {
+export default function Transactions({ budgetState, setBudgetState, transactions, addTransaction, recategorize, setExcluded, setTaxCategory }) {
   // Needs Review is for unclear spending, not unclear deposits — money coming
   // in (amount < 0, the reverse of "positive = expense") never belongs here,
   // even if it somehow got flagged that way.
@@ -159,8 +159,8 @@ export default function Transactions({ budgetState, setBudgetState, transactions
             categories={budgetState.categories}
             onRecategorize={handleRecategorize}
             onToggleExcluded={setExcluded}
-            onToggleBusiness={setBusiness}
-            onToggleDeductible={setDeductible}
+            onSetTaxCategory={setTaxCategory}
+            taxLabels={budgetState.taxLabels}
             showReceiptLookup
           />
         </section>
@@ -176,8 +176,8 @@ export default function Transactions({ budgetState, setBudgetState, transactions
           categories={budgetState.categories}
           onRecategorize={handleRecategorize}
           onToggleExcluded={setExcluded}
-          onToggleBusiness={setBusiness}
-          onToggleDeductible={setDeductible}
+          onSetTaxCategory={setTaxCategory}
+          taxLabels={budgetState.taxLabels}
           showReceiptLookup
         />
       </section>

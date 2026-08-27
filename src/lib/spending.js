@@ -26,7 +26,9 @@ function isKnownRefund(description) {
 export function netSpentByCategory(transactions) {
   const totals = {};
   for (const t of transactions) {
-    if (t.excluded || t.business) continue; // not real household spending (ignored, or a business/rental expense tracked elsewhere)
+    // Not real household spending: ignored, an AI-flagged business expense, or
+    // tagged to a business tax bucket (tracked elsewhere).
+    if (t.excluded || t.business || t.taxCategory === 'business-1' || t.taxCategory === 'business-2') continue;
     const amount = Number(t.amount);
     if (amount > 0) {
       totals[t.categoryId] = (totals[t.categoryId] || 0) + amount;

@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { findReceipt } from '../lib/findReceipt';
+import { uploadReceipt, getReceiptUrl } from '../lib/receiptsClient';
+import { TAX_CATEGORIES, taxLabel } from '../lib/tax';
 
-function TxRow({ t, categories, onRecategorize, onToggleExcluded, onToggleBusiness, onToggleDeductible, showReceiptLookup }) {
+function TxRow({ t, categories, onRecategorize, onToggleExcluded, onSetTaxCategory, taxLabels, showReceiptLookup }) {
   const [lookupBusy, setLookupBusy] = useState(false);
   const [lookupMsg, setLookupMsg] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
 
   async function lookUp() {
     setLookupBusy(true);
@@ -18,14 +22,41 @@ function TxRow({ t, categories, onRecategorize, onToggleExcluded, onToggleBusine
     }
   }
 
+  async function onPickFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setLookupMsg(null);
+    try {
+      await uploadReceipt(t.id, file);
+      setLookupMsg('Receipt attached.');
+    } catch (err) {
+      setLookupMsg(err.message);
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  }
+
+  async function viewReceipt() {
+    try {
+      const url = await getReceiptUrl(t.id);
+      window.open(url, '_blank', 'noopener');
+    } catch (err) {
+      setLookupMsg(err.message);
+    }
+  }
+
+  const isBiz = t.business || t.taxCategory === 'business-1' || t.taxCategory === 'business-2';
+
   return (
-    <div className={`tx-row${t.business ? ' tx-row-business' : ''}`}>
+    <div className={`tx-row${isBiz ? ' tx-row-business' : ''}`}>
       <span className="tx-date">{t.date.slice(5)}</span>
       <span className="tx-desc">
         {t.description}
         {t.source === 'plaid' && <span className="pill tx-source-pill">Synced</span>}
-        {t.business && <span className="pill tx-biz-pill">Business</span>}
-        {t.deductible && <span className="pill tx-tax-pill">Tax</span>}
+        {isBiz && <span className="pill tx-biz-pill">Business</span>}
+        {t.taxCategory && !isBiz && <span className="pill tx-tax-pill">{taxLabel(t.taxCategory, taxLabels)}</span>}
         {t.note && <span className="tx-note">{t.note}</span>}
         {lookupMsg && <span className="tx-lookup-msg">{lookupMsg}</span>}
       </span>
@@ -45,31 +76,36 @@ function TxRow({ t, categories, onRecategorize, onToggleExcluded, onToggleBusine
         ))}
       </select>
       <div className="tx-actions">
+        {onSetTaxCategory && (
+          <select
+            className="tx-tax-select"
+            value={t.taxCategory || ''}
+            onChange={(e) => onSetTaxCategory(t.id, e.target.value)}
+            title="Tag for the CPA tax report (and exclude business from the household budget)"
+          >
+            <option value="">Tax: —</option>
+            {TAX_CATEGORIES.map((k) => (
+              <option key={k} value={k}>
+                {taxLabel(k, taxLabels)}
+              </option>
+            ))}
+          </select>
+        )}
         {showReceiptLookup && (
           <button type="button" className="tx-tag-btn" onClick={lookUp} disabled={lookupBusy} title="Search your connected email for this receipt">
             {lookupBusy ? '…' : '🔎'}
           </button>
         )}
-        {onToggleBusiness && (
-          <button
-            type="button"
-            className={`tx-tag-btn${t.business ? ' active' : ''}`}
-            onClick={() => onToggleBusiness(t.id, !t.business)}
-            title="Mark as a business/rental expense — excluded from the household budget"
-          >
-            Biz
+        {t.receiptPath ? (
+          <button type="button" className="tx-tag-btn active" onClick={viewReceipt} title="View attached receipt">
+            📎 View
+          </button>
+        ) : (
+          <button type="button" className="tx-tag-btn" onClick={() => fileRef.current?.click()} disabled={uploading} title="Attach a receipt photo/PDF">
+            {uploading ? '…' : '📎'}
           </button>
         )}
-        {onToggleDeductible && (
-          <button
-            type="button"
-            className={`tx-tag-btn${t.deductible ? ' active' : ''}`}
-            onClick={() => onToggleDeductible(t.id, !t.deductible)}
-            title="Mark as tax-deductible — included in the Tax Report"
-          >
-            Tax
-          </button>
-        )}
+        <input ref={fileRef} type="file" accept="image/*,application/pdf" hidden onChange={onPickFile} />
         <button
           type="button"
           className="tx-tag-btn"
@@ -91,8 +127,8 @@ export default function TxList({
   categories,
   onRecategorize,
   onToggleExcluded,
-  onToggleBusiness,
-  onToggleDeductible,
+  onSetTaxCategory,
+  taxLabels,
   showReceiptLookup = false,
   emptyLabel = 'Nothing here yet.',
 }) {
@@ -100,7 +136,7 @@ export default function TxList({
   const active = transactions.filter((t) => !t.excluded);
   const ignored = transactions.filter((t) => t.excluded);
 
-  const rowProps = { categories, onRecategorize, onToggleExcluded, onToggleBusiness, onToggleDeductible, showReceiptLookup };
+  const rowProps = { categories, onRecategorize, onToggleExcluded, onSetTaxCategory, taxLabels, showReceiptLookup };
 
   if (active.length === 0 && ignored.length === 0) {
     return <p className="module-note">{emptyLabel}</p>;

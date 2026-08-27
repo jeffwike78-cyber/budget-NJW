@@ -14,7 +14,7 @@ import { useBudgetTransactions } from './lib/useBudgetTransactions';
 function App() {
   const [view, setView] = useState('overview');
   const [budgetState, setBudgetState, budgetLoading] = useBudgetState();
-  const { transactions, addTransaction, recategorize, setExcluded, setBusiness, setDeductible } =
+  const { transactions, addTransaction, recategorize, setExcluded, setBusiness, setTaxCategory } =
     useBudgetTransactions();
 
   if (budgetLoading) {
@@ -23,7 +23,7 @@ function App() {
 
   const totalBalance = budgetState.accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
 
-  const txActions = { recategorize, setExcluded, setBusiness, setDeductible };
+  const txActions = { recategorize, setExcluded, setBusiness, setTaxCategory };
 
   return (
     <div className="app-shell">
@@ -55,7 +55,12 @@ function App() {
             <SinkingFunds budgetState={budgetState} setBudgetState={setBudgetState} />
           )}
           {view === 'reports' && (
-            <TaxReport budgetState={budgetState} transactions={transactions} {...txActions} />
+            <TaxReport
+              budgetState={budgetState}
+              setBudgetState={setBudgetState}
+              transactions={transactions}
+              {...txActions}
+            />
           )}
           {view === 'accounts' && (
             <Accounts budgetState={budgetState} setBudgetState={setBudgetState} />
