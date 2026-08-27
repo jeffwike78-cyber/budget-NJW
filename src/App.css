@@ -1110,3 +1110,13 @@ textarea {
   background: var(--surface);
   font: inherit;
 }
+
+/* ---------- AI categorization ---------- */
+.ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 14px;
+}
+.ai-status { margin: 0; }
