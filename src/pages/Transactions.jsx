@@ -159,6 +159,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
             categories={budgetState.categories}
             onRecategorize={handleRecategorize}
             onToggleExcluded={setExcluded}
+            showReceiptLookup
           />
         </section>
       )}
@@ -173,6 +174,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
           categories={budgetState.categories}
           onRecategorize={handleRecategorize}
           onToggleExcluded={setExcluded}
+          showReceiptLookup
         />
       </section>
     </>

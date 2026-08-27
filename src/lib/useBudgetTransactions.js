@@ -11,6 +11,7 @@ function rowToTx(row) {
     accountId: row.account_id,
     source: row.source,
     excluded: row.excluded,
+    note: row.note,
   };
 }
 

@@ -135,6 +135,7 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
             categories={budgetState.categories}
             onRecategorize={handleRecategorize}
             onToggleExcluded={setExcluded}
+            showReceiptLookup
           />
         </section>
       )}

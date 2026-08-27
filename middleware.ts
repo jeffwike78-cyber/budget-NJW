@@ -31,10 +31,14 @@ function allowedCredentials(): Credential[] {
 // anon key reaches the browser — this app has no per-user data, so the login
 // is what protects the family's financial data.
 export default function middleware(request: Request) {
-  // Plaid calls /api/plaid/webhook directly and has no login to send, so that
-  // one route is exempt. It only re-pulls from Plaid using tokens already
-  // stored server-side, exposing nothing to a caller.
-  if (new URL(request.url).pathname === '/api/plaid/webhook') return;
+  // Two routes are exempt from the login because they're hit by an outside
+  // service, not the logged-in browser:
+  //   - Plaid's webhook (Plaid has no login to send; it only re-pulls using
+  //     server-stored tokens)
+  //   - the Google OAuth callback (a top-level redirect back from Google; the
+  //     signed `state` guards it instead)
+  const { pathname } = new URL(request.url);
+  if (pathname === '/api/plaid/webhook' || pathname === '/api/gmail/auth-callback') return;
 
   const creds = allowedCredentials();
   if (creds.length === 0) return; // not configured — fail open rather than lock the owner out

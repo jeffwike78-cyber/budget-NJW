@@ -1137,3 +1137,18 @@ textarea {
 .bank-synced { font-size: 12px; color: var(--text); }
 .bank-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .plaid-connect { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+/* ---------- Receipt detail on transactions ---------- */
+.tx-note {
+  display: block;
+  font-size: 12px;
+  color: var(--accent);
+  margin-top: 2px;
+}
+.tx-lookup-msg {
+  display: block;
+  font-size: 12px;
+  color: var(--text);
+  margin-top: 2px;
+  font-style: italic;
+}

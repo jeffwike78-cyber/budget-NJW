@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import PlaidConnectButton from '../components/PlaidConnectButton';
 import { useConnectedBanks } from '../lib/useConnectedBanks';
+import { useGmailAccounts } from '../lib/useGmailAccounts';
 
 const ACCOUNT_TYPES = ['checking', 'savings', 'investing', 'credit'];
 
@@ -23,6 +24,30 @@ export default function Accounts({ budgetState, setBudgetState }) {
   const { banks, reload: reloadBanks } = useConnectedBanks();
   const [syncingId, setSyncingId] = useState(null);
   const [syncMsg, setSyncMsg] = useState(null);
+  const { accounts: emailAccounts, reload: reloadEmail, connect: connectGmail, disconnect: disconnectGmail } = useGmailAccounts();
+  const [emailMsg, setEmailMsg] = useState(null);
+
+  // After returning from Google, show a note and refresh the account list.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const flag = params.get('gmail');
+    if (!flag) return;
+    setEmailMsg(flag === 'connected' ? 'Gmail account connected.' : 'Google sign-in was cancelled or failed.');
+    reloadEmail();
+    params.delete('gmail');
+    const url = new URL(window.location.href);
+    url.search = params.toString();
+    window.history.replaceState({}, '', url.toString());
+  }, [reloadEmail]);
+
+  async function startGmailConnect() {
+    setEmailMsg(null);
+    try {
+      await connectGmail();
+    } catch (err) {
+      setEmailMsg(err.message);
+    }
+  }
   const accounts = budgetState.accounts || [];
   const total = accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
 
@@ -107,6 +132,40 @@ export default function Accounts({ budgetState, setBudgetState }) {
             }}
           />
           {syncMsg && <span className="module-note ai-status">{syncMsg}</span>}
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-header">
+          <h2>Email receipts</h2>
+          {emailAccounts.length > 0 && <span className="pill pill-good">{emailAccounts.length} connected</span>}
+        </div>
+        <p className="module-note">
+          Connect the Gmail accounts where your receipts land. Then, on a mystery charge, hit
+          <strong> 🔎 Details</strong> and the AI finds the matching receipt and fills in what it was for.
+        </p>
+
+        {emailAccounts.length > 0 && (
+          <ul className="bank-list">
+            {emailAccounts.map((a) => (
+              <li key={a.email} className="bank-row">
+                <div className="bank-info">
+                  <span className="bank-name">{a.email}</span>
+                  {!a.searchable && <span className="bank-synced">reconnect needed</span>}
+                </div>
+                <button type="button" className="link-btn danger" onClick={() => disconnectGmail(a.email)}>
+                  Disconnect
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="bank-actions">
+          <button type="button" className="primary-btn" onClick={startGmailConnect}>
+            {emailAccounts.length > 0 ? 'Connect another Gmail' : 'Connect a Gmail account'}
+          </button>
+          {emailMsg && <span className="module-note ai-status">{emailMsg}</span>}
         </div>
       </section>
 
