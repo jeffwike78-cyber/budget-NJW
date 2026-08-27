@@ -11,6 +11,20 @@ export async function uploadReceipt(transactionId, file) {
   return data;
 }
 
+// Snap/upload a receipt photo → OCR → creates a pending transaction that
+// immediately counts toward its envelope (later auto-linked to the bank charge).
+export async function scanReceipt(file) {
+  const dataBase64 = await fileToBase64(file);
+  const res = await fetch('/api/receipts/ocr', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dataBase64, contentType: file.type, filename: file.name }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Receipt scan failed.');
+  return data;
+}
+
 export async function getReceiptUrl(transactionId) {
   const res = await fetch('/api/receipts/url', {
     method: 'POST',

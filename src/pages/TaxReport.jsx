@@ -14,8 +14,6 @@ export default function TaxReport({ budgetState, setBudgetState, transactions, s
   const [year, setYear] = useState(String(new Date(todayStr()).getFullYear()));
   const labels = { ...DEFAULT_TAX_LABELS, ...(budgetState.taxLabels || {}) };
 
-  const givingIds = new Set((budgetState.categories || []).filter((c) => c.group === 'Giving').map((c) => c.id));
-
   const inYear = transactions.filter((t) => !t.excluded && Number(t.amount) > 0 && t.date.startsWith(year));
   const byCategory = {};
   for (const key of TAX_CATEGORIES) {
@@ -28,12 +26,6 @@ export default function TaxReport({ budgetState, setBudgetState, transactions, s
 
   function renameLabel(key, value) {
     setBudgetState((prev) => ({ ...prev, taxLabels: { ...labels, [key]: value } }));
-  }
-
-  // One-click: tag every Giving-envelope transaction this year as Charitable.
-  async function tagGivingAsCharitable() {
-    const targets = inYear.filter((t) => givingIds.has(t.categoryId) && !t.taxCategory);
-    for (const t of targets) await setTaxCategory(t.id, 'charitable');
   }
 
   function exportCsv() {
@@ -68,9 +60,6 @@ export default function TaxReport({ budgetState, setBudgetState, transactions, s
               ))}
             </select>
           </label>
-          <button type="button" className="secondary-btn" onClick={tagGivingAsCharitable}>
-            Tag Giving → Charitable
-          </button>
           <button type="button" className="secondary-btn" onClick={exportCsv}>
             Export CSV
           </button>
@@ -101,9 +90,9 @@ export default function TaxReport({ budgetState, setBudgetState, transactions, s
           </tbody>
         </table>
         <p className="module-note no-print">
-          Tag transactions on the Transactions page (the <strong>Tax</strong> dropdown), or use{' '}
-          <strong>Tag Giving → Charitable</strong> to bulk-tag your giving envelopes. Rename the business
-          buckets below.
+          Tag transactions on the Transactions page using the <strong>Tax</strong> dropdown. (Your Giving
+          envelopes aren&apos;t counted here — they&apos;re personal gifts, not deductions.) Rename the
+          business buckets below.
         </p>
         <div className="tax-label-editors no-print">
           {['business-1', 'business-2'].map((key) => (

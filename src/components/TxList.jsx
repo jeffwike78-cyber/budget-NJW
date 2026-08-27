@@ -55,6 +55,7 @@ function TxRow({ t, categories, onRecategorize, onToggleExcluded, onSetTaxCatego
       <span className="tx-desc">
         {t.description}
         {t.source === 'plaid' && <span className="pill tx-source-pill">Synced</span>}
+        {t.source === 'receipt' && <span className="pill tx-receipt-pill">Receipt</span>}
         {isBiz && <span className="pill tx-biz-pill">Business</span>}
         {t.taxCategory && !isBiz && <span className="pill tx-tax-pill">{taxLabel(t.taxCategory, taxLabels)}</span>}
         {t.note && <span className="tx-note">{t.note}</span>}

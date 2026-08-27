@@ -53,6 +53,61 @@ async function assignCategories(supabaseAdmin, changed, categories) {
   return { assignments, businessSet }; // missing assignment → 'needs-review' at upsert
 }
 
+function daysApart(aStr, bStr) {
+  return Math.abs((new Date(`${aStr}T00:00:00`) - new Date(`${bStr}T00:00:00`)) / 86400000);
+}
+
+// Merge scanned "pending" receipts (source='receipt') into the matching real
+// bank charge once it posts: copy the receipt's note/photo/category onto the
+// bank transaction and delete the pending one so the envelope isn't double-hit.
+async function mergeReceiptMatches(supabaseAdmin, added) {
+  if (!added.length) return;
+  const { data: pending } = await supabaseAdmin
+    .from('budget_transactions')
+    .select('id, date, amount, category_id, note, receipt_path')
+    .eq('source', 'receipt');
+  if (!pending || pending.length === 0) return;
+
+  const used = new Set();
+  for (const txn of added) {
+    const amt = Number(txn.amount);
+    let best = null;
+    let bestScore = Infinity;
+    for (const r of pending) {
+      if (used.has(r.id)) continue;
+      const da = Math.abs(Number(r.amount) - amt);
+      if (da > 0.75) continue; // totals should match (small tolerance for tips/rounding)
+      const dd = daysApart(r.date, txn.date);
+      if (dd > 4) continue;
+      const score = da * 10 + dd;
+      if (score < bestScore) {
+        bestScore = score;
+        best = r;
+      }
+    }
+    if (!best) continue;
+    used.add(best.id);
+
+    const { data: plaidRow } = await supabaseAdmin
+      .from('budget_transactions')
+      .select('id, category_id')
+      .eq('plaid_transaction_id', txn.transaction_id)
+      .maybeSingle();
+    if (!plaidRow) continue;
+
+    const update = {};
+    if (best.note) update.note = best.note;
+    if (best.receipt_path) update.receipt_path = best.receipt_path;
+    if ((plaidRow.category_id === 'needs-review' || !plaidRow.category_id) && best.category_id && best.category_id !== 'needs-review') {
+      update.category_id = best.category_id;
+    }
+    if (Object.keys(update).length > 0) {
+      await supabaseAdmin.from('budget_transactions').update(update).eq('id', plaidRow.id);
+    }
+    await supabaseAdmin.from('budget_transactions').delete().eq('id', best.id);
+  }
+}
+
 async function syncBalance(supabaseAdmin, plaid, item) {
   const { data } = await plaid.accountsBalanceGet({ access_token: item.access_token });
   const total = data.accounts.reduce((sum, a) => sum + (a.balances.available ?? a.balances.current ?? 0), 0);
@@ -159,6 +214,12 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
     }
 
     await supabaseAdmin.from('plaid_items').update({ sync_cursor: cursor }).eq('id', itemRowId);
+
+    try {
+      await mergeReceiptMatches(supabaseAdmin, added);
+    } catch (err) {
+      console.error('Receipt match phase failed:', err?.message || err);
+    }
 
     try {
       await syncBalance(supabaseAdmin, plaid, item);

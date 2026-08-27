@@ -31,7 +31,8 @@ export default async function handler(req, res) {
     const { access_token, item_id } = exchange.data;
 
     const accountId = `plaid-${item_id}`;
-    await ensureAccount(admin, { id: accountId, name: institutionName, type: 'checking' });
+    const accountKind = body.account_kind === 'credit' ? 'credit' : 'checking';
+    await ensureAccount(admin, { id: accountId, name: institutionName, type: accountKind });
 
     const { error } = await admin.from('plaid_items').upsert(
       {

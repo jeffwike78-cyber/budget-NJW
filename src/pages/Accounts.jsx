@@ -171,6 +171,45 @@ export default function Accounts({ budgetState, setBudgetState }) {
 
       <section className="card">
         <div className="card-header">
+          <h2>Budgeting style</h2>
+        </div>
+        <p className="module-note">
+          How do you pay for things? Either way the envelopes track your spending — Option 2 adds a
+          credit-card payoff safety check on the Overview.
+        </p>
+        <div className="paymode-options">
+          <label className="paymode-option">
+            <input
+              type="radio"
+              name="paymode"
+              checked={(budgetState.settings?.payMode || 'checking') === 'checking'}
+              onChange={() =>
+                setBudgetState((prev) => ({ ...prev, settings: { ...(prev.settings || {}), payMode: 'checking' } }))
+              }
+            />
+            <span>
+              <strong>Option 1 — Pay from checking.</strong> Income lands in checking; bills are paid from it directly.
+            </span>
+          </label>
+          <label className="paymode-option">
+            <input
+              type="radio"
+              name="paymode"
+              checked={budgetState.settings?.payMode === 'card'}
+              onChange={() =>
+                setBudgetState((prev) => ({ ...prev, settings: { ...(prev.settings || {}), payMode: 'card' } }))
+              }
+            />
+            <span>
+              <strong>Option 2 — Put expenses on a credit card</strong> (for points), pay it off monthly from checking.
+              Link the card below and set its type to <em>credit</em>.
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-header">
           <h2>Your accounts</h2>
           <span className="pill">{money(total)} total</span>
         </div>
