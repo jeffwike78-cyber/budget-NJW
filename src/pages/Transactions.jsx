@@ -23,6 +23,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
   const [aiStatus, setAiStatus] = useState(null);
   const [scanBusy, setScanBusy] = useState(false);
   const [scanMsg, setScanMsg] = useState(null);
+  const [scanMeta, setScanMeta] = useState(null); // { note, receiptPath, date } from a scan awaiting Add
   const scanRef = useRef(null);
 
   async function onScanFile(e) {
@@ -32,7 +33,15 @@ export default function Transactions({ budgetState, setBudgetState, transactions
     setScanMsg(null);
     try {
       const data = await scanReceipt(file);
-      setScanMsg(`Added: ${data.merchant} — $${Number(data.amount).toFixed(2)}. It now counts toward its envelope and will link to the bank charge when it posts.`);
+      const matchedCategory = data.categoryId && budgetState.categories.some((c) => c.id === data.categoryId);
+      setForm((f) => ({
+        ...f,
+        description: data.merchant || f.description,
+        amount: data.amount ? String(data.amount) : f.amount,
+        categoryId: matchedCategory ? data.categoryId : f.categoryId,
+      }));
+      setScanMeta({ note: data.summary || null, receiptPath: data.receiptPath || null, date: data.date || null });
+      setScanMsg('Filled in from your receipt — review the fields and tap Add.');
     } catch (err) {
       setScanMsg(err.message);
     } finally {
@@ -50,17 +59,24 @@ export default function Transactions({ budgetState, setBudgetState, transactions
     e.preventDefault();
     if (!form.description.trim() || !form.amount) return;
     await addTransaction({
-      date: todayStr(),
+      date: scanMeta?.date || todayStr(),
       description: form.description.trim(),
       amount: Number(form.amount),
       categoryId: form.categoryId,
       accountId: form.accountId,
+      // A scanned receipt becomes a 'receipt' transaction (so it auto-links to the
+      // bank charge later) and carries its note + attached photo.
+      source: scanMeta ? 'receipt' : 'manual',
+      note: scanMeta?.note,
+      receiptPath: scanMeta?.receiptPath,
     });
     setBudgetState((prev) => ({
       ...prev,
       merchantMemory: { ...prev.merchantMemory, [normalize(form.description)]: form.categoryId },
     }));
     setForm((f) => ({ ...f, description: '', amount: '' }));
+    setScanMeta(null);
+    setScanMsg(null);
   }
 
   async function handleRecategorize(txId, categoryId) {
@@ -161,12 +177,13 @@ export default function Transactions({ budgetState, setBudgetState, transactions
           <button type="button" className="secondary-btn" onClick={() => scanRef.current?.click()} disabled={scanBusy}>
             {scanBusy ? 'Reading receipt…' : '📷 Scan a receipt'}
           </button>
-          <input ref={scanRef} type="file" accept="image/*" capture="environment" hidden onChange={onScanFile} />
+          <input ref={scanRef} type="file" accept="image/*" hidden onChange={onScanFile} />
           {scanMsg && <span className="module-note ai-status">{scanMsg}</span>}
         </div>
         <p className="module-note">
-          Snap a photo of a receipt and it&apos;s added instantly (counting toward its envelope), then
-          linked to the bank charge automatically when it posts a few days later.
+          Take (or choose) a photo of a receipt — the fields above fill in for you to review, then tap
+          <strong> Add</strong>. It counts toward its envelope right away, keeps the photo, and links to
+          the bank charge automatically when it posts.
         </p>
       </section>
 
