@@ -73,10 +73,20 @@ export function useBudgetTransactions() {
       };
       if (note) row.note = note;
       if (receiptPath) row.receipt_path = receiptPath;
-      const { error } = await supabase.from('budget_transactions').insert(row);
+      // .select() returns the inserted row — but only if a read (RLS SELECT)
+      // policy allows it. So this distinguishes: insert blocked (error), insert
+      // ok + readable (data has the row), insert ok + NOT readable (empty, no
+      // error — a missing SELECT policy).
+      const { data, error } = await supabase.from('budget_transactions').insert(row).select('id');
       if (error) {
         console.error('Failed to add transaction:', error);
         return error;
+      }
+      if (!data || data.length === 0) {
+        return {
+          message:
+            'The database accepted the request but won’t return the row — a read (RLS SELECT) policy is missing on budget_transactions.',
+        };
       }
       await reload(); // don't rely on realtime alone — refresh the list now
       return null;

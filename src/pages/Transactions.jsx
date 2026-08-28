@@ -14,8 +14,10 @@ export default function Transactions({ budgetState, setBudgetState, transactions
   // even if it somehow got flagged that way.
   const needsReview = transactions.filter((t) => t.categoryId === 'needs-review' && Number(t.amount) > 0);
   const [form, setForm] = useState({
-    description: '',
+    description: '', // vendor / where it was spent (shown in the list)
+    note: '', // what was purchased (from the receipt)
     amount: '',
+    date: todayStr(),
     categoryId: budgetState.categories[0].id,
     accountId: budgetState.accounts[0].id,
   });
@@ -25,6 +27,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
   const [scanMsg, setScanMsg] = useState(null);
   const [scanMeta, setScanMeta] = useState(null); // { note, receiptPath, date } from a scan awaiting Add
   const [addMsg, setAddMsg] = useState(null);
+  const [addOk, setAddOk] = useState(false);
   const scanRef = useRef(null);
 
   async function onScanFile(e) {
@@ -37,11 +40,13 @@ export default function Transactions({ budgetState, setBudgetState, transactions
       const matchedCategory = data.categoryId && budgetState.categories.some((c) => c.id === data.categoryId);
       setForm((f) => ({
         ...f,
-        description: data.merchant || f.description,
+        description: data.merchant || f.description, // Vendor
+        note: data.summary || f.note, // Description (what was purchased)
         amount: data.amount ? String(data.amount) : f.amount,
+        date: data.date || f.date, // full receipt date
         categoryId: matchedCategory ? data.categoryId : f.categoryId,
       }));
-      setScanMeta({ note: data.summary || null, receiptPath: data.receiptPath || null, date: data.date || null });
+      setScanMeta({ receiptPath: data.receiptPath || null });
       setScanMsg('Filled in from your receipt — review the fields and tap Add.');
     } catch (err) {
       setScanMsg(err.message);
@@ -52,6 +57,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
   }
 
   function handleDescriptionChange(value) {
+    if (addMsg) setAddMsg(null);
     const remembered = budgetState.merchantMemory[normalize(value)];
     setForm((f) => ({ ...f, description: value, categoryId: remembered || f.categoryId }));
   }
@@ -60,16 +66,17 @@ export default function Transactions({ budgetState, setBudgetState, transactions
     e.preventDefault();
     if (!form.description.trim() || !form.amount) return;
     setAddMsg(null);
+    setAddOk(false);
     const error = await addTransaction({
-      date: scanMeta?.date || todayStr(),
-      description: form.description.trim(),
+      date: form.date || todayStr(),
+      description: form.description.trim(), // Vendor
       amount: Number(form.amount),
       categoryId: form.categoryId,
       accountId: form.accountId,
-      // A scanned receipt becomes a 'receipt' transaction (so it auto-links to the
-      // bank charge later) and carries its note + attached photo.
+      note: form.note?.trim() || null, // Description (what was purchased)
+      // A scanned receipt becomes a 'receipt' transaction (so it auto-links to
+      // the bank charge later) and carries its attached photo.
       source: scanMeta ? 'receipt' : 'manual',
-      note: scanMeta?.note,
       receiptPath: scanMeta?.receiptPath,
     });
     if (error) {
@@ -81,9 +88,13 @@ export default function Transactions({ budgetState, setBudgetState, transactions
       ...prev,
       merchantMemory: { ...prev.merchantMemory, [normalize(form.description)]: form.categoryId },
     }));
-    setForm((f) => ({ ...f, description: '', amount: '' }));
+    const savedVendor = form.description.trim();
+    setForm((f) => ({ ...f, description: '', note: '', amount: '', date: todayStr() }));
     setScanMeta(null);
     setScanMsg(null);
+    // Positive confirmation so a save is never ambiguous — clears on the next edit.
+    setAddMsg(`Added “${savedVendor}” ✓`);
+    setAddOk(true);
   }
 
   async function handleRecategorize(txId, categoryId) {
@@ -150,18 +161,31 @@ export default function Transactions({ budgetState, setBudgetState, transactions
         <form className="tx-form" onSubmit={submit}>
           <input
             type="text"
-            placeholder="What'd you spend on?"
+            placeholder="Vendor (where you spent it)"
             value={form.description}
             onChange={(e) => handleDescriptionChange(e.target.value)}
           />
           <input
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            placeholder="$"
-            value={form.amount}
-            onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+            type="text"
+            placeholder="Description (what you bought)"
+            value={form.note}
+            onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
           />
+          <div className="tx-form-row">
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              placeholder="$"
+              value={form.amount}
+              onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+            />
+            <input
+              type="date"
+              value={form.date}
+              onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+            />
+          </div>
           <select value={form.categoryId} onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}>
             {budgetState.categories.map((c) => (
               <option key={c.id} value={c.id}>
@@ -180,7 +204,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
             Add
           </button>
         </form>
-        {addMsg && <p className="module-note form-error">{addMsg}</p>}
+        {addMsg && <p className={`module-note ${addOk ? 'form-ok' : 'form-error'}`}>{addMsg}</p>}
         <div className="ai-actions">
           <button type="button" className="secondary-btn" onClick={() => scanRef.current?.click()} disabled={scanBusy}>
             {scanBusy ? 'Reading receipt…' : '📷 Scan a receipt'}
