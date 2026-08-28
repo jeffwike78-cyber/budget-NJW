@@ -1,6 +1,34 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 
+// Flatten whatever Supabase / the browser hands back into one readable line, so
+// the exact failure shows on screen without needing the dev console. Postgres/RLS
+// errors carry {message, code, details, hint}; a network/fetch failure is a bare
+// Error/TypeError with just a name + message.
+function describeError(e) {
+  if (!e) return 'Unknown error (no details).';
+  if (typeof e === 'string') return e;
+  const parts = [];
+  if (e.name && e.name !== 'Error') parts.push(e.name);
+  if (e.message) parts.push(e.message);
+  if (e.code) parts.push(`code ${e.code}`);
+  if (e.details) parts.push(String(e.details));
+  if (e.hint) parts.push(`hint: ${e.hint}`);
+  const s = parts.filter(Boolean).join(' · ');
+  const base = s || JSON.stringify(e);
+  // A fetch that never reaches the server is a bare TypeError with no Postgres
+  // code — almost always a bad Supabase URL/key in the deploy's env vars
+  // (a typo, or a trailing space/newline from pasting). Say so plainly.
+  const looksNetwork =
+    !e.code &&
+    (e.name === 'TypeError' ||
+      /failed to fetch|load failed|type error|networkerror/i.test(e.message || ''));
+  if (looksNetwork) {
+    return `${base} — the app can’t reach the database. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel (no trailing spaces or line breaks), then redeploy.`;
+  }
+  return base;
+}
+
 function rowToTx(row) {
   return {
     id: row.id,
@@ -77,22 +105,20 @@ export function useBudgetTransactions() {
       // policy allows it. So this distinguishes: insert blocked (error), insert
       // ok + readable (data has the row), insert ok + NOT readable (empty, no
       // error — a missing SELECT policy).
-      const { data, error } = await supabase.from('budget_transactions').insert(row).select('id');
+      // Insert WITHOUT a follow-up select first. A .select() after insert asks
+      // PostgREST for the row back (return=representation) and adds a read
+      // requirement; isolating the plain insert tells us whether the *write*
+      // itself is what fails.
+      const { error } = await supabase.from('budget_transactions').insert(row);
       if (error) {
-        console.error('Failed to add transaction:', error);
-        return error;
-      }
-      if (!data || data.length === 0) {
-        return {
-          message:
-            'The database accepted the request but won’t return the row — a read (RLS SELECT) policy is missing on budget_transactions.',
-        };
+        console.error('Failed to add transaction (insert error):', describeError(error), error);
+        return { message: describeError(error) };
       }
       await reload(); // don't rely on realtime alone — refresh the list now
       return null;
     } catch (err) {
-      console.error('Failed to add transaction:', err);
-      return err;
+      console.error('Failed to add transaction (threw):', describeError(err), err);
+      return { message: describeError(err) };
     }
   }
 
