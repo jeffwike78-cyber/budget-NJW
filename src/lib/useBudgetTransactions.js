@@ -61,17 +61,21 @@ export function useBudgetTransactions() {
     };
   }, [reload]);
 
-  async function addTransaction({ date, description, amount, categoryId, accountId }) {
+  async function addTransaction({ date, description, amount, categoryId, accountId, source = 'manual', note, receiptPath }) {
     try {
-      const { error } = await supabase.from('budget_transactions').insert({
+      const row = {
         date,
         description,
         amount,
         category_id: categoryId,
         account_id: accountId,
-        source: 'manual',
-      });
+        source,
+      };
+      if (note) row.note = note;
+      if (receiptPath) row.receipt_path = receiptPath;
+      const { error } = await supabase.from('budget_transactions').insert(row);
       if (error) console.error('Failed to add transaction:', error);
+      else await reload(); // don't rely on realtime alone — refresh the list now
     } catch (err) {
       console.error('Failed to add transaction:', err);
     }
