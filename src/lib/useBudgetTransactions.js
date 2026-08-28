@@ -74,10 +74,15 @@ export function useBudgetTransactions() {
       if (note) row.note = note;
       if (receiptPath) row.receipt_path = receiptPath;
       const { error } = await supabase.from('budget_transactions').insert(row);
-      if (error) console.error('Failed to add transaction:', error);
-      else await reload(); // don't rely on realtime alone — refresh the list now
+      if (error) {
+        console.error('Failed to add transaction:', error);
+        return error;
+      }
+      await reload(); // don't rely on realtime alone — refresh the list now
+      return null;
     } catch (err) {
       console.error('Failed to add transaction:', err);
+      return err;
     }
   }
 

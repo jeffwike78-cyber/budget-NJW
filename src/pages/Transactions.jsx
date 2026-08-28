@@ -24,6 +24,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
   const [scanBusy, setScanBusy] = useState(false);
   const [scanMsg, setScanMsg] = useState(null);
   const [scanMeta, setScanMeta] = useState(null); // { note, receiptPath, date } from a scan awaiting Add
+  const [addMsg, setAddMsg] = useState(null);
   const scanRef = useRef(null);
 
   async function onScanFile(e) {
@@ -58,7 +59,8 @@ export default function Transactions({ budgetState, setBudgetState, transactions
   async function submit(e) {
     e.preventDefault();
     if (!form.description.trim() || !form.amount) return;
-    await addTransaction({
+    setAddMsg(null);
+    const error = await addTransaction({
       date: scanMeta?.date || todayStr(),
       description: form.description.trim(),
       amount: Number(form.amount),
@@ -70,6 +72,11 @@ export default function Transactions({ budgetState, setBudgetState, transactions
       note: scanMeta?.note,
       receiptPath: scanMeta?.receiptPath,
     });
+    if (error) {
+      // Keep the form filled so nothing is lost, and show what went wrong.
+      setAddMsg(`Couldn’t save: ${error.message || error.hint || JSON.stringify(error)}`);
+      return;
+    }
     setBudgetState((prev) => ({
       ...prev,
       merchantMemory: { ...prev.merchantMemory, [normalize(form.description)]: form.categoryId },
@@ -173,6 +180,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
             Add
           </button>
         </form>
+        {addMsg && <p className="module-note form-error">{addMsg}</p>}
         <div className="ai-actions">
           <button type="button" className="secondary-btn" onClick={() => scanRef.current?.click()} disabled={scanBusy}>
             {scanBusy ? 'Reading receipt…' : '📷 Scan a receipt'}
