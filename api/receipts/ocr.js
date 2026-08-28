@@ -42,7 +42,7 @@ export default async function handler(req, res) {
 Respond with ONLY JSON, no prose or code fences:
 {"merchant": string, "date": "YYYY-MM-DD" or null, "amount": number, "summary": string, "categoryId": string or null}
 - amount = the grand total as a positive number.
-- summary = a brief description of what was purchased.
+- summary = a short, comma-separated list of the actual items purchased (read the line items), e.g. "milk, eggs, paper towels". If items aren't legible, give a brief description.
 - categoryId = the best-fitting envelope id from the list, or null if unclear.`;
     const userContent = [
       { type: 'image', source: { type: 'base64', media_type: mediaType, data: dataBase64 } },

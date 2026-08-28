@@ -13,6 +13,11 @@
   color: var(--bad);
 }
 
+.form-ok {
+  font-size: 13px;
+  color: var(--good);
+}
+
 /* ---------- Shell layout ---------- */
 
 .app-shell {
@@ -1278,3 +1283,7 @@ textarea {
 .paymode-options { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
 .paymode-option { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: var(--text); cursor: pointer; }
 .paymode-option input { margin-top: 3px; }
+
+/* ---------- Add-transaction form row ---------- */
+.tx-form-row { display: flex; gap: 8px; }
+.tx-form-row input { flex: 1 1 0; min-width: 0; }
