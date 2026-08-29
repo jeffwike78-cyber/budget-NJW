@@ -18,8 +18,8 @@ export default function Transactions({ budgetState, setBudgetState, transactions
     note: '', // what was purchased (from the receipt)
     amount: '',
     date: todayStr(),
-    categoryId: budgetState.categories[0].id,
-    accountId: budgetState.accounts[0].id,
+    categoryId: budgetState.categories?.[0]?.id || '',
+    accountId: budgetState.accounts?.[0]?.id || '',
   });
   const [aiBusy, setAiBusy] = useState(false);
   const [aiStatus, setAiStatus] = useState(null);
