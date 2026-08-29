@@ -51,7 +51,7 @@ function TxRow({ t, categories, onRecategorize, onToggleExcluded, onSetTaxCatego
 
   return (
     <div className={`tx-row${isBiz ? ' tx-row-business' : ''}`}>
-      <span className="tx-date">{t.date.slice(5)}</span>
+      <span className="tx-date">{(t.date || '').slice(5)}</span>
       <span className="tx-desc">
         {t.description}
         {t.source === 'plaid' && <span className="pill tx-source-pill">Synced</span>}

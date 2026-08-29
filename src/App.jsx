@@ -2,6 +2,7 @@ import { useState } from 'react';
 import './App.css';
 import TopBar from './components/TopBar';
 import Sidebar, { MobileTabBar } from './components/Sidebar';
+import ErrorBoundary from './components/ErrorBoundary';
 import Overview from './pages/Overview';
 import Transactions from './pages/Transactions';
 import Budget from './pages/Budget';
@@ -31,6 +32,7 @@ function App() {
       <div className="app-body">
         <Sidebar view={view} setView={setView} totalBalance={totalBalance} />
         <main className="app-main">
+          <ErrorBoundary key={view}>
           {view === 'overview' && (
             <Overview budgetState={budgetState} transactions={transactions} setView={setView} />
           )}
@@ -65,6 +67,7 @@ function App() {
           {view === 'accounts' && (
             <Accounts budgetState={budgetState} setBudgetState={setBudgetState} />
           )}
+          </ErrorBoundary>
         </main>
       </div>
       <MobileTabBar view={view} setView={setView} />
