@@ -7,7 +7,7 @@ const ROW_ID = 'main';
 // setValue accepts either a value or an updater function. Persists to a single
 // shared row in Supabase instead of the browser's localStorage, so data now
 // follows the deployed app rather than the device — no accounts involved.
-export function useSupabaseState(column, defaultValue) {
+export function useSupabaseState(column, defaultValue, normalize) {
   const [data, setData] = useState(defaultValue);
   const [loading, setLoading] = useState(true);
 
@@ -27,7 +27,11 @@ export function useSupabaseState(column, defaultValue) {
       // keys), so treat "no keys" the same as "nothing saved yet" and use defaultValue.
       const value = row?.[column];
       const isEmpty = value == null || (typeof value === 'object' && Object.keys(value).length === 0);
-      setData(isEmpty ? defaultValue : value);
+      const resolved = isEmpty ? defaultValue : value;
+      // A half-written row (e.g. a budget saved with accounts but no categories)
+      // would otherwise leave the app unusable — normalize fills any missing/empty
+      // sections from the defaults while keeping whatever real data is present.
+      setData(normalize ? normalize(resolved) : resolved);
       setLoading(false);
     }
     load();
