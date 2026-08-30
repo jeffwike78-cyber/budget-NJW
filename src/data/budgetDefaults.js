@@ -5,12 +5,13 @@
 // is saved to the database.
 // ---------------------------------------------------------------------------
 
+// The rentals are a business tracked elsewhere, so their accounts are NOT in
+// the personal budget. Only the owner draw you pay yourselves counts (see the
+// income sources below). Add a linked credit card here once Plaid is live.
 export const DEFAULT_ACCOUNTS = [
   { id: 'checking', name: 'Main Checking', type: 'checking', balance: 0 },
   { id: 'savings', name: 'Savings', type: 'savings', balance: 0 },
   { id: 'emergency', name: 'Emergency Fund', type: 'savings', balance: 0 },
-  { id: 'wall-street', name: '1427 Wall Street (rental)', type: 'checking', balance: 0 },
-  { id: 'stophlet', name: '1331 Stophlet (rental)', type: 'checking', balance: 0 },
 ];
 
 // Regular monthly envelopes. Each budgets a flat dollar amount every month
@@ -35,8 +36,8 @@ export const DEFAULT_CATEGORIES = [
 
   // Housing
   { id: 'mortgage', name: 'Countrywood Mortgage', group: 'Housing', kind: 'bill', budgetType: 'fixed', budgetValue: 1570 },
-  { id: 'repairs-predictable', name: 'Repairs / Maintenance', group: 'Housing', kind: 'spending', budgetType: 'fixed', budgetValue: 167 },
-  { id: 'repairs-unknown', name: 'Repairs (unexpected)', group: 'Housing', kind: 'spending', budgetType: 'fixed', budgetValue: 100 },
+  { id: 'repairs-predictable', name: 'Repairs / Maintenance', group: 'Housing', kind: 'sinking', budgetType: 'fixed', budgetValue: 167 },
+  { id: 'repairs-unknown', name: 'Repairs (unexpected)', group: 'Housing', kind: 'sinking', budgetType: 'fixed', budgetValue: 100 },
   { id: 'electric', name: 'Electric', group: 'Housing', kind: 'bill', budgetType: 'fixed', budgetValue: 165 },
   { id: 'gas-utility', name: 'Gas (home)', group: 'Housing', kind: 'bill', budgetType: 'fixed', budgetValue: 65 },
   { id: 'city-utilities', name: 'City Utilities', group: 'Housing', kind: 'bill', budgetType: 'fixed', budgetValue: 100 },
@@ -56,7 +57,7 @@ export const DEFAULT_CATEGORIES = [
 
   // Transportation
   { id: 'auto-gas', name: 'Gas (auto)', group: 'Transportation', kind: 'spending', budgetType: 'fixed', budgetValue: 450 },
-  { id: 'auto-repairs', name: 'Auto Repairs', group: 'Transportation', kind: 'spending', budgetType: 'fixed', budgetValue: 500 },
+  { id: 'auto-repairs', name: 'Auto Repairs', group: 'Transportation', kind: 'sinking', budgetType: 'fixed', budgetValue: 500 },
 
   // Medical / Health
   { id: 'fitness', name: 'Fitness Membership', group: 'Medical / Health', kind: 'bill', budgetType: 'fixed', budgetValue: 65 },
@@ -69,13 +70,13 @@ export const DEFAULT_CATEGORIES = [
   // Miscellaneous
   { id: 'subscriptions', name: 'Subscriptions', group: 'Miscellaneous', kind: 'bill', budgetType: 'fixed', budgetValue: 96 },
   { id: 'misc', name: 'Miscellaneous', group: 'Miscellaneous', kind: 'spending', budgetType: 'fixed', budgetValue: 350 },
-  { id: 'gifts', name: 'Gifts', group: 'Miscellaneous', kind: 'spending', budgetType: 'fixed', budgetValue: 250 },
+  { id: 'gifts', name: 'Gifts', group: 'Miscellaneous', kind: 'sinking', budgetType: 'fixed', budgetValue: 250 },
   { id: 'dogs', name: 'Dogs', group: 'Miscellaneous', kind: 'spending', budgetType: 'fixed', budgetValue: 120 },
   { id: 'decor', name: 'Décor', group: 'Miscellaneous', kind: 'spending', budgetType: 'fixed', budgetValue: 35 },
   { id: 'boys-working', name: 'Boys Working', group: 'Miscellaneous', kind: 'spending', budgetType: 'fixed', budgetValue: 150 },
   { id: 'entertainment', name: 'Entertainment / Activities', group: 'Miscellaneous', kind: 'spending', budgetType: 'fixed', budgetValue: 175 },
-  { id: 'jeff-spending', name: 'Jeff Spending', group: 'Miscellaneous', kind: 'spending', budgetType: 'fixed', budgetValue: 200 },
-  { id: 'kari-spending', name: 'Kari Spending', group: 'Miscellaneous', kind: 'spending', budgetType: 'fixed', budgetValue: 200 },
+  { id: 'jeff-spending', name: 'Jeff Spending', group: 'Miscellaneous', kind: 'transfer', budgetType: 'fixed', budgetValue: 200 },
+  { id: 'kari-spending', name: 'Kari Spending', group: 'Miscellaneous', kind: 'transfer', budgetType: 'fixed', budgetValue: 200 },
   { id: 'noah-support', name: 'Noah Support', group: 'Miscellaneous', kind: 'bill', budgetType: 'fixed', budgetValue: 50 },
 
   // Recreation / Travel
@@ -120,11 +121,14 @@ export const DEFAULT_SINKING_FUNDS = [
 // in the app under Budget → Income. The app sums their monthly-equivalent to
 // show how much of your income is left after every envelope is funded.
 //   frequency: 'weekly' | 'biweekly' | 'semimonthly' | 'monthly' | 'quarterly' | 'annual' | 'one-time'
+// Only the money that actually reaches your personal budget counts here. The
+// rentals are tracked as a business elsewhere, so instead of their gross rent
+// we count the owner draw you pay yourselves. Set that amount to what you
+// really take each month (0 = set it in the app under Budget → Income).
 export const DEFAULT_INCOME_SOURCES = [
   { id: 'inc-jeff', name: 'Jeff paycheck', amount: 3767, frequency: 'semimonthly' },
   { id: 'inc-kari', name: 'Kari FLOW', amount: 900, frequency: 'monthly' },
-  { id: 'inc-wallst', name: '1427 Wall Street (rental)', amount: 1885, frequency: 'monthly' },
-  { id: 'inc-stophlet', name: '1331 Stophlet (rental)', amount: 1500, frequency: 'monthly' },
+  { id: 'inc-rental-draw', name: 'Rental owner draw', amount: 0, frequency: 'monthly' },
 ];
 
 // Legacy single-income shape, kept only so state saved before multi-source
