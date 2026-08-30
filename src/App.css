@@ -1376,3 +1376,38 @@ textarea {
 }
 
 .budget-input-date { width: 130px; }
+
+/* Keep the zero-based summary in view while editing the envelope list below it */
+.budget-zero-sticky {
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  box-shadow: var(--shadow);
+}
+/* The Overview grid follows a plain card (Age of Money / cashflow), which the
+   .card + .card rule doesn't reach — give it the same gap so cards don't touch */
+.overview-grid { margin-top: 16px; }
+
+/* ---------- Floating quick-scan button (Overview) ---------- */
+.fab-scan {
+  position: fixed;
+  right: 18px;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  z-index: 30;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 40%, transparent);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.fab-scan:active { transform: scale(0.94); }
+@media (min-width: 900px) {
+  .fab-scan { bottom: 24px; right: 24px; }
+}
