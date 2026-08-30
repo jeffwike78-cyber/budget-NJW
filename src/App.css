@@ -1374,3 +1374,5 @@ textarea {
   .category-row-figures { justify-content: space-between; width: 100%; }
   .budget-zero-value { font-size: 18px; }
 }
+
+.budget-input-date { width: 130px; }

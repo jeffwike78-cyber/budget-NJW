@@ -1,15 +1,8 @@
 import { useState } from 'react';
 import { todayStr } from '../lib/storage';
-import {
-  computeFund,
-  advanceDueDate,
-  dueLabel,
-  totalRequiredMonthly,
-} from '../lib/sinkingFunds';
-
-function monthKey(dateStr = todayStr()) {
-  return dateStr.slice(0, 7);
-}
+import { netSpentByCategory } from '../lib/spending';
+import { monthlyIncomeTotal, computeCategoryBudgets, envelopeBalances } from '../lib/budgetMath';
+import { computeSinkingEnvelope, advanceDueDate, dueLabel } from '../lib/sinkingFunds';
 
 const STATUS_LABEL = {
   funded: 'Fully funded',
@@ -17,127 +10,94 @@ const STATUS_LABEL = {
   behind: 'Behind',
   overdue: 'Overdue',
 };
-
 const STATUS_CLASS = {
   funded: 'pill-good',
   'on-track': 'pill-good',
   behind: 'pill-warn',
   overdue: 'pill-bad',
 };
+const FREQ_OPTIONS = [
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'quarterly', label: 'Quarterly' },
+  { value: 'semiannual', label: 'Every 6 months' },
+  { value: 'annual', label: 'Yearly' },
+];
 
 function money(n) {
   return `$${Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
+function monthKey(dateStr = todayStr()) {
+  return dateStr.slice(0, 7);
+}
 
-export default function SinkingFunds({ budgetState, setBudgetState }) {
-  const [showAdd, setShowAdd] = useState(false);
-  const funds = budgetState.sinkingFunds || [];
-  const computed = funds.map((f) => computeFund(f));
-  const thisMonth = monthKey();
+// The Funds tab is a live tracker: sinking funds are created and edited as
+// sinking-kind envelopes on the Budget page, and their balance here is the
+// real carryover (opening balance + monthly set-aside funded each month −
+// anything spent from the envelope). Editing a fund here updates the same
+// envelope, so the two stay in sync.
+export default function SinkingFunds({ budgetState, setBudgetState, transactions }) {
+  const month = monthKey();
+  const income = monthlyIncomeTotal(budgetState);
+  const budgetable = (budgetState.categories || []).filter((c) => c.id !== 'needs-review');
+  const effectiveBudgets = computeCategoryBudgets(budgetable, income);
+  const allTimeSpent = netSpentByCategory(transactions);
+  const monthSpent = netSpentByCategory(transactions.filter((t) => monthKey(t.date) === month));
+  const balances = envelopeBalances(budgetable, effectiveBudgets, allTimeSpent, monthSpent, budgetState.settings?.startMonth, month);
 
-  const totalSaved = funds.reduce((s, f) => s + Number(f.balance || 0), 0);
-  const totalTarget = funds.reduce((s, f) => s + Number(f.targetAmount || 0), 0);
-  const requiredThisMonth = totalRequiredMonthly(funds);
-  const alreadyFundedThisMonth = funds.filter((f) => f.lastFunded === thisMonth).length;
+  const sinking = budgetable.filter((c) => c.kind === 'sinking');
+  const computed = sinking.map((c) => ({
+    envelope: c,
+    live: balances[c.id]?.available ?? 0,
+    ...computeSinkingEnvelope(c, balances[c.id]?.available ?? 0),
+  }));
 
-  const upcoming = [...computed]
-    .filter((f) => f.nextDueDate)
+  const totalSaved = computed.reduce((s, f) => s + f.live, 0);
+  const totalTarget = computed.reduce((s, f) => s + Number(f.envelope.targetAmount || 0), 0);
+  const requiredMonthly = computed.reduce((s, f) => s + (f.requiredMonthly || 0), 0);
+
+  const upcoming = computed
+    .filter((f) => f.nextDueDate && Number(f.envelope.targetAmount || 0) > 0)
     .sort((a, b) => a.nextDueDate.localeCompare(b.nextDueDate));
 
   function updateFund(id, patch) {
     setBudgetState((prev) => ({
       ...prev,
-      sinkingFunds: prev.sinkingFunds.map((f) => (f.id === id ? { ...f, ...patch } : f)),
+      categories: prev.categories.map((c) => (c.id === id ? { ...c, ...patch } : c)),
     }));
   }
 
-  function deleteFund(id) {
-    setBudgetState((prev) => ({
-      ...prev,
-      sinkingFunds: prev.sinkingFunds.filter((f) => f.id !== id),
-    }));
-  }
-
-  function addContribution(id, amount) {
-    const add = Number(amount);
-    if (!add) return;
-    setBudgetState((prev) => ({
-      ...prev,
-      sinkingFunds: prev.sinkingFunds.map((f) =>
-        f.id === id ? { ...f, balance: Number(f.balance || 0) + add } : f
-      ),
-    }));
-  }
-
-  function markPaid(fund) {
-    const target = Number(fund.targetAmount || 0);
-    updateFund(fund.id, {
-      balance: Math.max(0, Number(fund.balance || 0) - target),
-      nextDueDate: advanceDueDate(fund.nextDueDate, fund.frequency),
-    });
-  }
-
-  // Deposit this month's suggested set-aside into every fund that still needs
-  // it and hasn't already been funded this month.
-  function setAsideThisMonth() {
-    setBudgetState((prev) => ({
-      ...prev,
-      sinkingFunds: prev.sinkingFunds.map((f) => {
-        if (f.lastFunded === thisMonth) return f;
-        const c = computeFund(f);
-        if (c.requiredMonthly <= 0) return f;
-        return {
-          ...f,
-          balance: Number(f.balance || 0) + Math.round(c.requiredMonthly * 100) / 100,
-          lastFunded: thisMonth,
-        };
-      }),
-    }));
-  }
-
-  function addFund(fund) {
-    setBudgetState((prev) => ({ ...prev, sinkingFunds: [...(prev.sinkingFunds || []), fund] }));
-    setShowAdd(false);
+  function markPaid(f) {
+    // The payment itself is a transaction against this envelope (that's what
+    // draws the balance down); marking paid just rolls the due date forward.
+    updateFund(f.envelope.id, { nextDueDate: advanceDueDate(f.nextDueDate, f.envelope.frequency) });
   }
 
   return (
     <>
       <h1 className="page-title">Sinking Funds</h1>
       <p className="page-intro">
-        One pot per irregular bill. Add a little each month so the money is already there when the
-        bill comes due — no more coming up short.
+        One pot per irregular bill. These are your <strong>sinking</strong> envelopes from the Budget —
+        each carries its balance forward month to month, so the money is already there when the bill
+        comes due. Create or edit them on the Budget page or right here.
       </p>
 
-      {/* Summary + monthly set-aside */}
       <section className="card">
         <div className="card-header">
-          <h2>This month</h2>
-          <span className="pill">{money(totalSaved)} of {money(totalTarget)} set aside</span>
+          <h2>Across all funds</h2>
+          <span className="pill">{money(totalSaved)} of {money(totalTarget)} saved</span>
         </div>
         <div className="sf-summary">
           <div className="sf-summary-figure">
-            <span className="sf-summary-label">Set aside to stay on track</span>
-            <span className="sf-summary-value">{money(requiredThisMonth)}/mo</span>
+            <span className="sf-summary-label">Set aside each month to stay on track</span>
+            <span className="sf-summary-value">{money(requiredMonthly)}/mo</span>
           </div>
-          <button
-            type="button"
-            className="primary-btn"
-            onClick={setAsideThisMonth}
-            disabled={alreadyFundedThisMonth === funds.length && funds.length > 0}
-          >
-            {alreadyFundedThisMonth === funds.length && funds.length > 0
-              ? 'All funded this month ✓'
-              : `Set aside this month's ${money(requiredThisMonth)}`}
-          </button>
         </div>
         <p className="module-note">
-          "Set aside this month" adds each fund's suggested amount to its balance and marks it done
-          for {thisMonth}. You can also add money to any single fund below, or type in the real
-          balance if you already have cash saved.
+          Balances update automatically as your monthly set-aside is budgeted and as you spend from a
+          fund. To change how much you save into a fund, edit its monthly amount on the Budget page.
         </p>
       </section>
 
-      {/* Upcoming bills timeline */}
       {upcoming.length > 0 && (
         <section className="card">
           <div className="card-header">
@@ -145,9 +105,9 @@ export default function SinkingFunds({ budgetState, setBudgetState }) {
           </div>
           <ul className="sf-timeline">
             {upcoming.map((f) => (
-              <li key={f.id} className="sf-timeline-row">
+              <li key={f.envelope.id} className="sf-timeline-row">
                 <span className={`sf-dot sf-dot-${f.status}`} />
-                <span className="sf-timeline-name">{f.name}</span>
+                <span className="sf-timeline-name">{f.envelope.name}</span>
                 <span className="sf-timeline-due">{dueLabel(f.nextDueDate)}</span>
                 <span className="sf-timeline-amount">
                   {f.funded ? (
@@ -162,110 +122,83 @@ export default function SinkingFunds({ budgetState, setBudgetState }) {
         </section>
       )}
 
-      {/* Individual funds */}
       <section className="card">
         <div className="card-header">
           <h2>Your funds</h2>
-          <button type="button" className="secondary-btn" onClick={() => setShowAdd((s) => !s)}>
-            {showAdd ? 'Cancel' : '+ Add a fund'}
-          </button>
         </div>
-
-        {showAdd && <AddFundForm onAdd={addFund} />}
-
-        <div className="sf-list">
-          {computed.map((f) => (
-            <FundCard
-              key={f.id}
-              fund={f}
-              onUpdate={updateFund}
-              onDelete={deleteFund}
-              onAddContribution={addContribution}
-              onMarkPaid={markPaid}
-            />
-          ))}
-          {computed.length === 0 && (
-            <p className="module-note">No sinking funds yet — add one above.</p>
-          )}
-        </div>
+        {computed.length === 0 ? (
+          <p className="module-note">
+            No sinking funds yet. On the Budget page, add an envelope and set its type to
+            <strong> Sinking fund</strong>.
+          </p>
+        ) : (
+          <div className="sf-list">
+            {computed.map((f) => (
+              <FundCard key={f.envelope.id} f={f} onUpdate={updateFund} onMarkPaid={markPaid} />
+            ))}
+          </div>
+        )}
       </section>
     </>
   );
 }
 
-function FundCard({ fund, onUpdate, onDelete, onAddContribution, onMarkPaid }) {
+function FundCard({ f, onUpdate, onMarkPaid }) {
   const [expanded, setExpanded] = useState(false);
-  const [addAmount, setAddAmount] = useState('');
+  const env = f.envelope;
+  const hasTarget = Number(env.targetAmount || 0) > 0;
 
   return (
-    <div className={`sf-card sf-card-${fund.status}`}>
+    <div className={`sf-card sf-card-${f.status}`}>
       <div className="sf-card-top">
         <div className="sf-card-heading">
-          <span className="sf-card-name">{fund.name}</span>
-          <span className={`pill ${STATUS_CLASS[fund.status]}`}>{STATUS_LABEL[fund.status]}</span>
+          <span className="sf-card-name">{env.name}</span>
+          {hasTarget && <span className={`pill ${STATUS_CLASS[f.status]}`}>{STATUS_LABEL[f.status]}</span>}
         </div>
-        <span className="sf-card-due">{dueLabel(fund.nextDueDate)}</span>
+        {env.nextDueDate && <span className="sf-card-due">{dueLabel(env.nextDueDate)}</span>}
       </div>
 
       <div className="sf-card-figures">
         <span className="sf-figure">
-          <span className="sf-figure-label">Saved</span>
-          <span className="sf-figure-value">{money(fund.balance)}</span>
+          <span className="sf-figure-label">Balance</span>
+          <span className="sf-figure-value">{money(f.live)}</span>
         </span>
         <span className="sf-figure">
           <span className="sf-figure-label">Target</span>
-          <span className="sf-figure-value">{money(fund.target)}</span>
+          <span className="sf-figure-value">{hasTarget ? money(env.targetAmount) : '—'}</span>
         </span>
         <span className="sf-figure">
           <span className="sf-figure-label">Set aside / mo</span>
-          <span className="sf-figure-value">{money(fund.requiredMonthly)}</span>
+          <span className="sf-figure-value">{money(env.budgetValue)}</span>
         </span>
       </div>
 
-      <div className="bar-track">
-        <div className={`bar-fill sf-bar-${fund.status}`} style={{ width: `${fund.pct}%` }} />
-      </div>
+      {hasTarget && (
+        <div className="bar-track">
+          <div className={`bar-fill sf-bar-${f.status}`} style={{ width: `${f.pct}%` }} />
+        </div>
+      )}
 
-      {fund.status === 'behind' && (
+      {f.status === 'behind' && (
         <p className="sf-warn">
-          Behind pace — set aside {money(fund.requiredMonthly)}/mo (vs. the usual {money(fund.ideal)}) to
-          make it by {dueLabel(fund.nextDueDate)}.
+          Behind pace — set aside {money(f.requiredMonthly)}/mo (vs. the usual {money(f.ideal)}) to make it
+          by {dueLabel(env.nextDueDate)}. Bump this fund&apos;s monthly amount on the Budget page.
         </p>
       )}
-      {fund.status === 'overdue' && !fund.funded && (
+      {f.status === 'overdue' && !f.funded && (
         <p className="sf-warn sf-warn-bad">
-          Due date has passed and you're {money(fund.stillNeeded)} short. Update the balance, or set a
-          new due date after paying it.
+          Due date passed and you&apos;re {money(f.stillNeeded)} short. After paying it, tap Mark paid to roll
+          the due date forward.
         </p>
       )}
-      {fund.funded && (
-        <p className="sf-warn sf-warn-good">Fully funded — the cash is ready when this bill comes due.</p>
-      )}
+      {f.funded && <p className="sf-warn sf-warn-good">Fully funded — the cash is ready for this bill.</p>}
 
       <div className="sf-card-actions">
-        <div className="sf-add-inline">
-          <input
-            type="number"
-            inputMode="decimal"
-            placeholder="Add $"
-            className="budget-input"
-            value={addAmount}
-            onChange={(e) => setAddAmount(e.target.value)}
-          />
-          <button
-            type="button"
-            className="secondary-btn"
-            onClick={() => {
-              onAddContribution(fund.id, addAmount);
-              setAddAmount('');
-            }}
-          >
-            Add
+        {env.nextDueDate && (
+          <button type="button" className="secondary-btn" onClick={() => onMarkPaid(f)}>
+            Mark paid
           </button>
-        </div>
-        <button type="button" className="secondary-btn" onClick={() => onMarkPaid(fund)}>
-          Mark paid
-        </button>
+        )}
         <button type="button" className="link-btn" onClick={() => setExpanded((e) => !e)}>
           {expanded ? 'Done' : 'Edit'}
         </button>
@@ -274,98 +207,32 @@ function FundCard({ fund, onUpdate, onDelete, onAddContribution, onMarkPaid }) {
       {expanded && (
         <div className="sf-edit">
           <label>
-            Name
-            <input value={fund.name} onChange={(e) => onUpdate(fund.id, { name: e.target.value })} />
+            Monthly set-aside
+            <input type="number" value={env.budgetValue} onChange={(e) => onUpdate(env.id, { budgetValue: e.target.value })} />
           </label>
           <label>
-            Current balance
-            <input
-              type="number"
-              value={fund.balance}
-              onChange={(e) => onUpdate(fund.id, { balance: e.target.value })}
-            />
+            Opening balance (already saved)
+            <input type="number" value={env.openingBalance ?? 0} onChange={(e) => onUpdate(env.id, { openingBalance: e.target.value })} />
           </label>
           <label>
             Target amount
-            <input
-              type="number"
-              value={fund.targetAmount}
-              onChange={(e) => onUpdate(fund.id, { targetAmount: e.target.value })}
-            />
+            <input type="number" value={env.targetAmount ?? ''} placeholder="none" onChange={(e) => onUpdate(env.id, { targetAmount: e.target.value })} />
           </label>
           <label>
             Due date
-            <input
-              type="date"
-              value={fund.nextDueDate || ''}
-              onChange={(e) => onUpdate(fund.id, { nextDueDate: e.target.value })}
-            />
+            <input type="date" value={env.nextDueDate || ''} onChange={(e) => onUpdate(env.id, { nextDueDate: e.target.value })} />
           </label>
           <label>
             Recurs
-            <select
-              value={fund.frequency}
-              onChange={(e) => onUpdate(fund.id, { frequency: e.target.value })}
-            >
-              <option value="monthly">Monthly</option>
-              <option value="quarterly">Quarterly</option>
-              <option value="semiannual">Every 6 months</option>
-              <option value="annual">Yearly</option>
+            <select value={env.frequency || 'annual'} onChange={(e) => onUpdate(env.id, { frequency: e.target.value })}>
+              {FREQ_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
             </select>
           </label>
-          <button type="button" className="link-btn danger" onClick={() => onDelete(fund.id)}>
-            Delete this fund
-          </button>
+          <p className="module-note">Delete a fund by removing its envelope on the Budget page.</p>
         </div>
       )}
     </div>
-  );
-}
-
-function AddFundForm({ onAdd }) {
-  const [name, setName] = useState('');
-  const [targetAmount, setTargetAmount] = useState('');
-  const [nextDueDate, setNextDueDate] = useState('');
-  const [frequency, setFrequency] = useState('annual');
-
-  function submit(e) {
-    e.preventDefault();
-    if (!name.trim() || !targetAmount) return;
-    onAdd({
-      id: `sf-${Date.now()}`,
-      name: name.trim(),
-      group: 'Other',
-      targetAmount: Number(targetAmount),
-      frequency,
-      nextDueDate: nextDueDate || null,
-      balance: 0,
-    });
-  }
-
-  return (
-    <form className="sf-add-form" onSubmit={submit}>
-      <label>
-        Name
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Property taxes" />
-      </label>
-      <label>
-        Target $
-        <input type="number" value={targetAmount} onChange={(e) => setTargetAmount(e.target.value)} placeholder="0" />
-      </label>
-      <label>
-        Due date
-        <input type="date" value={nextDueDate} onChange={(e) => setNextDueDate(e.target.value)} />
-      </label>
-      <label>
-        Recurs
-        <select value={frequency} onChange={(e) => setFrequency(e.target.value)}>
-          <option value="monthly">Monthly</option>
-          <option value="quarterly">Quarterly</option>
-          <option value="semiannual">Every 6 months</option>
-          <option value="annual">Yearly</option>
-        </select>
-      </label>
-      <button type="submit" className="primary-btn">Add fund</button>
-    </form>
   );
 }

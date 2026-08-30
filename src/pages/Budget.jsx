@@ -325,6 +325,40 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                             />
                           </span>
                         )}
+                        {c.kind === 'sinking' && (
+                          <>
+                            <span className="category-type-value" title="What you'll owe when this bill comes due (blank = just accumulate)">
+                              target&nbsp;$
+                              <input
+                                type="number"
+                                className="budget-input"
+                                value={c.targetAmount ?? ''}
+                                placeholder="—"
+                                onChange={(e) => updateCategory(c.id, 'targetAmount', e.target.value)}
+                              />
+                            </span>
+                            <span className="category-type-value" title="When the next payment is due">
+                              due
+                              <input
+                                type="date"
+                                className="budget-input budget-input-date"
+                                value={c.nextDueDate || ''}
+                                onChange={(e) => updateCategory(c.id, 'nextDueDate', e.target.value)}
+                              />
+                            </span>
+                            <select
+                              className="category-kind-select"
+                              value={c.frequency || 'annual'}
+                              onChange={(e) => updateCategory(c.id, 'frequency', e.target.value)}
+                              title="How often this bill recurs"
+                            >
+                              <option value="monthly">Monthly</option>
+                              <option value="quarterly">Quarterly</option>
+                              <option value="semiannual">Every 6 months</option>
+                              <option value="annual">Yearly</option>
+                            </select>
+                          </>
+                        )}
                         <button
                           type="button"
                           className="reorder-btn"
