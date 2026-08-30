@@ -57,6 +57,16 @@ function daysApart(aStr, bStr) {
   return Math.abs((new Date(`${aStr}T00:00:00`) - new Date(`${bStr}T00:00:00`)) / 86400000);
 }
 
+// The earliest transaction date to import (YYYY-MM-DD), so linking a bank
+// doesn't pull years of history. Prefer an explicit settings.importSince;
+// otherwise start on the first of the ledger's start month; null = no cutoff.
+function importCutoff(budget) {
+  const s = budget.settings || {};
+  if (typeof s.importSince === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.importSince)) return s.importSince;
+  if (typeof s.startMonth === 'string' && /^\d{4}-\d{2}$/.test(s.startMonth)) return `${s.startMonth}-01`;
+  return null;
+}
+
 // Money moving between your own accounts, and paying off the credit card, are
 // NOT spending — counting them would double-count (the card purchases already
 // hit their envelopes) or make an envelope look overspent. Plaid tags these,
@@ -196,8 +206,14 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
       cursor = resp.data.next_cursor;
     }
 
-    const changed = [...added, ...modified];
     const budget = await loadBudget(supabaseAdmin);
+    // Clean slate: don't import history from before the ledger starts. Plaid's
+    // sync has no date filter, so we drop older transactions here (the cursor
+    // still advances past them, they're just never written).
+    const cutoff = importCutoff(budget);
+    const withinCutoff = (t) => !cutoff || t.date >= cutoff;
+    const addedNew = added.filter(withinCutoff);
+    const changed = [...added, ...modified].filter(withinCutoff);
     const categories = (budget.categories || []).filter((c) => c.id !== 'needs-review');
     const { assignments, businessSet } = await assignCategories(supabaseAdmin, changed, categories);
 
@@ -238,7 +254,7 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
     await supabaseAdmin.from('plaid_items').update({ sync_cursor: cursor }).eq('id', itemRowId);
 
     try {
-      await mergeReceiptMatches(supabaseAdmin, added);
+      await mergeReceiptMatches(supabaseAdmin, addedNew);
     } catch (err) {
       console.error('Receipt match phase failed:', err?.message || err);
     }
