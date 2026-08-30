@@ -693,6 +693,8 @@ textarea {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .category-type-control select {
@@ -1360,3 +1362,15 @@ textarea {
 .add-envelope-form select { min-width: 0; }
 
 .budget-input-wide { width: 70px; }
+
+/* ---------- Mobile polish (primary target: iPhone) ---------- */
+@media (max-width: 640px) {
+  .app-main { padding: 18px 14px 92px; }
+  .card { padding: 16px; border-radius: 16px; gap: 12px; }
+  .page-title { margin-bottom: 14px; font-size: 24px; }
+  .aom-value { font-size: 30px; }
+  .category-name-input { flex: 1 1 100%; }
+  .category-type-control { justify-content: flex-start; }
+  .category-row-figures { justify-content: space-between; width: 100%; }
+  .budget-zero-value { font-size: 18px; }
+}

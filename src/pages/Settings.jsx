@@ -4,17 +4,24 @@ import { makeDefaultBudget } from '../lib/useBudgetState';
 // One place for the knobs that don't belong on a specific page: what the app
 // is called, when the envelope ledger starts counting, how you pay for things,
 // and a guarded reset back to the seeded budget.
-export default function Settings({ budgetState, setBudgetState }) {
+export default function Settings({ budgetState, setBudgetState, setView }) {
   const settings = budgetState.settings || {};
   const [confirmReset, setConfirmReset] = useState(false);
+  const [resetText, setResetText] = useState('');
 
   function updateSetting(patch) {
     setBudgetState((prev) => ({ ...prev, settings: { ...(prev.settings || {}), ...patch } }));
   }
 
-  function resetToDefaults() {
-    setBudgetState(makeDefaultBudget());
+  function cancelReset() {
     setConfirmReset(false);
+    setResetText('');
+  }
+
+  function resetToDefaults() {
+    if (resetText.trim().toUpperCase() !== 'RESET') return;
+    setBudgetState(makeDefaultBudget());
+    cancelReset();
   }
 
   return (
@@ -84,6 +91,19 @@ export default function Settings({ budgetState, setBudgetState }) {
         </div>
       </section>
 
+      <section className="card">
+        <div className="card-header">
+          <h2>Tax Report</h2>
+        </div>
+        <p className="module-note">
+          Year-end totals by tax bucket (charitable, medical, business), with receipt detail and a CSV
+          export for your CPA. Lives here since it&apos;s used once a year, not day to day.
+        </p>
+        <button type="button" className="secondary-btn" onClick={() => setView?.('reports')}>
+          Open Tax Report →
+        </button>
+      </section>
+
       <section className="card danger-zone">
         <div className="card-header">
           <h2>Danger zone</h2>
@@ -93,13 +113,31 @@ export default function Settings({ budgetState, setBudgetState }) {
           This does <strong>not</strong> touch your recorded transactions. There&apos;s no undo.
         </p>
         {confirmReset ? (
-          <div className="bank-actions">
-            <button type="button" className="link-btn danger" onClick={resetToDefaults}>
-              Yes, reset the budget to defaults
-            </button>
-            <button type="button" className="secondary-btn" onClick={() => setConfirmReset(false)}>
-              Cancel
-            </button>
+          <div className="settings-field">
+            <label htmlFor="reset-confirm">
+              Type <strong>RESET</strong> to confirm you want to wipe your budget setup:
+            </label>
+            <input
+              id="reset-confirm"
+              type="text"
+              value={resetText}
+              placeholder="RESET"
+              autoComplete="off"
+              onChange={(e) => setResetText(e.target.value)}
+            />
+            <div className="bank-actions" style={{ marginTop: 10 }}>
+              <button
+                type="button"
+                className="link-btn danger"
+                disabled={resetText.trim().toUpperCase() !== 'RESET'}
+                onClick={resetToDefaults}
+              >
+                Permanently reset the budget
+              </button>
+              <button type="button" className="secondary-btn" onClick={cancelReset}>
+                Cancel
+              </button>
+            </div>
           </div>
         ) : (
           <button type="button" className="secondary-btn" onClick={() => setConfirmReset(true)}>
