@@ -79,7 +79,9 @@ export default function Overview({ budgetState, transactions, setView }) {
     sources: budgetState.incomeSources,
     categories: budgetState.categories,
     effectiveBudgets,
-    sinkingFunds: budgetState.sinkingFunds,
+    // Sinking funds are sinking-kind envelopes now; their due dates + targets
+    // drive the outflow side of the timeline.
+    sinkingFunds: budgetState.categories.filter((c) => c.kind === 'sinking'),
     days: 45,
   });
   const cashflowShort = cashflow.low < 0;

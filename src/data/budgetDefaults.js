@@ -84,6 +84,20 @@ export const DEFAULT_CATEGORIES = [
   { id: 'sports-camps', name: 'Sports / Camps', group: 'Recreation / Travel', kind: 'spending', budgetType: 'fixed', budgetValue: 75 },
   { id: 'noah-travel', name: 'Noah Travel', group: 'Recreation / Travel', kind: 'spending', budgetType: 'fixed', budgetValue: 100 },
 
+  // Sinking funds — irregular/annual bills you save toward. They're sinking-kind
+  // envelopes (so they live in the Budget and carry their balance forward), and
+  // they carry a target, a due date, and how often the bill recurs so the
+  // Funds tab can show "on track / behind". budgetValue is the monthly set-aside
+  // (≈ target ÷ months in the cycle) — tweak it, and set your REAL due dates.
+  { id: 'sf-13th-mortgage', name: '13th Mortgage Payment', group: 'Housing', kind: 'sinking', budgetType: 'fixed', budgetValue: 131, openingBalance: 0, targetAmount: 1570, frequency: 'annual', nextDueDate: '2026-12-13' },
+  { id: 'sf-auto-insurance', name: 'Auto Insurance', group: 'Insurance', kind: 'sinking', budgetType: 'fixed', budgetValue: 175, openingBalance: 0, targetAmount: 1050, frequency: 'semiannual', nextDueDate: '2027-01-15' },
+  { id: 'sf-life-jeff', name: 'Life Insurance — Jeff (term)', group: 'Insurance', kind: 'sinking', budgetType: 'fixed', budgetValue: 58, openingBalance: 0, targetAmount: 700, frequency: 'annual', nextDueDate: '2027-01-15' },
+  { id: 'sf-life-kari', name: 'Life Insurance — Kari / boys', group: 'Insurance', kind: 'sinking', budgetType: 'fixed', budgetValue: 12, openingBalance: 0, targetAmount: 144, frequency: 'annual', nextDueDate: '2027-01-15' },
+  { id: 'sf-hoa', name: 'HOA Dues', group: 'Housing', kind: 'sinking', budgetType: 'fixed', budgetValue: 15, openingBalance: 0, targetAmount: 175, frequency: 'annual', nextDueDate: '2027-01-15' },
+  { id: 'sf-license-taxes', name: 'Vehicle License / Taxes', group: 'Transportation', kind: 'sinking', budgetType: 'fixed', budgetValue: 63, openingBalance: 0, targetAmount: 750, frequency: 'annual', nextDueDate: '2027-03-01' },
+  { id: 'sf-vacation', name: 'Vacation', group: 'Recreation / Travel', kind: 'sinking', budgetType: 'fixed', budgetValue: 833, openingBalance: 0, targetAmount: 10000, frequency: 'annual', nextDueDate: '2027-06-01' },
+  { id: 'sf-bluegreen', name: 'Bluegreen Dues', group: 'Recreation / Travel', kind: 'sinking', budgetType: 'fixed', budgetValue: 109, openingBalance: 0, targetAmount: 1310, frequency: 'annual', nextDueDate: '2027-01-15' },
+
   // Always keep this one last — it's where unclear transactions land until you
   // sort them. It's a flag, not a spending target.
   { id: 'needs-review', name: 'Needs Review', group: 'Other', kind: 'spending', budgetType: 'fixed', budgetValue: 0 },
@@ -106,16 +120,10 @@ export const DEFAULT_CATEGORIES = [
 // due date — the whole "will I have the cash in time?" calculation depends on
 // it.
 // ---------------------------------------------------------------------------
-export const DEFAULT_SINKING_FUNDS = [
-  { id: 'sf-13th-mortgage', name: '13th Mortgage Payment', group: 'Housing', targetAmount: 1570, frequency: 'annual', nextDueDate: '2026-12-13', balance: 0 },
-  { id: 'sf-auto-insurance', name: 'Auto Insurance', group: 'Insurance', targetAmount: 1050, frequency: 'semiannual', nextDueDate: '2027-01-15', balance: 0 },
-  { id: 'sf-life-jeff', name: 'Life Insurance — Jeff (term)', group: 'Insurance', targetAmount: 700, frequency: 'annual', nextDueDate: '2027-01-15', balance: 0 },
-  { id: 'sf-life-kari', name: 'Life Insurance — Kari / boys', group: 'Insurance', targetAmount: 144, frequency: 'annual', nextDueDate: '2027-01-15', balance: 0 },
-  { id: 'sf-hoa', name: 'HOA Dues', group: 'Housing', targetAmount: 175, frequency: 'annual', nextDueDate: '2027-01-15', balance: 0 },
-  { id: 'sf-license-taxes', name: 'Vehicle License / Taxes', group: 'Transportation', targetAmount: 750, frequency: 'annual', nextDueDate: '2027-03-01', balance: 0 },
-  { id: 'sf-vacation', name: 'Vacation', group: 'Recreation / Travel', targetAmount: 10000, frequency: 'annual', nextDueDate: '2027-06-01', balance: 0 },
-  { id: 'sf-bluegreen', name: 'Bluegreen Dues', group: 'Recreation / Travel', targetAmount: 1310, frequency: 'annual', nextDueDate: '2027-01-15', balance: 0 },
-];
+// Sinking funds are now sinking-kind envelopes (see DEFAULT_CATEGORIES) so they
+// live in the Budget and the Funds tab tracks them live. This legacy array is
+// kept empty for backward compatibility with saved state that referenced it.
+export const DEFAULT_SINKING_FUNDS = [];
 
 // Your income sources. Each lands on its own cadence — add/rename/remove them
 // in the app under Budget → Income. The app sums their monthly-equivalent to

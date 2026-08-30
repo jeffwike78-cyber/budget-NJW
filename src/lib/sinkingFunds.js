@@ -81,6 +81,21 @@ export function computeFund(fund, fromStr = todayStr()) {
   };
 }
 
+// A sinking-fund envelope's live status: its rolling balance (already computed
+// from contributions − spending) run through the same on-track math as a fund.
+export function computeSinkingEnvelope(envelope, liveBalance, fromStr = todayStr()) {
+  return computeFund(
+    {
+      ...envelope,
+      balance: liveBalance,
+      targetAmount: envelope.targetAmount,
+      nextDueDate: envelope.nextDueDate,
+      frequency: envelope.frequency,
+    },
+    fromStr
+  );
+}
+
 // Roll a due date forward one period — used when a bill is marked paid.
 export function advanceDueDate(dueDateStr, frequency) {
   const d = new Date((dueDateStr || todayStr()) + 'T00:00:00');
