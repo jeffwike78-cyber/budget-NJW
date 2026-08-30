@@ -1,11 +1,19 @@
 // The four kinds of envelope. `carryover` decides what happens to money left
 // at month end: bills reset to their budget each month; everything else keeps
 // its running balance (true cash-envelope behavior).
+// carryover decides what happens to money left at month end:
+//   bill      — a fixed monthly bill; resets to its budget each month
+//   spending  — a monthly allowance spent down across many small buys
+//               (gas, groceries); resets each month, does NOT accumulate
+//   sinking   — saved up over time toward an irregular/larger expense;
+//               leftover carries forward and the balance grows
+//   transfer  — money moved out to another account (Jeff/Kari spending,
+//               retirement, savings); carries forward
 export const ENVELOPE_KINDS = [
   { value: 'bill', label: 'Monthly bill', carryover: false },
-  { value: 'spending', label: 'Everyday spending', carryover: true },
+  { value: 'spending', label: 'Monthly spending', carryover: false },
   { value: 'sinking', label: 'Sinking fund', carryover: true },
-  { value: 'transfer', label: 'Transfer to savings', carryover: true },
+  { value: 'transfer', label: 'Transfer to account', carryover: true },
 ];
 
 const KIND_CARRYOVER = Object.fromEntries(ENVELOPE_KINDS.map((k) => [k.value, k.carryover]));
