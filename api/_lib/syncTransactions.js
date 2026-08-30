@@ -57,6 +57,24 @@ function daysApart(aStr, bStr) {
   return Math.abs((new Date(`${aStr}T00:00:00`) - new Date(`${bStr}T00:00:00`)) / 86400000);
 }
 
+// Money moving between your own accounts, and paying off the credit card, are
+// NOT spending — counting them would double-count (the card purchases already
+// hit their envelopes) or make an envelope look overspent. Plaid tags these,
+// so we auto-mark them Ignored. Note we deliberately DON'T exclude all
+// LOAN_PAYMENTS — a mortgage or auto-loan payment is a real budget expense;
+// only the credit-card-payment detail is a transfer of already-counted money.
+const EXCLUDE_PRIMARY = new Set(['TRANSFER_IN', 'TRANSFER_OUT']);
+function isTransferOrCardPayment(txn) {
+  const pfc = txn.personal_finance_category || {};
+  if (pfc.primary && EXCLUDE_PRIMARY.has(pfc.primary)) return true;
+  if (pfc.detailed === 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT') return true;
+  // Fallback for accounts/data without a personal-finance category.
+  const legacy = Array.isArray(txn.category) ? txn.category.join(' ') : '';
+  if (/\btransfer\b/i.test(legacy)) return true;
+  if (/credit card payment|card payment/i.test(legacy)) return true;
+  return false;
+}
+
 // Merge scanned "pending" receipts (source='receipt') into the matching real
 // bank charge once it posts: copy the receipt's note/photo/category onto the
 // bank transaction and delete the pending one so the envelope isn't double-hit.
@@ -185,8 +203,11 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
 
     const needsReviewPlaidIds = [];
     for (const txn of changed) {
-      const categoryId = assignments[txn.transaction_id] || 'needs-review';
-      if (categoryId === 'needs-review') needsReviewPlaidIds.push(txn.transaction_id);
+      // A transfer or card payoff isn't spending: leave it uncategorized and
+      // Ignored so it never hits an envelope or the Needs Review queue.
+      const isXfer = isTransferOrCardPayment(txn);
+      const categoryId = isXfer ? null : assignments[txn.transaction_id] || 'needs-review';
+      if (!isXfer && categoryId === 'needs-review') needsReviewPlaidIds.push(txn.transaction_id);
       const row = {
         plaid_transaction_id: txn.transaction_id,
         date: txn.date,
@@ -199,6 +220,7 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
       // Only set business when detected — never write false, so a re-sync of a
       // modified transaction can't clear a flag the user set by hand.
       if (businessSet.has(txn.transaction_id)) row.business = true;
+      if (isXfer) row.excluded = true;
       const { error } = await supabaseAdmin
         .from('budget_transactions')
         .upsert(row, { onConflict: 'plaid_transaction_id' });
