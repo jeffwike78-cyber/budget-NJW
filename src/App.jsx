@@ -15,6 +15,9 @@ import { useBudgetTransactions } from './lib/useBudgetTransactions';
 
 function App() {
   const [view, setView] = useState('overview');
+  // A receipt photo captured from the Overview quick-scan button, handed to the
+  // Transactions page to run OCR and prefill the add form.
+  const [pendingScanFile, setPendingScanFile] = useState(null);
   const [budgetState, setBudgetState, budgetLoading] = useBudgetState();
   const { transactions, addTransaction, recategorize, setExcluded, setBusiness, setTaxCategory } =
     useBudgetTransactions();
@@ -35,7 +38,15 @@ function App() {
         <main className="app-main">
           <ErrorBoundary key={view}>
           {view === 'overview' && (
-            <Overview budgetState={budgetState} transactions={transactions} setView={setView} />
+            <Overview
+              budgetState={budgetState}
+              transactions={transactions}
+              setView={setView}
+              onQuickScan={(file) => {
+                setPendingScanFile(file);
+                setView('transactions');
+              }}
+            />
           )}
           {view === 'transactions' && (
             <Transactions
@@ -43,6 +54,8 @@ function App() {
               setBudgetState={setBudgetState}
               transactions={transactions}
               addTransaction={addTransaction}
+              pendingScanFile={pendingScanFile}
+              onScanConsumed={() => setPendingScanFile(null)}
               {...txActions}
             />
           )}

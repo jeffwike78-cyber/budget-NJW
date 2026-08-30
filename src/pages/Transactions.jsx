@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { todayStr } from '../lib/storage';
 import { categorizeWithAI } from '../lib/aiCategorize';
 import { scanReceipt } from '../lib/receiptsClient';
@@ -8,7 +8,7 @@ function normalize(desc) {
   return desc.trim().toLowerCase();
 }
 
-export default function Transactions({ budgetState, setBudgetState, transactions, addTransaction, recategorize, setExcluded, setTaxCategory }) {
+export default function Transactions({ budgetState, setBudgetState, transactions, addTransaction, recategorize, setExcluded, setTaxCategory, pendingScanFile, onScanConsumed }) {
   // Needs Review is for unclear spending, not unclear deposits — money coming
   // in (amount < 0, the reverse of "positive = expense") never belongs here,
   // even if it somehow got flagged that way.
@@ -30,8 +30,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
   const [addOk, setAddOk] = useState(false);
   const scanRef = useRef(null);
 
-  async function onScanFile(e) {
-    const file = e.target.files?.[0];
+  async function processScan(file) {
     if (!file) return;
     setScanBusy(true);
     setScanMsg(null);
@@ -52,9 +51,23 @@ export default function Transactions({ budgetState, setBudgetState, transactions
       setScanMsg(err.message);
     } finally {
       setScanBusy(false);
-      e.target.value = '';
     }
   }
+
+  async function onScanFile(e) {
+    const file = e.target.files?.[0];
+    await processScan(file);
+    e.target.value = '';
+  }
+
+  // A photo captured from the Overview quick-scan button arrives here — run it
+  // through OCR once, then clear it so it doesn't reprocess on re-render.
+  useEffect(() => {
+    if (!pendingScanFile) return;
+    processScan(pendingScanFile);
+    onScanConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingScanFile]);
 
   function handleDescriptionChange(value) {
     if (addMsg) setAddMsg(null);

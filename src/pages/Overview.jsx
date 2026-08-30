@@ -30,7 +30,7 @@ function lastNMonths(n) {
   return out;
 }
 
-export default function Overview({ budgetState, transactions, setView }) {
+export default function Overview({ budgetState, transactions, setView, onQuickScan }) {
   const today = todayStr();
   const month = monthKey(today);
   const monthTx = transactions.filter((t) => monthKey(t.date) === month);
@@ -263,6 +263,23 @@ export default function Overview({ budgetState, transactions, setView }) {
           </ul>
         </section>
       </div>
+
+      {onQuickScan && (
+        <label className="fab-scan" title="Scan a receipt">
+          📷
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onQuickScan(f);
+              e.target.value = '';
+            }}
+          />
+        </label>
+      )}
     </>
   );
 }

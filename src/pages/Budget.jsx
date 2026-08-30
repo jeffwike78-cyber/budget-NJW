@@ -228,19 +228,19 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
           </span>
         </div>
 
-        <div className={`budget-zero ${Math.abs(leftToBudget) < 1 ? 'zero-balanced' : leftToBudget < 0 ? 'zero-over' : 'zero-under'}`}>
+        <div className={`budget-zero budget-zero-sticky ${Math.abs(leftToBudget) < 1 ? 'zero-balanced' : leftToBudget < 0 ? 'zero-over' : 'zero-under'}`}>
           <div className="budget-zero-fig">
-            <span className="budget-zero-label">Projected income</span>
+            <span className="budget-zero-label">Income</span>
             <span className="budget-zero-value">${income.toFixed(0)}</span>
           </div>
           <span className="budget-zero-op">−</span>
           <div className="budget-zero-fig">
-            <span className="budget-zero-label">Budgeted</span>
+            <span className="budget-zero-label">Expenses</span>
             <span className="budget-zero-value">${totalBudgeted.toFixed(0)}</span>
           </div>
           <span className="budget-zero-op">=</span>
           <div className="budget-zero-fig">
-            <span className="budget-zero-label">{leftToBudget < 0 ? 'Over by' : 'Left to budget'}</span>
+            <span className="budget-zero-label">{leftToBudget < 0 ? 'Over by' : 'Remaining'}</span>
             <span className="budget-zero-value">${Math.abs(leftToBudget).toFixed(0)}</span>
           </div>
         </div>
