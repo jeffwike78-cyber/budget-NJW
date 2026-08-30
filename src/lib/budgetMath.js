@@ -1,3 +1,33 @@
+// The four kinds of envelope. `carryover` decides what happens to money left
+// at month end: bills reset to their budget each month; everything else keeps
+// its running balance (true cash-envelope behavior).
+export const ENVELOPE_KINDS = [
+  { value: 'bill', label: 'Monthly bill', carryover: false },
+  { value: 'spending', label: 'Everyday spending', carryover: true },
+  { value: 'sinking', label: 'Sinking fund', carryover: true },
+  { value: 'transfer', label: 'Transfer to savings', carryover: true },
+];
+
+const KIND_CARRYOVER = Object.fromEntries(ENVELOPE_KINDS.map((k) => [k.value, k.carryover]));
+
+export function isCarryover(kind) {
+  return KIND_CARRYOVER[kind] ?? true; // unknown/legacy envelopes carry over
+}
+
+export function kindLabel(kind) {
+  return ENVELOPE_KINDS.find((k) => k.value === kind)?.label || 'Everyday spending';
+}
+
+// Count of months from a 'YYYY-MM' start to a 'YYYY-MM' end, inclusive
+// (both the start and current month count as funded). Never less than 1.
+export function monthsInclusive(startMonth, currentMonth) {
+  if (!startMonth || !currentMonth) return 1;
+  const [sy, sm] = startMonth.split('-').map(Number);
+  const [cy, cm] = currentMonth.split('-').map(Number);
+  const n = (cy - sy) * 12 + (cm - sm) + 1;
+  return Math.max(1, n);
+}
+
 // How many times a year each pay cadence lands.
 const FREQ_PER_YEAR = {
   weekly: 52,
@@ -40,6 +70,30 @@ export function monthlyIncomeTotal(state) {
     return state.incomeSources.reduce((sum, src) => sum + sourceMonthly(src), 0);
   }
   return monthlyIncome(state?.income);
+}
+
+// The running "available" balance for each envelope, honoring its kind:
+//   - bills reset every month → available = this month's budget − spent this month
+//   - carryover envelopes keep a rolling balance → available =
+//       opening balance + (budget funded each month since the start) − all spending
+// `spentAll` / `spentMonth` are category→dollars maps (see netSpentByCategory).
+export function envelopeBalances(categories, effectiveBudgets, spentAll, spentMonth, startMonth, currentMonth) {
+  const monthsFunded = monthsInclusive(startMonth, currentMonth);
+  const out = {};
+  for (const c of categories) {
+    const budget = Number(effectiveBudgets[c.id] || 0);
+    const carry = isCarryover(c.kind);
+    const spentThisMonth = Number(spentMonth[c.id] || 0);
+    if (carry) {
+      const opening = Number(c.openingBalance || 0);
+      const funded = opening + budget * monthsFunded;
+      const spentToDate = Number(spentAll[c.id] || 0);
+      out[c.id] = { carry: true, available: funded - spentToDate, spentThisMonth, budget };
+    } else {
+      out[c.id] = { carry: false, available: budget - spentThisMonth, spentThisMonth, budget };
+    }
+  }
+  return out;
 }
 
 // Turns each category's budgetType/budgetValue into an actual dollar amount

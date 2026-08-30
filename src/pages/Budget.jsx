@@ -1,7 +1,16 @@
 import { useState } from 'react';
 import { todayStr } from '../lib/storage';
 import { netSpentByCategory } from '../lib/spending';
-import { monthlyIncome, monthlyIncomeTotal, sourceMonthly, computeCategoryBudgets, INCOME_FREQUENCIES } from '../lib/budgetMath';
+import {
+  monthlyIncome,
+  monthlyIncomeTotal,
+  sourceMonthly,
+  computeCategoryBudgets,
+  envelopeBalances,
+  isCarryover,
+  ENVELOPE_KINDS,
+  INCOME_FREQUENCIES,
+} from '../lib/budgetMath';
 import TxList from '../components/TxList';
 
 function monthKey(dateStr = todayStr()) {
@@ -24,6 +33,8 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
   const month = monthKey();
   const monthTx = transactions.filter((t) => monthKey(t.date) === month);
   const spentByCategory = netSpentByCategory(monthTx);
+  // All-time spend per envelope drives the rolling balance for carryover kinds.
+  const allTimeSpent = netSpentByCategory(transactions);
 
   // Income sources — migrate the legacy single income into one source the first
   // time, so nothing is lost for setups saved before multi-source income.
@@ -37,6 +48,14 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
   // set a dollar target for — so it's excluded from the budget-bar list.
   const budgetableCategories = budgetState.categories.filter((c) => c.id !== 'needs-review');
   const effectiveBudgets = computeCategoryBudgets(budgetableCategories, income);
+  const balances = envelopeBalances(
+    budgetableCategories,
+    effectiveBudgets,
+    allTimeSpent,
+    spentByCategory,
+    budgetState.settings?.startMonth,
+    month
+  );
   const hasRemainderCategory = budgetableCategories.some((c) => c.budgetType === 'remainder');
   const totalBudgeted = Object.values(effectiveBudgets).reduce((a, b) => a + b, 0);
   const totalSpent = Object.values(spentByCategory).reduce((a, b) => a + b, 0);
@@ -180,7 +199,8 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
               {byGroup[group].map((c) => {
                 const spent = spentByCategory[c.id] || 0;
                 const budget = effectiveBudgets[c.id] || 0;
-                const remaining = budget - spent;
+                const carry = isCarryover(c.kind);
+                const available = balances[c.id]?.available ?? budget - spent;
                 const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
                 const over = budget > 0 && spent > budget;
                 const categoryTx = monthTx.filter((t) => t.categoryId === c.id);
@@ -194,6 +214,18 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                         onChange={(e) => updateCategory(c.id, 'name', e.target.value)}
                       />
                       <div className="category-type-control">
+                        <select
+                          className="category-kind-select"
+                          value={c.kind || 'spending'}
+                          onChange={(e) => updateCategory(c.id, 'kind', e.target.value)}
+                          title="Bills reset each month; spending, sinking, and transfer envelopes keep their balance"
+                        >
+                          {ENVELOPE_KINDS.map((k) => (
+                            <option key={k.value} value={k.value}>
+                              {k.label}
+                            </option>
+                          ))}
+                        </select>
                         <select value={c.budgetType} onChange={(e) => updateCategory(c.id, 'budgetType', e.target.value)}>
                           <option value="fixed">Fixed $</option>
                           <option value="percent">% of income</option>
@@ -211,6 +243,18 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                             {c.budgetType === 'percent' ? '%' : null}
                           </span>
                         )}
+                        {carry && (
+                          <span className="category-type-value" title="Cash already in this envelope on your start date">
+                            start&nbsp;$
+                            <input
+                              type="number"
+                              className="budget-input"
+                              value={c.openingBalance ?? ''}
+                              placeholder="0"
+                              onChange={(e) => updateCategory(c.id, 'openingBalance', e.target.value)}
+                            />
+                          </span>
+                        )}
                         <button type="button" className="link-btn danger" onClick={() => deleteCategory(c.id)}>
                           ✕
                         </button>
@@ -219,16 +263,16 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
 
                     <div className="category-row-figures">
                       <span className="category-figure">
-                        <span className="category-figure-label">Budget</span>
+                        <span className="category-figure-label">Budget/mo</span>
                         <span className="category-figure-value">${budget.toFixed(0)}</span>
                       </span>
                       <span className="category-figure">
                         <span className="category-figure-label">Spent</span>
                         <span className="category-figure-value">${spent.toFixed(0)}</span>
                       </span>
-                      <span className={`category-figure ${remaining < 0 ? 'over-budget' : ''}`}>
-                        <span className="category-figure-label">Remaining</span>
-                        <span className="category-figure-value">${remaining.toFixed(0)}</span>
+                      <span className={`category-figure ${available < 0 ? 'over-budget' : ''}`}>
+                        <span className="category-figure-label">{carry ? 'Available' : 'Left this month'}</span>
+                        <span className="category-figure-value">${available.toFixed(0)}</span>
                       </span>
                     </div>
 
