@@ -19,69 +19,73 @@ export const DEFAULT_ACCOUNTS = [
 //
 // Amounts are seeded from your monthly cash & spending plan — tweak any of
 // them in the app as your real numbers shift.
+// `kind` tags each envelope: 'bill' (fixed, resets monthly), 'spending'
+// (variable, rolls its balance over), 'transfer' (money moved to another
+// account, rolls over). Sinking funds live on their own page. You can retag
+// any envelope in the app; these are just sensible starting points.
 export const DEFAULT_CATEGORIES = [
   // Giving
-  { id: 'tithe', name: 'Tithe / GCU', group: 'Giving', budgetType: 'fixed', budgetValue: 625 },
-  { id: 'service', name: 'Service / Generosity', group: 'Giving', budgetType: 'fixed', budgetValue: 500 },
-  { id: 'center', name: 'The Center', group: 'Giving', budgetType: 'fixed', budgetValue: 100 },
-  { id: 'blackhawk', name: 'Blackhawk', group: 'Giving', budgetType: 'fixed', budgetValue: 83 },
+  { id: 'tithe', name: 'Tithe / GCU', group: 'Giving', kind: 'bill', budgetType: 'fixed', budgetValue: 625 },
+  { id: 'service', name: 'Service / Generosity', group: 'Giving', kind: 'spending', budgetType: 'fixed', budgetValue: 500 },
+  { id: 'center', name: 'The Center', group: 'Giving', kind: 'bill', budgetType: 'fixed', budgetValue: 100 },
+  { id: 'blackhawk', name: 'Blackhawk', group: 'Giving', kind: 'bill', budgetType: 'fixed', budgetValue: 83 },
 
   // Saving
-  { id: 'emergency-fund', name: 'Emergency Fund', group: 'Saving', budgetType: 'fixed', budgetValue: 200 },
+  { id: 'emergency-fund', name: 'Emergency Fund', group: 'Saving', kind: 'transfer', budgetType: 'fixed', budgetValue: 200 },
 
   // Housing
-  { id: 'mortgage', name: 'Countrywood Mortgage', group: 'Housing', budgetType: 'fixed', budgetValue: 1570 },
-  { id: 'repairs-predictable', name: 'Repairs / Maintenance', group: 'Housing', budgetType: 'fixed', budgetValue: 167 },
-  { id: 'repairs-unknown', name: 'Repairs (unexpected)', group: 'Housing', budgetType: 'fixed', budgetValue: 100 },
-  { id: 'electric', name: 'Electric', group: 'Housing', budgetType: 'fixed', budgetValue: 165 },
-  { id: 'gas-utility', name: 'Gas (home)', group: 'Housing', budgetType: 'fixed', budgetValue: 65 },
-  { id: 'city-utilities', name: 'City Utilities', group: 'Housing', budgetType: 'fixed', budgetValue: 100 },
-  { id: 'internet', name: 'Internet', group: 'Housing', budgetType: 'fixed', budgetValue: 80 },
-  { id: 'cell-phone', name: 'Cell Phones', group: 'Housing', budgetType: 'fixed', budgetValue: 245 },
-  { id: 'spa', name: 'Spa', group: 'Housing', budgetType: 'fixed', budgetValue: 65 },
+  { id: 'mortgage', name: 'Countrywood Mortgage', group: 'Housing', kind: 'bill', budgetType: 'fixed', budgetValue: 1570 },
+  { id: 'repairs-predictable', name: 'Repairs / Maintenance', group: 'Housing', kind: 'spending', budgetType: 'fixed', budgetValue: 167 },
+  { id: 'repairs-unknown', name: 'Repairs (unexpected)', group: 'Housing', kind: 'spending', budgetType: 'fixed', budgetValue: 100 },
+  { id: 'electric', name: 'Electric', group: 'Housing', kind: 'bill', budgetType: 'fixed', budgetValue: 165 },
+  { id: 'gas-utility', name: 'Gas (home)', group: 'Housing', kind: 'bill', budgetType: 'fixed', budgetValue: 65 },
+  { id: 'city-utilities', name: 'City Utilities', group: 'Housing', kind: 'bill', budgetType: 'fixed', budgetValue: 100 },
+  { id: 'internet', name: 'Internet', group: 'Housing', kind: 'bill', budgetType: 'fixed', budgetValue: 80 },
+  { id: 'cell-phone', name: 'Cell Phones', group: 'Housing', kind: 'bill', budgetType: 'fixed', budgetValue: 245 },
+  { id: 'spa', name: 'Spa', group: 'Housing', kind: 'bill', budgetType: 'fixed', budgetValue: 65 },
 
   // Food
-  { id: 'groceries', name: 'Groceries', group: 'Food', budgetType: 'fixed', budgetValue: 800 },
-  { id: 'caleb-grocery', name: 'Caleb Grocery $', group: 'Food', budgetType: 'fixed', budgetValue: 200 },
-  { id: 'restaurants', name: 'Restaurants / Carry Out', group: 'Food', budgetType: 'fixed', budgetValue: 225 },
-  { id: 'boys-lunches', name: 'Boys Lunches', group: 'Food', budgetType: 'fixed', budgetValue: 70 },
+  { id: 'groceries', name: 'Groceries', group: 'Food', kind: 'spending', budgetType: 'fixed', budgetValue: 800 },
+  { id: 'caleb-grocery', name: 'Caleb Grocery $', group: 'Food', kind: 'spending', budgetType: 'fixed', budgetValue: 200 },
+  { id: 'restaurants', name: 'Restaurants / Carry Out', group: 'Food', kind: 'spending', budgetType: 'fixed', budgetValue: 225 },
+  { id: 'boys-lunches', name: 'Boys Lunches', group: 'Food', kind: 'spending', budgetType: 'fixed', budgetValue: 70 },
 
   // Clothing
-  { id: 'boys-clothing', name: 'Boys Clothing', group: 'Clothing', budgetType: 'fixed', budgetValue: 150 },
-  { id: 'laundry', name: 'Cleaning / Laundry', group: 'Clothing', budgetType: 'fixed', budgetValue: 10 },
+  { id: 'boys-clothing', name: 'Boys Clothing', group: 'Clothing', kind: 'spending', budgetType: 'fixed', budgetValue: 150 },
+  { id: 'laundry', name: 'Cleaning / Laundry', group: 'Clothing', kind: 'spending', budgetType: 'fixed', budgetValue: 10 },
 
   // Transportation
-  { id: 'auto-gas', name: 'Gas (auto)', group: 'Transportation', budgetType: 'fixed', budgetValue: 450 },
-  { id: 'auto-repairs', name: 'Auto Repairs', group: 'Transportation', budgetType: 'fixed', budgetValue: 500 },
+  { id: 'auto-gas', name: 'Gas (auto)', group: 'Transportation', kind: 'spending', budgetType: 'fixed', budgetValue: 450 },
+  { id: 'auto-repairs', name: 'Auto Repairs', group: 'Transportation', kind: 'spending', budgetType: 'fixed', budgetValue: 500 },
 
   // Medical / Health
-  { id: 'fitness', name: 'Fitness Membership', group: 'Medical / Health', budgetType: 'fixed', budgetValue: 65 },
-  { id: 'fitness-misc', name: 'Fitness Misc.', group: 'Medical / Health', budgetType: 'fixed', budgetValue: 84 },
-  { id: 'medical-bills', name: 'Medical Bills', group: 'Medical / Health', budgetType: 'fixed', budgetValue: 200 },
+  { id: 'fitness', name: 'Fitness Membership', group: 'Medical / Health', kind: 'bill', budgetType: 'fixed', budgetValue: 65 },
+  { id: 'fitness-misc', name: 'Fitness Misc.', group: 'Medical / Health', kind: 'spending', budgetType: 'fixed', budgetValue: 84 },
+  { id: 'medical-bills', name: 'Medical Bills', group: 'Medical / Health', kind: 'spending', budgetType: 'fixed', budgetValue: 200 },
 
   // Insurance
-  { id: 'health-insurance', name: 'Health Insurance', group: 'Insurance', budgetType: 'fixed', budgetValue: 524 },
+  { id: 'health-insurance', name: 'Health Insurance', group: 'Insurance', kind: 'bill', budgetType: 'fixed', budgetValue: 524 },
 
   // Miscellaneous
-  { id: 'subscriptions', name: 'Subscriptions', group: 'Miscellaneous', budgetType: 'fixed', budgetValue: 96 },
-  { id: 'misc', name: 'Miscellaneous', group: 'Miscellaneous', budgetType: 'fixed', budgetValue: 350 },
-  { id: 'gifts', name: 'Gifts', group: 'Miscellaneous', budgetType: 'fixed', budgetValue: 250 },
-  { id: 'dogs', name: 'Dogs', group: 'Miscellaneous', budgetType: 'fixed', budgetValue: 120 },
-  { id: 'decor', name: 'Décor', group: 'Miscellaneous', budgetType: 'fixed', budgetValue: 35 },
-  { id: 'boys-working', name: 'Boys Working', group: 'Miscellaneous', budgetType: 'fixed', budgetValue: 150 },
-  { id: 'entertainment', name: 'Entertainment / Activities', group: 'Miscellaneous', budgetType: 'fixed', budgetValue: 175 },
-  { id: 'jeff-spending', name: 'Jeff Spending', group: 'Miscellaneous', budgetType: 'fixed', budgetValue: 200 },
-  { id: 'kari-spending', name: 'Kari Spending', group: 'Miscellaneous', budgetType: 'fixed', budgetValue: 200 },
-  { id: 'noah-support', name: 'Noah Support', group: 'Miscellaneous', budgetType: 'fixed', budgetValue: 50 },
+  { id: 'subscriptions', name: 'Subscriptions', group: 'Miscellaneous', kind: 'bill', budgetType: 'fixed', budgetValue: 96 },
+  { id: 'misc', name: 'Miscellaneous', group: 'Miscellaneous', kind: 'spending', budgetType: 'fixed', budgetValue: 350 },
+  { id: 'gifts', name: 'Gifts', group: 'Miscellaneous', kind: 'spending', budgetType: 'fixed', budgetValue: 250 },
+  { id: 'dogs', name: 'Dogs', group: 'Miscellaneous', kind: 'spending', budgetType: 'fixed', budgetValue: 120 },
+  { id: 'decor', name: 'Décor', group: 'Miscellaneous', kind: 'spending', budgetType: 'fixed', budgetValue: 35 },
+  { id: 'boys-working', name: 'Boys Working', group: 'Miscellaneous', kind: 'spending', budgetType: 'fixed', budgetValue: 150 },
+  { id: 'entertainment', name: 'Entertainment / Activities', group: 'Miscellaneous', kind: 'spending', budgetType: 'fixed', budgetValue: 175 },
+  { id: 'jeff-spending', name: 'Jeff Spending', group: 'Miscellaneous', kind: 'spending', budgetType: 'fixed', budgetValue: 200 },
+  { id: 'kari-spending', name: 'Kari Spending', group: 'Miscellaneous', kind: 'spending', budgetType: 'fixed', budgetValue: 200 },
+  { id: 'noah-support', name: 'Noah Support', group: 'Miscellaneous', kind: 'bill', budgetType: 'fixed', budgetValue: 50 },
 
   // Recreation / Travel
-  { id: 'fwu-travel', name: 'FWU Travel Expenses', group: 'Recreation / Travel', budgetType: 'fixed', budgetValue: 250 },
-  { id: 'sports-camps', name: 'Sports / Camps', group: 'Recreation / Travel', budgetType: 'fixed', budgetValue: 75 },
-  { id: 'noah-travel', name: 'Noah Travel', group: 'Recreation / Travel', budgetType: 'fixed', budgetValue: 100 },
+  { id: 'fwu-travel', name: 'FWU Travel Expenses', group: 'Recreation / Travel', kind: 'spending', budgetType: 'fixed', budgetValue: 250 },
+  { id: 'sports-camps', name: 'Sports / Camps', group: 'Recreation / Travel', kind: 'spending', budgetType: 'fixed', budgetValue: 75 },
+  { id: 'noah-travel', name: 'Noah Travel', group: 'Recreation / Travel', kind: 'spending', budgetType: 'fixed', budgetValue: 100 },
 
   // Always keep this one last — it's where unclear transactions land until you
   // sort them. It's a flag, not a spending target.
-  { id: 'needs-review', name: 'Needs Review', group: 'Other', budgetType: 'fixed', budgetValue: 0 },
+  { id: 'needs-review', name: 'Needs Review', group: 'Other', kind: 'spending', budgetType: 'fixed', budgetValue: 0 },
 ];
 
 // ---------------------------------------------------------------------------
