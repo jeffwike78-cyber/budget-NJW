@@ -164,6 +164,13 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                   </option>
                 ))}
               </select>
+              <input
+                type="date"
+                className="income-date-input"
+                value={s.payDate || ''}
+                onChange={(e) => updateSource(s.id, { payDate: e.target.value })}
+                title="Next date this income lands — used for the cashflow timeline"
+              />
               <span className="income-monthly">${sourceMonthly(s).toFixed(0)}/mo</span>
               <button type="button" className="link-btn danger" onClick={() => deleteSource(s.id)}>
                 ✕
@@ -252,6 +259,20 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                               value={c.openingBalance ?? ''}
                               placeholder="0"
                               onChange={(e) => updateCategory(c.id, 'openingBalance', e.target.value)}
+                            />
+                          </span>
+                        )}
+                        {c.kind === 'bill' && (
+                          <span className="category-type-value" title="Day of the month this bill is due — puts it on the cashflow timeline">
+                            due&nbsp;day
+                            <input
+                              type="number"
+                              min="1"
+                              max="31"
+                              className="budget-input"
+                              value={c.dueDay ?? ''}
+                              placeholder="—"
+                              onChange={(e) => updateCategory(c.id, 'dueDay', e.target.value)}
                             />
                           </span>
                         )}

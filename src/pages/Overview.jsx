@@ -5,6 +5,11 @@ import { isPayrollDeposit } from '../lib/income';
 import { netSpentByCategory } from '../lib/spending';
 import { monthlyIncomeTotal, computeCategoryBudgets } from '../lib/budgetMath';
 import { ageOfMoney, ageOfMoneyAdvice, ageOfMoneyStatus } from '../lib/ageOfMoney';
+import { projectCashflow } from '../lib/cashflow';
+
+function shortDate(str) {
+  return new Date(str + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
 
 function monthKey(dateStr) {
   return dateStr.slice(0, 7);
@@ -64,6 +69,21 @@ export default function Overview({ budgetState, transactions, setView }) {
   const covered = cashOnHand >= creditOwed;
   const usd = (n) => `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
+  // Cashflow projection over the next 45 days from checking, using income pay
+  // dates and bill/sinking-fund due dates.
+  const checkingBalance = budgetState.accounts
+    .filter((a) => a.type === 'checking')
+    .reduce((s, a) => s + Number(a.balance || 0), 0);
+  const cashflow = projectCashflow({
+    startingBalance: checkingBalance,
+    sources: budgetState.incomeSources,
+    categories: budgetState.categories,
+    effectiveBudgets,
+    sinkingFunds: budgetState.sinkingFunds,
+    days: 45,
+  });
+  const cashflowShort = cashflow.low < 0;
+
   return (
     <>
       <h1 className="page-title">Welcome!</h1>
@@ -108,6 +128,47 @@ export default function Overview({ budgetState, transactions, setView }) {
             {covered
               ? 'You have enough cash to pay the card in full this month.'
               : 'Heads up — set aside more in checking so you can pay the card off in full.'}
+          </p>
+        </section>
+      )}
+
+      {cashflow.timeline.length > 0 && (
+        <section className={`card cashflow-card ${cashflowShort ? 'payoff-bad' : ''}`}>
+          <div className="card-header">
+            <h2>Cashflow — next 45 days</h2>
+            <span className={`pill ${cashflowShort ? 'pill-bad' : 'pill-good'}`}>
+              {cashflowShort ? `Dips to ${usd(cashflow.low)} on ${shortDate(cashflow.lowDate)}` : 'Stays positive'}
+            </span>
+          </div>
+          <div className="payoff-figures">
+            <div className="payoff-figure">
+              <span className="payoff-label">Checking now</span>
+              <span className="payoff-value">{usd(checkingBalance)}</span>
+            </div>
+            <div className="payoff-figure">
+              <span className="payoff-label">Lowest point</span>
+              <span className={`payoff-value ${cashflowShort ? 'bad' : ''}`}>{usd(cashflow.low)}</span>
+            </div>
+            <div className="payoff-figure">
+              <span className="payoff-label">In 45 days</span>
+              <span className="payoff-value">{usd(cashflow.endingBalance)}</span>
+            </div>
+          </div>
+          <ul className="cashflow-list">
+            {cashflow.timeline.slice(0, 12).map((e, i) => (
+              <li key={`${e.date}-${e.name}-${i}`} className="cashflow-row">
+                <span className="cashflow-date">{shortDate(e.date)}</span>
+                <span className="cashflow-name">{e.name}</span>
+                <span className={`cashflow-amount ${e.amount < 0 ? '' : 'good'}`}>
+                  {e.amount < 0 ? '-' : '+'}{usd(Math.abs(e.amount))}
+                </span>
+                <span className={`cashflow-balance ${e.balance < 0 ? 'bad' : ''}`}>{usd(e.balance)}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="module-note">
+            Uses each income source&apos;s pay date and each bill&apos;s due day. Add due days on the Budget page
+            and pay dates under Budget → Income to make this complete.
           </p>
         </section>
       )}
