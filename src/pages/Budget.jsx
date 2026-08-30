@@ -189,8 +189,17 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                 className="income-date-input"
                 value={s.payDate || ''}
                 onChange={(e) => updateSource(s.id, { payDate: e.target.value })}
-                title="Next date this income lands — used for the cashflow timeline"
+                title={s.frequency === 'semimonthly' ? 'First pay date of the month' : 'Next date this income lands — used for the cashflow timeline'}
               />
+              {s.frequency === 'semimonthly' && (
+                <input
+                  type="date"
+                  className="income-date-input"
+                  value={s.payDate2 || ''}
+                  onChange={(e) => updateSource(s.id, { payDate2: e.target.value })}
+                  title="Second pay date of the month"
+                />
+              )}
               <span className="income-monthly">${sourceMonthly(s).toFixed(0)}/mo</span>
               <button type="button" className="link-btn danger" onClick={() => deleteSource(s.id)}>
                 ✕
@@ -304,16 +313,15 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                           </span>
                         )}
                         {c.kind === 'bill' && (
-                          <span className="category-type-value" title="Day of the month this bill is due — puts it on the cashflow timeline">
-                            due&nbsp;day
+                          <span className="category-type-value" title="Day(s) of the month this bill hits, e.g. 1, 15 — puts it on the cashflow timeline. The monthly budget is split evenly across the days.">
+                            due&nbsp;day(s)
                             <input
-                              type="number"
-                              min="1"
-                              max="31"
-                              className="budget-input"
-                              value={c.dueDay ?? ''}
-                              placeholder="—"
-                              onChange={(e) => updateCategory(c.id, 'dueDay', e.target.value)}
+                              type="text"
+                              inputMode="numeric"
+                              className="budget-input budget-input-wide"
+                              value={c.dueDays ?? (c.dueDay ? String(c.dueDay) : '')}
+                              placeholder="e.g. 1, 15"
+                              onChange={(e) => updateCategory(c.id, 'dueDays', e.target.value)}
                             />
                           </span>
                         )}

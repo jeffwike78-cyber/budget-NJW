@@ -1358,3 +1358,5 @@ textarea {
 .reorder-btn:hover { border-color: var(--accent-border); }
 
 .add-envelope-form select { min-width: 0; }
+
+.budget-input-wide { width: 70px; }

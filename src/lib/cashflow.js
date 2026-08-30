@@ -31,7 +31,16 @@ function advance(d, frequency) {
   return n;
 }
 
+// Roll a single anchor date forward by `stepFreq` across the window.
+function seriesFrom(anchorStr, stepFreq, from, to, push) {
+  let d = parse(anchorStr);
+  let guard = 0;
+  while (d < from && guard < 1000) { d = advance(d, stepFreq); guard += 1; }
+  while (d <= to && guard < 2000) { push(iso(d)); d = advance(d, stepFreq); guard += 1; }
+}
+
 // Income landing events between two dates (inclusive), one per pay occurrence.
+// Twice-a-month income can carry two pay dates, each recurring monthly.
 export function incomeEvents(sources, fromStr, toStr) {
   const from = parse(fromStr);
   const to = parse(toStr);
@@ -39,21 +48,30 @@ export function incomeEvents(sources, fromStr, toStr) {
   for (const s of sources || []) {
     const amount = Number(s.amount || 0);
     if (!amount || !s.payDate) continue;
+    const add = (dateStr) => events.push({ date: dateStr, name: s.name, amount, kind: 'income' });
     if (s.frequency === 'one-time') {
       const d = parse(s.payDate);
-      if (d >= from && d <= to) events.push({ date: s.payDate, name: s.name, amount, kind: 'income' });
+      if (d >= from && d <= to) add(s.payDate);
       continue;
     }
-    let d = parse(s.payDate);
-    let guard = 0;
-    while (d < from && guard < 1000) { d = advance(d, s.frequency); guard += 1; }
-    while (d <= to && guard < 2000) {
-      events.push({ date: iso(d), name: s.name, amount, kind: 'income' });
-      d = advance(d, s.frequency);
-      guard += 1;
+    if (s.frequency === 'semimonthly') {
+      // Two monthly series — one per pay date the user gave.
+      seriesFrom(s.payDate, 'monthly', from, to, add);
+      if (s.payDate2) seriesFrom(s.payDate2, 'monthly', from, to, add);
+      continue;
     }
+    seriesFrom(s.payDate, s.frequency, from, to, add);
   }
   return events;
+}
+
+// Parse a bill's due day(s): a string like "1, 15" or a legacy single number.
+function billDueDays(c) {
+  const raw = c.dueDays != null ? String(c.dueDays) : c.dueDay != null ? String(c.dueDay) : '';
+  return raw
+    .split(/[,\s]+/)
+    .map((x) => parseInt(x, 10))
+    .filter((n) => n >= 1 && n <= 31);
 }
 
 // Bill outflows: bill-kind envelopes that have a due day, one per month in range.
@@ -63,18 +81,23 @@ export function billEvents(categories, effectiveBudgets, fromStr, toStr) {
   const events = [];
   for (const c of categories || []) {
     if (c.kind !== 'bill') continue;
-    const amount = Number(effectiveBudgets[c.id] || 0);
-    const day = Number(c.dueDay || 0);
-    if (!amount || !day) continue;
+    const monthly = Number(effectiveBudgets[c.id] || 0);
+    const days = billDueDays(c);
+    if (!monthly || days.length === 0) continue;
+    // A bill that hits on several days splits its monthly budget evenly.
+    const perHit = monthly / days.length;
     // Walk month by month from the start month through the end month.
     let y = from.getFullYear();
     let m = from.getMonth();
     let guard = 0;
     while (guard < 60) {
-      const dd = Math.min(day, daysInMonth(y, m));
-      const d = new Date(y, m, dd);
-      if (d > to) break;
-      if (d >= from) events.push({ date: iso(d), name: c.name, amount: -amount, kind: 'bill' });
+      for (const day of days) {
+        const dd = Math.min(day, daysInMonth(y, m));
+        const d = new Date(y, m, dd);
+        if (d >= from && d <= to) events.push({ date: iso(d), name: c.name, amount: -perHit, kind: 'bill' });
+      }
+      const monthStart = new Date(y, m, 1);
+      if (monthStart > to) break;
       m += 1;
       if (m > 11) { m = 0; y += 1; }
       guard += 1;
