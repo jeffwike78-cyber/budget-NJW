@@ -93,6 +93,26 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
     setShowAdd(false);
   }
 
+  // Move an envelope up/down among its group-mates. Reordering the flat
+  // categories array is what sticks; the display regroups from that order.
+  function moveCategory(id, dir) {
+    setBudgetState((prev) => {
+      const cats = [...prev.categories];
+      const idx = cats.findIndex((c) => c.id === id);
+      if (idx < 0) return prev;
+      const group = cats[idx].group || 'Other';
+      let swap = -1;
+      if (dir < 0) {
+        for (let i = idx - 1; i >= 0; i--) if ((cats[i].group || 'Other') === group) { swap = i; break; }
+      } else {
+        for (let i = idx + 1; i < cats.length; i++) if ((cats[i].group || 'Other') === group) { swap = i; break; }
+      }
+      if (swap < 0) return prev;
+      [cats[idx], cats[swap]] = [cats[swap], cats[idx]];
+      return { ...prev, categories: cats };
+    });
+  }
+
   function updateSource(id, patch) {
     setBudgetState((prev) => ({
       ...prev,
@@ -195,9 +215,30 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
         <div className="card-header">
           <h2>Envelopes</h2>
           <span className="pill">
-            {totalBudgeted > 0 ? `$${totalSpent.toFixed(0)} of $${totalBudgeted.toFixed(0)} this month` : 'Set budgets below to get started'}
+            {totalBudgeted > 0 ? `$${totalSpent.toFixed(0)} spent of $${totalBudgeted.toFixed(0)}` : 'Set budgets below to get started'}
           </span>
         </div>
+
+        <div className={`budget-zero ${Math.abs(leftToBudget) < 1 ? 'zero-balanced' : leftToBudget < 0 ? 'zero-over' : 'zero-under'}`}>
+          <div className="budget-zero-fig">
+            <span className="budget-zero-label">Projected income</span>
+            <span className="budget-zero-value">${income.toFixed(0)}</span>
+          </div>
+          <span className="budget-zero-op">−</span>
+          <div className="budget-zero-fig">
+            <span className="budget-zero-label">Budgeted</span>
+            <span className="budget-zero-value">${totalBudgeted.toFixed(0)}</span>
+          </div>
+          <span className="budget-zero-op">=</span>
+          <div className="budget-zero-fig">
+            <span className="budget-zero-label">{leftToBudget < 0 ? 'Over by' : 'Left to budget'}</span>
+            <span className="budget-zero-value">${Math.abs(leftToBudget).toFixed(0)}</span>
+          </div>
+        </div>
+        <p className="module-note">
+          Give every dollar a job — aim for <strong>$0 left to budget</strong>. Assign the remainder to savings or
+          a sinking fund to zero it out.
+        </p>
 
         {groupOrder.map((group) => (
           <div className="category-group" key={group}>
@@ -276,6 +317,22 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                             />
                           </span>
                         )}
+                        <button
+                          type="button"
+                          className="reorder-btn"
+                          aria-label="Move up"
+                          onClick={() => moveCategory(c.id, -1)}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          className="reorder-btn"
+                          aria-label="Move down"
+                          onClick={() => moveCategory(c.id, 1)}
+                        >
+                          ↓
+                        </button>
                         <button type="button" className="link-btn danger" onClick={() => deleteCategory(c.id)}>
                           ✕
                         </button>
@@ -341,33 +398,53 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
   );
 }
 
+const NEW_GROUP = '__new__';
+
 function AddCategoryForm({ groups, onAdd, onCancel }) {
   const [name, setName] = useState('');
+  const [kind, setKind] = useState('spending');
   const [group, setGroup] = useState(groups[0] || 'Other');
+  const [newGroup, setNewGroup] = useState('');
   const [budgetValue, setBudgetValue] = useState('');
+
+  const usingNewGroup = group === NEW_GROUP;
 
   function submit(e) {
     e.preventDefault();
     if (!name.trim()) return;
+    const finalGroup = usingNewGroup ? newGroup.trim() || 'Other' : group;
     onAdd({
       id: `cat-${Date.now()}`,
       name: name.trim(),
-      group,
+      group: finalGroup,
+      kind,
       budgetType: 'fixed',
       budgetValue: Number(budgetValue || 0),
     });
   }
 
   return (
-    <form className="add-inline-form" onSubmit={submit}>
-      <input placeholder="Envelope name" value={name} onChange={(e) => setName(e.target.value)} />
-      <input list="budget-groups" placeholder="Group" value={group} onChange={(e) => setGroup(e.target.value)} />
-      <datalist id="budget-groups">
-        {groups.map((g) => (
-          <option key={g} value={g} />
+    <form className="add-inline-form add-envelope-form" onSubmit={submit}>
+      <input placeholder="Envelope name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+      <select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Envelope type">
+        {ENVELOPE_KINDS.map((k) => (
+          <option key={k.value} value={k.value}>
+            {k.label}
+          </option>
         ))}
-      </datalist>
-      <input type="number" placeholder="Monthly $" value={budgetValue} onChange={(e) => setBudgetValue(e.target.value)} />
+      </select>
+      <select value={group} onChange={(e) => setGroup(e.target.value)} aria-label="Group">
+        {groups.map((g) => (
+          <option key={g} value={g}>
+            {g}
+          </option>
+        ))}
+        <option value={NEW_GROUP}>＋ New group…</option>
+      </select>
+      {usingNewGroup && (
+        <input placeholder="New group name" value={newGroup} onChange={(e) => setNewGroup(e.target.value)} />
+      )}
+      <input type="number" inputMode="decimal" placeholder="Monthly $" value={budgetValue} onChange={(e) => setBudgetValue(e.target.value)} />
       <button type="submit" className="primary-btn">
         Add
       </button>
