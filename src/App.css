@@ -1287,3 +1287,20 @@ textarea {
 /* ---------- Add-transaction form row ---------- */
 .tx-form-row { display: flex; gap: 8px; }
 .tx-form-row input { flex: 1 1 0; min-width: 0; }
+
+/* ---------- Settings ---------- */
+.settings-field { margin-bottom: 18px; }
+.settings-field label { display: block; font-weight: 600; margin-bottom: 6px; }
+.settings-field input[type="text"],
+.settings-field input[type="month"] {
+  width: 100%;
+  max-width: 320px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--surface-2);
+  color: inherit;
+}
+.danger-zone { border: 1px solid var(--bad); }
+.category-kind-select { max-width: 150px; }

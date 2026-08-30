@@ -9,6 +9,7 @@ import Budget from './pages/Budget';
 import SinkingFunds from './pages/SinkingFunds';
 import Accounts from './pages/Accounts';
 import TaxReport from './pages/TaxReport';
+import Settings from './pages/Settings';
 import { useBudgetState } from './lib/useBudgetState';
 import { useBudgetTransactions } from './lib/useBudgetTransactions';
 
@@ -28,7 +29,7 @@ function App() {
 
   return (
     <div className="app-shell">
-      <TopBar />
+      <TopBar appName={budgetState.settings?.appName} setView={setView} />
       <div className="app-body">
         <Sidebar view={view} setView={setView} totalBalance={totalBalance} />
         <main className="app-main">
@@ -66,6 +67,9 @@ function App() {
           )}
           {view === 'accounts' && (
             <Accounts budgetState={budgetState} setBudgetState={setBudgetState} />
+          )}
+          {view === 'settings' && (
+            <Settings budgetState={budgetState} setBudgetState={setBudgetState} />
           )}
           </ErrorBoundary>
         </main>

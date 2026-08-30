@@ -16,8 +16,14 @@ const DEFAULT_STATE = {
   merchantMemory: {}, // { normalizedDescription: categoryId } — learned from past corrections
   // The month the envelope ledger starts accruing from (YYYY-MM). Carryover
   // balances = opening balance + budget funded each month since this + spending.
-  settings: { startMonth: '2026-09' },
+  settings: { startMonth: '2026-09', appName: 'Family Budget' },
 };
+
+// A fresh deep copy of the seeded defaults — used by the Settings "reset to
+// defaults" action so it can't accidentally mutate the shared default objects.
+export function makeDefaultBudget() {
+  return structuredClone(DEFAULT_STATE);
+}
 
 // Heal a partially-written budget: if a section is missing or empty, fall back
 // to the seeded default for it, while preserving any real data already saved.

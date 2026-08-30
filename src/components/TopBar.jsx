@@ -1,6 +1,6 @@
-import { UserIcon, HelpIcon, SettingsIcon, LogoutIcon } from './icons';
+import { SettingsIcon } from './icons';
 
-export default function TopBar() {
+export default function TopBar({ appName = 'Family Budget', setView }) {
   return (
     <header className="top-bar">
       <div className="top-bar-brand">
@@ -10,20 +10,16 @@ export default function TopBar() {
             <path d="M21 21l-4.3-4.3" />
           </svg>
         </span>
-        BudgetTemplate
+        {appName}
       </div>
       <div className="top-bar-actions">
-        <button className="top-bar-icon-btn" type="button" aria-label="Profile">
-          <UserIcon />
-        </button>
-        <button className="top-bar-icon-btn" type="button" aria-label="Help">
-          <HelpIcon />
-        </button>
-        <button className="top-bar-icon-btn" type="button" aria-label="Settings">
+        <button
+          className="top-bar-icon-btn"
+          type="button"
+          aria-label="Settings"
+          onClick={() => setView?.('settings')}
+        >
           <SettingsIcon />
-        </button>
-        <button className="top-bar-icon-btn" type="button" aria-label="Log out">
-          <LogoutIcon />
         </button>
       </div>
     </header>
