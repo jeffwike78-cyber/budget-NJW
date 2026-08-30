@@ -36,7 +36,6 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
   // Needs Review isn't a real spending category — it's a flag, not something to
   // set a dollar target for — so it's excluded from the budget-bar list.
   const budgetableCategories = budgetState.categories.filter((c) => c.id !== 'needs-review');
-  const needsReview = transactions.filter((t) => t.categoryId === 'needs-review' && Number(t.amount) > 0);
   const effectiveBudgets = computeCategoryBudgets(budgetableCategories, income);
   const hasRemainderCategory = budgetableCategories.some((c) => c.budgetType === 'remainder');
   const totalBudgeted = Object.values(effectiveBudgets).reduce((a, b) => a + b, 0);
@@ -165,27 +164,6 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
           is left to budget.
         </p>
       </section>
-
-      {needsReview.length > 0 && (
-        <section className="card">
-          <div className="card-header">
-            <h2>Needs Review</h2>
-            <span className="pill">{needsReview.length} flagged</span>
-          </div>
-          <p className="module-note">
-            These couldn&apos;t be confidently placed — sort each one into the right envelope below.
-          </p>
-          <TxList
-            transactions={needsReview}
-            categories={budgetState.categories}
-            onRecategorize={handleRecategorize}
-            onToggleExcluded={setExcluded}
-            onSetTaxCategory={setTaxCategory}
-            taxLabels={budgetState.taxLabels}
-            showReceiptLookup
-          />
-        </section>
-      )}
 
       <section className="card">
         <div className="card-header">
