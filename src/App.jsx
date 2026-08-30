@@ -62,6 +62,7 @@ function App() {
               budgetState={budgetState}
               setBudgetState={setBudgetState}
               transactions={transactions}
+              setView={setView}
               {...txActions}
             />
           )}
@@ -69,7 +70,7 @@ function App() {
             <Accounts budgetState={budgetState} setBudgetState={setBudgetState} />
           )}
           {view === 'settings' && (
-            <Settings budgetState={budgetState} setBudgetState={setBudgetState} />
+            <Settings budgetState={budgetState} setBudgetState={setBudgetState} setView={setView} />
           )}
           </ErrorBoundary>
         </main>

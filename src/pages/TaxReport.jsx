@@ -9,7 +9,7 @@ function money(n) {
 
 // Year-end tax report, grouped by tax bucket (Charitable, Medical, Business 1,
 // Business 2) with totals and a CSV export to hand to a CPA.
-export default function TaxReport({ budgetState, setBudgetState, transactions, setTaxCategory }) {
+export default function TaxReport({ budgetState, setBudgetState, transactions, setTaxCategory, setView }) {
   const years = yearsPresent(transactions);
   const [year, setYear] = useState(String(new Date(todayStr()).getFullYear()));
   const labels = { ...DEFAULT_TAX_LABELS, ...(budgetState.taxLabels || {}) };
@@ -48,7 +48,14 @@ export default function TaxReport({ budgetState, setBudgetState, transactions, s
   return (
     <div className="tax-report">
       <div className="tax-report-head no-print">
-        <h1 className="page-title">Tax Report</h1>
+        <div>
+          {setView && (
+            <button type="button" className="link-btn" onClick={() => setView('settings')}>
+              ← Settings
+            </button>
+          )}
+          <h1 className="page-title">Tax Report</h1>
+        </div>
         <div className="tax-report-controls">
           <label>
             Year
