@@ -1,11 +1,15 @@
 -- Run this once in Supabase: Project → SQL Editor → New query → paste → Run.
 --
--- No login/accounts — this is a single-user app, and everything lives in one
--- fixed row (or, for transactions, one shared table) accessed directly via
--- the anon key. That means anyone holding the Project URL + anon key (i.e.
--- anyone who has this deployed app's URL, since the key ships in the
--- frontend bundle) can read and write this data. Treat the deployed URL as
--- the only thing gating access — don't share or publish it.
+-- The app now has a login screen (Supabase Auth email/password) so the family
+-- signs in to use it, but there is still ONE shared budget: everything lives in
+-- one fixed row (or, for transactions, one shared table). The RLS policies below
+-- use `using (true)` with no role clause, which means `to public` — i.e. both
+-- the signed-in (authenticated) and anonymous (anon) roles pass them. So the
+-- login gates the app's UI, not the database itself: the anon key ships in the
+-- frontend bundle, so anyone with the Project URL + anon key could still reach
+-- this data via the API directly. Treat the deployed URL as sensitive. (To lock
+-- the database to signed-in users only, you'd change `to public` policies to
+-- `to authenticated` — a later hardening step, not required for the app to work.)
 
 create table if not exists app_state (
   id text primary key default 'main',

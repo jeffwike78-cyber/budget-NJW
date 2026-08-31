@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { makeDefaultBudget } from '../lib/useBudgetState';
+import { supabase } from '../lib/supabaseClient';
+import { useAuth } from '../lib/useAuth';
 
 // One place for the knobs that don't belong on a specific page: what the app
 // is called, when the envelope ledger starts counting, how you pay for things,
 // and a guarded reset back to the seeded budget.
 export default function Settings({ budgetState, setBudgetState, setView }) {
   const settings = budgetState.settings || {};
+  const { user } = useAuth();
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetText, setResetText] = useState('');
 
@@ -101,6 +104,22 @@ export default function Settings({ budgetState, setBudgetState, setView }) {
         </p>
         <button type="button" className="secondary-btn" onClick={() => setView?.('reports')}>
           Open Tax Report →
+        </button>
+      </section>
+
+      <section className="card">
+        <div className="card-header">
+          <h2>Account</h2>
+        </div>
+        <p className="module-note">
+          {user?.email ? (
+            <>Signed in as <strong>{user.email}</strong>. Everyone in the family shares this one budget.</>
+          ) : (
+            'You are signed in.'
+          )}
+        </p>
+        <button type="button" className="secondary-btn" onClick={() => supabase.auth.signOut()}>
+          Sign out
         </button>
       </section>
 
