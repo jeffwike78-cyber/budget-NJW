@@ -1411,3 +1411,5 @@ textarea {
 @media (min-width: 900px) {
   .fab-scan { bottom: 24px; right: 24px; }
 }
+
+.bank-row-actions { display: inline-flex; align-items: center; gap: 8px; }

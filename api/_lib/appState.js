@@ -32,6 +32,28 @@ export async function setAccountBalance(supabaseAdmin, accountId, balance) {
   await saveBudget(supabaseAdmin, { ...budget, accounts });
 }
 
+// Create/update one budget account per linked Plaid account in a single write.
+// Keeps a name the user has renamed; refreshes type + balance from Plaid.
+export async function upsertPlaidAccounts(supabaseAdmin, list) {
+  if (!list || list.length === 0) return;
+  const budget = await loadBudget(supabaseAdmin);
+  const accounts = [...(budget.accounts || [])];
+  for (const item of list) {
+    const idx = accounts.findIndex((a) => a.id === item.id);
+    if (idx >= 0) accounts[idx] = { ...accounts[idx], type: item.type, balance: item.balance };
+    else accounts.push({ id: item.id, name: item.name, type: item.type, balance: item.balance });
+  }
+  await saveBudget(supabaseAdmin, { ...budget, accounts });
+}
+
+// Remove budget accounts by id (used when disconnecting a bank).
+export async function removeAccounts(supabaseAdmin, ids) {
+  const drop = new Set(ids);
+  const budget = await loadBudget(supabaseAdmin);
+  const accounts = (budget.accounts || []).filter((a) => !drop.has(a.id));
+  await saveBudget(supabaseAdmin, { ...budget, accounts });
+}
+
 // plaid_status lives on app_state (not plaid_items) because the frontend's
 // anon key can read app_state but is deliberately locked out of plaid_items.
 // Keyed by Plaid item_id: { institutionName, accountId, linked, lastSyncedAt }.

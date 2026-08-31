@@ -1,6 +1,6 @@
 import { getPlaidClient } from '../_lib/plaidClient.js';
 import { getSupabaseAdmin } from '../_lib/supabaseAdmin.js';
-import { ensureAccount, setPlaidStatus } from '../_lib/appState.js';
+import { setPlaidStatus } from '../_lib/appState.js';
 import { syncItem } from '../_lib/syncTransactions.js';
 import { parseBody, plaidErrorMessage } from '../_lib/http.js';
 
@@ -30,16 +30,15 @@ export default async function handler(req, res) {
     const exchange = await plaid.itemPublicTokenExchange({ public_token: publicToken });
     const { access_token, item_id } = exchange.data;
 
-    const accountId = `plaid-${item_id}`;
-    const accountKind = body.account_kind === 'credit' ? 'credit' : 'checking';
-    await ensureAccount(admin, { id: accountId, name: institutionName, type: accountKind });
-
+    // A budget account is created per Plaid account by the sync below (a bank
+    // can expose several). account_id here is a legacy placeholder to satisfy
+    // the NOT NULL column; it's no longer used for routing.
     const { error } = await admin.from('plaid_items').upsert(
       {
         id: item_id,
         institution_name: institutionName,
         account_type: 'depository',
-        account_id: accountId,
+        account_id: `plaid-${item_id}`,
         access_token,
         item_id,
         sync_cursor: null,

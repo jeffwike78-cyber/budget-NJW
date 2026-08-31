@@ -1,6 +1,24 @@
 import { categorizeTransactions } from './categorizeCore.js';
 import { lookupReceiptForTx } from './receipts.js';
-import { loadBudget, setAccountBalance, setPlaidStatus } from './appState.js';
+import { loadBudget, upsertPlaidAccounts, setPlaidStatus } from './appState.js';
+
+// One budget account per Plaid account. Its id is derived from the Plaid
+// account id so transactions and balances can be routed to it without an
+// extra lookup table.
+function budgetAccountId(plaidAccountId) {
+  return `plaid-${plaidAccountId}`;
+}
+function mapAccountType(a) {
+  if (a.type === 'credit') return 'credit';
+  if (a.type === 'investment' || a.type === 'brokerage') return 'investing';
+  if (a.subtype === 'savings' || a.subtype === 'money market' || a.subtype === 'cd') return 'savings';
+  return 'checking';
+}
+function accountBalance(a) {
+  // Credit: current = amount owed. Depository: available cash (falls back to current).
+  if (a.type === 'credit') return Number(a.balances?.current ?? 0);
+  return Number(a.balances?.available ?? a.balances?.current ?? 0);
+}
 
 // Confidence below this and the transaction lands in "Needs Review" instead of
 // being auto-filed — so only things the AI is unsure about need a human look.
@@ -138,8 +156,13 @@ async function mergeReceiptMatches(supabaseAdmin, added) {
 
 async function syncBalance(supabaseAdmin, plaid, item) {
   const { data } = await plaid.accountsBalanceGet({ access_token: item.access_token });
-  const total = data.accounts.reduce((sum, a) => sum + (a.balances.available ?? a.balances.current ?? 0), 0);
-  await setAccountBalance(supabaseAdmin, item.account_id, total);
+  const list = (data.accounts || []).map((a) => ({
+    id: budgetAccountId(a.account_id),
+    name: `${item.institution_name || 'Bank'} · ${a.name || a.official_name || a.subtype || 'Account'}${a.mask ? ` ••${a.mask}` : ''}`,
+    type: mapAccountType(a),
+    balance: accountBalance(a),
+  }));
+  await upsertPlaidAccounts(supabaseAdmin, list);
 }
 
 // After the normal import, chase email receipts for the transactions that
@@ -230,7 +253,8 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
         description: txn.merchant_name || txn.name,
         amount: txn.amount, // Plaid: positive = money out, matches this app's convention
         category_id: categoryId,
-        account_id: item.account_id,
+        // Route each transaction to its own account (a bank can have several).
+        account_id: txn.account_id ? budgetAccountId(txn.account_id) : item.account_id,
         source: 'plaid',
       };
       // Only set business when detected — never write false, so a re-sync of a
