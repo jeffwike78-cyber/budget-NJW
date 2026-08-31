@@ -55,7 +55,13 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
     const projected = live + (base.remaining || 0) * monthly;
     const onTrack = target > 0 ? projected >= target - 0.5 : true;
     const projectedShort = target > 0 ? Math.max(0, target - projected) : 0;
-    return { envelope: c, live, monthly, projected, onTrack, projectedShort, ...base };
+    // The status the card shows is projection-aware — it reflects whether the
+    // CURRENT monthly set-aside will fund the target by the due date. So raising
+    // the monthly amount to (or above) the recommended figure flips it off
+    // "behind" the moment it's enough, instead of judging only past balance.
+    const displayStatus = base.funded ? 'funded' : base.overdue ? 'overdue' : onTrack ? 'on-track' : 'behind';
+    const recommendedMonthly = Math.ceil(base.requiredMonthly || 0);
+    return { envelope: c, live, monthly, projected, onTrack, projectedShort, displayStatus, recommendedMonthly, ...base };
   });
 
   const totalSaved = computed.reduce((s, f) => s + f.live, 0);
@@ -77,6 +83,44 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
     });
   const spendBudget = spending.reduce((s, e) => s + e.budget, 0);
   const spendSpent = spending.reduce((s, e) => s + e.spent, 0);
+
+  // A page-specific display order (settings.envelopeOrder) that's independent of
+  // the Budget page — so the most-used envelopes can sit at the top here without
+  // moving anything on the Budget. Anything not yet in the list sorts to the end
+  // in its natural order.
+  const order = budgetState.settings?.envelopeOrder || [];
+  const rank = (id) => {
+    const i = order.indexOf(id);
+    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  const byOrder = (a, b) => rank(a.envelope.id) - rank(b.envelope.id);
+  const computedSorted = [...computed].sort(byOrder);
+  const spendingSorted = [...spending].sort(byOrder);
+  const sinkingIds = computedSorted.map((f) => f.envelope.id);
+  const spendingIds = spendingSorted.map((e) => e.envelope.id);
+
+  function persistEnvelopeOrder(sinkIds, spendIds) {
+    setBudgetState((prev) => ({
+      ...prev,
+      settings: { ...(prev.settings || {}), envelopeOrder: [...sinkIds, ...spendIds] },
+    }));
+  }
+  function swapped(ids, id, dir) {
+    const i = ids.indexOf(id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= ids.length) return null;
+    const next = [...ids];
+    [next[i], next[j]] = [next[j], next[i]];
+    return next;
+  }
+  function moveSinking(id, dir) {
+    const next = swapped(sinkingIds, id, dir);
+    if (next) persistEnvelopeOrder(next, spendingIds);
+  }
+  function moveSpending(id, dir) {
+    const next = swapped(spendingIds, id, dir);
+    if (next) persistEnvelopeOrder(sinkingIds, next);
+  }
 
   function updateFund(id, patch) {
     setBudgetState((prev) => ({
@@ -174,8 +218,8 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
                   </div>
                   {!ok && (
                     <p className="sf-upcoming-note">
-                      At {money(f.monthly)}/mo you&apos;ll be {money(f.projectedShort)} short. Bump this fund to
-                      about {money(f.requiredMonthly)}/mo on the Budget page to have it ready in time.
+                      At {money(f.monthly)}/mo you&apos;ll be {money(f.projectedShort)} short. Set this fund to
+                      {' '}{money(f.recommendedMonthly)}/mo on the Budget page and this clears.
                     </p>
                   )}
                 </li>
@@ -192,16 +236,26 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
       <section className="card">
         <div className="card-header">
           <h2>Your funds</h2>
+          {computedSorted.length > 1 && <span className="pill">↕ Reorder with the arrows</span>}
         </div>
-        {computed.length === 0 ? (
+        {computedSorted.length === 0 ? (
           <p className="module-note">
             No sinking funds yet. On the Budget page, add an envelope and set its type to
             <strong> Sinking fund</strong>.
           </p>
         ) : (
           <div className="sf-list">
-            {computed.map((f) => (
-              <FundCard key={f.envelope.id} f={f} onUpdate={updateFund} onMarkPaid={markPaid} />
+            {computedSorted.map((f, i) => (
+              <FundCard
+                key={f.envelope.id}
+                f={f}
+                onUpdate={updateFund}
+                onMarkPaid={markPaid}
+                onMoveUp={() => moveSinking(f.envelope.id, -1)}
+                onMoveDown={() => moveSinking(f.envelope.id, 1)}
+                isFirst={i === 0}
+                isLast={i === computedSorted.length - 1}
+              />
             ))}
           </div>
         )}
@@ -214,20 +268,26 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
           <h2>This month</h2>
           <span className="pill">{money(spendSpent)} spent of {money(spendBudget)}</span>
         </div>
-        {spending.length === 0 ? (
+        {spendingSorted.length === 0 ? (
           <p className="module-note">
             No monthly-spending envelopes yet. On the Budget page, add an envelope and leave its type as
             <strong> Monthly spending</strong>.
           </p>
         ) : (
           <div className="sf-list">
-            {spending.map((e) => {
+            {spendingSorted.map((e, i) => {
               const pct = e.budget > 0 ? Math.min(100, (e.spent / e.budget) * 100) : 0;
               const over = e.remaining < 0;
               return (
                 <div className={`sf-card ${over ? 'sf-card-overdue' : 'sf-card-on-track'}`} key={e.envelope.id}>
                   <div className="sf-card-top">
                     <div className="sf-card-heading">
+                      <Reorder
+                        onUp={() => moveSpending(e.envelope.id, -1)}
+                        onDown={() => moveSpending(e.envelope.id, 1)}
+                        first={i === 0}
+                        last={i === spendingSorted.length - 1}
+                      />
                       <span className="sf-card-name">{e.envelope.name}</span>
                       <span className={`pill ${over ? 'pill-bad' : 'pill-good'}`}>
                         {over ? `Over ${money(-e.remaining)}` : `${money(e.remaining)} left`}
@@ -265,17 +325,32 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
   );
 }
 
-function FundCard({ f, onUpdate, onMarkPaid }) {
+function Reorder({ onUp, onDown, first, last }) {
+  return (
+    <div className="sf-reorder">
+      <button type="button" className="reorder-btn" aria-label="Move up" disabled={first} onClick={onUp}>
+        ↑
+      </button>
+      <button type="button" className="reorder-btn" aria-label="Move down" disabled={last} onClick={onDown}>
+        ↓
+      </button>
+    </div>
+  );
+}
+
+function FundCard({ f, onUpdate, onMarkPaid, onMoveUp, onMoveDown, isFirst, isLast }) {
   const [expanded, setExpanded] = useState(false);
   const env = f.envelope;
   const hasTarget = Number(env.targetAmount || 0) > 0;
+  const status = f.displayStatus;
 
   return (
-    <div className={`sf-card sf-card-${f.status}`}>
+    <div className={`sf-card sf-card-${status}`}>
       <div className="sf-card-top">
         <div className="sf-card-heading">
+          <Reorder onUp={onMoveUp} onDown={onMoveDown} first={isFirst} last={isLast} />
           <span className="sf-card-name">{env.name}</span>
-          {hasTarget && <span className={`pill ${STATUS_CLASS[f.status]}`}>{STATUS_LABEL[f.status]}</span>}
+          {hasTarget && <span className={`pill ${STATUS_CLASS[status]}`}>{STATUS_LABEL[status]}</span>}
         </div>
         {env.nextDueDate && <span className="sf-card-due">{dueLabel(env.nextDueDate)}</span>}
       </div>
@@ -297,17 +372,24 @@ function FundCard({ f, onUpdate, onMarkPaid }) {
 
       {hasTarget && (
         <div className="bar-track">
-          <div className={`bar-fill sf-bar-${f.status}`} style={{ width: `${f.pct}%` }} />
+          <div className={`bar-fill sf-bar-${status}`} style={{ width: `${f.pct}%` }} />
         </div>
       )}
 
-      {f.status === 'behind' && (
+      {status === 'behind' && (
         <p className="sf-warn">
-          Behind pace — set aside {money(f.requiredMonthly)}/mo (vs. the usual {money(f.ideal)}) to make it
-          by {dueLabel(env.nextDueDate)}. Bump this fund&apos;s monthly amount on the Budget page.
+          At {money(f.monthly)}/mo you&apos;re on pace for {money(f.projected)} by {dueLabel(env.nextDueDate)} —
+          {' '}{money(f.projectedShort)} short. Set this fund to {money(f.recommendedMonthly)}/mo on the Budget
+          page and this clears automatically.
         </p>
       )}
-      {f.status === 'overdue' && !f.funded && (
+      {status === 'on-track' && hasTarget && !f.funded && (
+        <p className="sf-warn sf-warn-good">
+          On pace — {money(f.monthly)}/mo reaches {money(f.projected)} by {dueLabel(env.nextDueDate)}, covering
+          the {money(env.targetAmount)} bill.
+        </p>
+      )}
+      {status === 'overdue' && !f.funded && (
         <p className="sf-warn sf-warn-bad">
           Due date passed and you&apos;re {money(f.stillNeeded)} short. After paying it, tap Mark paid to roll
           the due date forward.
