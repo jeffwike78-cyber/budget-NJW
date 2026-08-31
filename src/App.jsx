@@ -16,6 +16,7 @@ const Login = lazy(() => import('./pages/Login'));
 import { useBudgetState } from './lib/useBudgetState';
 import { useBudgetTransactions } from './lib/useBudgetTransactions';
 import { useAuth } from './lib/useAuth';
+import { signedBalance } from './lib/budgetMath';
 
 function App() {
   const [view, setView] = useState('overview');
@@ -48,7 +49,8 @@ function App() {
     return <div className="loading-screen">Loading your budget…</div>;
   }
 
-  const totalBalance = budgetState.accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
+  // Net worth: credit-card balances count against the total, not toward it.
+  const totalBalance = budgetState.accounts.reduce((sum, a) => sum + signedBalance(a), 0);
 
   const txActions = { recategorize, setExcluded, setBusiness, setTaxCategory };
 

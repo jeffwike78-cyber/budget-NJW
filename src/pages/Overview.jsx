@@ -4,7 +4,7 @@ import { PlusIcon, BudgetIcon, AccountsIcon, ArrowUpRightIcon } from '../compone
 import { todayStr, todayLabel } from '../lib/storage';
 import { isPayrollDeposit } from '../lib/income';
 import { netSpentByCategory } from '../lib/spending';
-import { monthlyIncomeTotal, computeCategoryBudgets } from '../lib/budgetMath';
+import { monthlyIncomeTotal, computeCategoryBudgets, signedBalance } from '../lib/budgetMath';
 import { ageOfMoney, ageOfMoneyAdvice, ageOfMoneyStatus } from '../lib/ageOfMoney';
 import { projectCashflow } from '../lib/cashflow';
 
@@ -43,7 +43,7 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
   const totalSpent = Object.values(netSpentByCategory(monthTx)).reduce((a, b) => a + b, 0);
   const remaining = totalBudgeted - totalSpent;
 
-  const totalBalance = budgetState.accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
+  const totalBalance = budgetState.accounts.reduce((sum, a) => sum + signedBalance(a), 0);
 
   const chartMonths = lastNMonths(6);
   const chartData = chartMonths.map((key) => {
@@ -215,17 +215,22 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
             <h2>My accounts</h2>
           </div>
           <ul className="account-list">
-            {budgetState.accounts.map((a) => (
-              <li key={a.id} className="account-list-row">
-                <span>{a.name}</span>
-                <span className="account-list-value">
-                  ${Number(a.balance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                </span>
-              </li>
-            ))}
+            {budgetState.accounts.map((a) => {
+              const bal = signedBalance(a);
+              return (
+                <li key={a.id} className="account-list-row">
+                  <span>{a.name}</span>
+                  <span className={`account-list-value${bal < 0 ? ' bad' : ''}`}>
+                    {bal < 0 ? `-${usd(Math.abs(bal))}` : usd(bal)}
+                  </span>
+                </li>
+              );
+            })}
             <li className="account-list-row account-list-total">
               <span>Total</span>
-              <span className="account-list-value">${totalBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+              <span className={`account-list-value${totalBalance < 0 ? ' bad' : ''}`}>
+                {totalBalance < 0 ? `-${usd(Math.abs(totalBalance))}` : usd(totalBalance)}
+              </span>
             </li>
           </ul>
         </section>

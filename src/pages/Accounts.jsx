@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import PlaidConnectButton from '../components/PlaidConnectButton';
 import { useConnectedBanks } from '../lib/useConnectedBanks';
 import { useGmailAccounts } from '../lib/useGmailAccounts';
+import { signedBalance, includeInCashOnHand } from '../lib/budgetMath';
 
 const ACCOUNT_TYPES = ['checking', 'savings', 'investing', 'credit'];
 
 function money(n) {
-  return `$${Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  const v = Number(n || 0);
+  return `${v < 0 ? '-' : ''}$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
 function timeAgo(iso) {
@@ -49,7 +51,8 @@ export default function Accounts({ budgetState, setBudgetState }) {
     }
   }
   const accounts = budgetState.accounts || [];
-  const total = accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
+  // Net worth: credit balances (money owed) count against the total.
+  const total = accounts.reduce((sum, a) => sum + signedBalance(a), 0);
 
   function updateAccount(id, patch) {
     setBudgetState((prev) => ({
@@ -299,8 +302,8 @@ export default function Accounts({ budgetState, setBudgetState }) {
                   </option>
                 ))}
               </select>
-              <span className="accounts-editor-balance">
-                $
+              <span className="accounts-editor-balance" title={a.type === 'credit' ? 'Amount owed — shown as negative in totals' : undefined}>
+                {a.type === 'credit' ? '−$' : '$'}
                 <input
                   type="number"
                   className="budget-input"
@@ -308,6 +311,14 @@ export default function Accounts({ budgetState, setBudgetState }) {
                   onChange={(e) => updateAccount(a.id, { balance: e.target.value })}
                 />
               </span>
+              <label className="account-cash-toggle" title="Count this account toward Cash on Hand on the Envelopes page">
+                <input
+                  type="checkbox"
+                  checked={includeInCashOnHand(a)}
+                  onChange={(e) => updateAccount(a.id, { includeInCash: e.target.checked })}
+                />
+                Cash
+              </label>
               <button type="button" className="link-btn danger" onClick={() => deleteAccount(a.id)}>
                 Remove
               </button>

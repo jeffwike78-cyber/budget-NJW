@@ -1867,3 +1867,21 @@ button, a, label, [role="button"], .sidebar-link, .mobile-tab-link, .quick-acces
 .reconcile-row .pill {
   margin-left: auto;
 }
+
+/* ---------- Cash-on-Hand per-account toggle (Accounts page) ---------- */
+.account-cash-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.85;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.account-cash-toggle input {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
