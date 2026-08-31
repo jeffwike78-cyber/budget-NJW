@@ -1806,3 +1806,16 @@ button, a, label, [role="button"], .sidebar-link, .mobile-tab-link, .quick-acces
 .passkey-name {
   color: var(--text);
 }
+
+/* ---------- Envelope reorder controls (Envelopes page) ---------- */
+.sf-reorder {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.sf-reorder .reorder-btn {
+  width: 24px;
+  height: 20px;
+  font-size: 12px;
+}
