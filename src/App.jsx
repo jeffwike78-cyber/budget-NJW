@@ -36,7 +36,7 @@ function App() {
     <div className="app-shell">
       <TopBar appName={budgetState.settings?.appName} setView={setView} />
       <div className="app-body">
-        <Sidebar view={view} setView={setView} totalBalance={totalBalance} />
+        <Sidebar view={view} setView={setView} totalBalance={totalBalance} accounts={budgetState.accounts} />
         <main className="app-main">
           <ErrorBoundary key={view}>
           <Suspense fallback={<div className="loading-screen">Loading…</div>}>

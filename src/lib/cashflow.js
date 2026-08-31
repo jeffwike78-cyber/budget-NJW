@@ -152,9 +152,35 @@ export function sinkingEvents(funds, fromStr, toStr) {
   return events;
 }
 
-// Build the full timeline: every event sorted by date with a running balance,
-// starting from `startingBalance`. Also reports the lowest point it reaches.
-export function projectCashflow({ startingBalance, sources, categories, effectiveBudgets, sinkingFunds, days = 60, fromStr = todayStr() }) {
+// Transfer outflows: transfer-kind envelopes leave checking on their scheduled
+// day-of-month (transferDay), so the money moving out shows up in the timeline.
+export function transferEvents(categories, effectiveBudgets, fromStr, toStr) {
+  const from = parse(fromStr);
+  const to = parse(toStr);
+  const events = [];
+  for (const c of categories || []) {
+    if (c.kind !== 'transfer') continue;
+    const monthly = Number(effectiveBudgets[c.id] || 0);
+    const day = Number(c.transferDay || 0);
+    if (!monthly || !(day >= 1 && day <= 31)) continue;
+    monthlyOnDay(day, from, to, (dateStr) =>
+      events.push({ date: dateStr, name: c.name, amount: -monthly, kind: 'transfer' })
+    );
+  }
+  return events;
+}
+
+function daysBetween(a, b) {
+  return Math.max(0, Math.round((b - a) / 86400000));
+}
+
+// Build a running-balance projection. Discrete events (income, bills, transfers,
+// sinking payouts) land on their dates; everyday-spending envelopes are modeled
+// as a smooth daily drain across the month (since those purchases happen all
+// month, not on one day). Reports the lowest point the balance reaches and the
+// recommended checking buffer — the standing cash to keep so the balance never
+// dips below zero as income catches up.
+export function projectCashflow({ startingBalance, sources, categories, effectiveBudgets, sinkingFunds, days = 45, fromStr = todayStr() }) {
   const from = parse(fromStr);
   const to = new Date(from);
   to.setDate(to.getDate() + days);
@@ -163,17 +189,52 @@ export function projectCashflow({ startingBalance, sources, categories, effectiv
   const events = [
     ...incomeEvents(sources, fromStr, toStr),
     ...billEvents(categories, effectiveBudgets, fromStr, toStr),
+    ...transferEvents(categories, effectiveBudgets, fromStr, toStr),
     ...sinkingEvents(sinkingFunds, fromStr, toStr),
   ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
-  let running = Number(startingBalance || 0);
-  let low = running;
-  let lowDate = fromStr;
-  const timeline = events.map((e) => {
-    running += e.amount;
-    if (running < low) { low = running; lowDate = e.date; }
-    return { ...e, balance: running };
-  });
+  // Everyday-spending drains steadily; spread each spending envelope's monthly
+  // budget over an average month.
+  const monthlySpend = (categories || [])
+    .filter((c) => c.kind === 'spending' && c.id !== 'needs-review')
+    .reduce((s, c) => s + Number(effectiveBudgets[c.id] || 0), 0);
+  const dailySpend = monthlySpend / 30.44;
 
-  return { timeline, endingBalance: running, low, lowDate, toStr };
+  const start = Number(startingBalance || 0);
+  let running = start; // balance including current cash
+  let net = 0; // cumulative change since today (for the buffer calc)
+  let minNet = 0;
+  let minDate = fromStr;
+  let cursor = from;
+  const timeline = [];
+
+  const drain = (untilDate) => {
+    const d = daysBetween(cursor, untilDate);
+    if (d > 0) {
+      running -= dailySpend * d;
+      net -= dailySpend * d;
+      // drain only decreases, so the low of a gap is at its end
+      if (net < minNet) { minNet = net; minDate = iso(untilDate); }
+      cursor = untilDate;
+    }
+  };
+
+  for (const e of events) {
+    drain(parse(e.date));
+    running += e.amount;
+    net += e.amount;
+    if (net < minNet) { minNet = net; minDate = e.date; }
+    timeline.push({ ...e, balance: running });
+  }
+  drain(to);
+
+  return {
+    timeline,
+    endingBalance: running,
+    low: start + minNet,
+    lowDate: minDate,
+    recommendedBuffer: Math.max(0, -minNet),
+    dailySpend,
+    toStr,
+  };
 }

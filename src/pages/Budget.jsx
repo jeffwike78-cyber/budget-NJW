@@ -345,6 +345,21 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                             />
                           </span>
                         )}
+                        {c.kind === 'transfer' && (
+                          <span className="category-type-value" title="Day of the month this transfer leaves checking — puts it on the cashflow timeline so the money moving out is accounted for.">
+                            transfer&nbsp;day
+                            <input
+                              type="number"
+                              min="1"
+                              max="31"
+                              inputMode="numeric"
+                              className="budget-input"
+                              value={c.transferDay ?? ''}
+                              placeholder="e.g. 5"
+                              onChange={(e) => updateCategory(c.id, 'transferDay', e.target.value)}
+                            />
+                          </span>
+                        )}
                         {c.kind === 'sinking' && (
                           <>
                             <span className="category-type-value" title="What you'll owe when this bill comes due (blank = just accumulate)">

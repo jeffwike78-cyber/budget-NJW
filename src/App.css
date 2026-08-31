@@ -144,8 +144,71 @@
 .sidebar-footer {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 10px;
   padding: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.sidebar-accounts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sidebar-accounts-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text);
+  opacity: 0.6;
+}
+
+.sidebar-accounts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sidebar-account-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.sidebar-account-name {
+  color: var(--text);
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-account-value {
+  color: var(--text-h);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.sidebar-account-value.negative {
+  color: var(--bad);
+}
+
+.sidebar-total-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 8px;
   border-top: 1px solid var(--border);
 }
 
@@ -1448,4 +1511,50 @@ button, a, label, [role="button"], .sidebar-link, .mobile-tab-link, .quick-acces
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Section heading between cards (Envelopes page: Sinking Funds / Monthly Spending) */
+.section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-h);
+  letter-spacing: -0.2px;
+  margin: 28px 0 12px;
+}
+.section-title:first-of-type {
+  margin-top: 8px;
+}
+
+/* Cashflow buffer callout on the Overview cashflow card */
+.cashflow-buffer {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cashflow-buffer-warn {
+  background: var(--bad-bg);
+}
+.cashflow-buffer-ok {
+  background: var(--good-bg);
+}
+.cashflow-buffer-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  opacity: 0.75;
+}
+.cashflow-buffer-value {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  color: var(--bad);
+}
+.cashflow-buffer-value.good {
+  color: var(--good);
+}
+.cashflow-buffer .module-note {
+  margin: 2px 0 0;
 }

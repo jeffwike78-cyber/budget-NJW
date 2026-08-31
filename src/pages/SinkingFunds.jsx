@@ -59,6 +59,18 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
     .filter((f) => f.nextDueDate && Number(f.envelope.targetAmount || 0) > 0)
     .sort((a, b) => a.nextDueDate.localeCompare(b.nextDueDate));
 
+  // Monthly Spending: everyday spending envelopes shown with this month's
+  // budget / spent / remaining — no carryover balance, target, or due date.
+  const spending = budgetable
+    .filter((c) => c.kind === 'spending')
+    .map((c) => {
+      const budget = effectiveBudgets[c.id] || 0;
+      const spent = monthSpent[c.id] || 0;
+      return { envelope: c, budget, spent, remaining: budget - spent };
+    });
+  const spendBudget = spending.reduce((s, e) => s + e.budget, 0);
+  const spendSpent = spending.reduce((s, e) => s + e.spent, 0);
+
   function updateFund(id, patch) {
     setBudgetState((prev) => ({
       ...prev,
@@ -74,12 +86,14 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
 
   return (
     <>
-      <h1 className="page-title">Sinking Funds</h1>
+      <h1 className="page-title">Envelopes</h1>
       <p className="page-intro">
-        One pot per irregular bill. These are your <strong>sinking</strong> envelopes from the Budget —
-        each carries its balance forward month to month, so the money is already there when the bill
-        comes due. Create or edit them on the Budget page or right here.
+        Your envelopes at a glance. <strong>Sinking funds</strong> carry a balance forward month to month for
+        irregular bills; <strong>monthly spending</strong> envelopes reset each month. Create or edit any of them
+        on the Budget page.
       </p>
+
+      <h2 className="section-title">Sinking Funds</h2>
 
       <section className="card">
         <div className="card-header">
@@ -138,6 +152,61 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
             ))}
           </div>
         )}
+      </section>
+
+      <h2 className="section-title">Monthly Spending</h2>
+
+      <section className="card">
+        <div className="card-header">
+          <h2>This month</h2>
+          <span className="pill">{money(spendSpent)} spent of {money(spendBudget)}</span>
+        </div>
+        {spending.length === 0 ? (
+          <p className="module-note">
+            No monthly-spending envelopes yet. On the Budget page, add an envelope and leave its type as
+            <strong> Monthly spending</strong>.
+          </p>
+        ) : (
+          <div className="sf-list">
+            {spending.map((e) => {
+              const pct = e.budget > 0 ? Math.min(100, (e.spent / e.budget) * 100) : 0;
+              const over = e.remaining < 0;
+              return (
+                <div className={`sf-card ${over ? 'sf-card-overdue' : 'sf-card-on-track'}`} key={e.envelope.id}>
+                  <div className="sf-card-top">
+                    <div className="sf-card-heading">
+                      <span className="sf-card-name">{e.envelope.name}</span>
+                      <span className={`pill ${over ? 'pill-bad' : 'pill-good'}`}>
+                        {over ? `Over ${money(-e.remaining)}` : `${money(e.remaining)} left`}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="sf-card-figures">
+                    <span className="sf-figure">
+                      <span className="sf-figure-label">Budget/mo</span>
+                      <span className="sf-figure-value">{money(e.budget)}</span>
+                    </span>
+                    <span className="sf-figure">
+                      <span className="sf-figure-label">Spent</span>
+                      <span className="sf-figure-value">{money(e.spent)}</span>
+                    </span>
+                    <span className="sf-figure">
+                      <span className="sf-figure-label">Remaining</span>
+                      <span className={`sf-figure-value${over ? ' over-budget' : ''}`}>{money(e.remaining)}</span>
+                    </span>
+                  </div>
+                  <div className="bar-track">
+                    <div className={`bar-fill${over ? ' over' : ''}`} style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <p className="module-note">
+          These reset at the start of each month — this is your budget, what you&apos;ve spent, and what&apos;s
+          left. Change amounts on the Budget page.
+        </p>
       </section>
     </>
   );

@@ -156,6 +156,27 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
               <span className="payoff-value">{usd(cashflow.endingBalance)}</span>
             </div>
           </div>
+          {cashflowShort ? (
+            <div className="cashflow-buffer cashflow-buffer-warn">
+              <span className="cashflow-buffer-label">Buffer to keep in checking</span>
+              <span className="cashflow-buffer-value">{usd(cashflow.recommendedBuffer)}</span>
+              <p className="module-note">
+                Your balance dips {usd(-cashflow.low)} below zero around {shortDate(cashflow.lowDate)} as bills and
+                everyday spending land before income catches up. Keep about <strong>{usd(cashflow.recommendedBuffer)}</strong> of
+                standing cash in checking so it never overdrafts — a one-time float you top back up as income arrives, not
+                money you have to spend.
+              </p>
+            </div>
+          ) : (
+            <div className="cashflow-buffer cashflow-buffer-ok">
+              <span className="cashflow-buffer-label">No buffer needed</span>
+              <span className="cashflow-buffer-value good">$0</span>
+              <p className="module-note">
+                Income lands in time to cover every bill and about {usd(cashflow.dailySpend * 30.44)}/mo of everyday
+                spending — checking stays above zero the whole window.
+              </p>
+            </div>
+          )}
           <ul className="cashflow-list">
             {cashflow.timeline.slice(0, 12).map((e, i) => (
               <li key={`${e.date}-${e.name}-${i}`} className="cashflow-row">
@@ -169,8 +190,9 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
             ))}
           </ul>
           <p className="module-note">
-            Uses each income source&apos;s pay date and each bill&apos;s due day. Add due days on the Budget page
-            and pay dates under Budget → Income to make this complete.
+            Uses each income source&apos;s pay date, each bill&apos;s due day, scheduled transfer days, and a steady
+            daily draw for everyday spending. Add due days, transfer days, and pay dates on the Budget page to make
+            this complete.
           </p>
         </section>
       )}
