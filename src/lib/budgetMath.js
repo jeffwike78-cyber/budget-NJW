@@ -26,6 +26,22 @@ export function kindLabel(kind) {
   return ENVELOPE_KINDS.find((k) => k.value === kind)?.label || 'Everyday spending';
 }
 
+// A credit-card balance is money owed (a liability). Plaid and manual entry both
+// store the owed amount as a positive number, so for display and net-worth
+// totals a credit account counts as negative. Everything else is as-stored.
+export function signedBalance(a) {
+  const bal = Number(a?.balance || 0);
+  return a?.type === 'credit' ? -bal : bal;
+}
+
+// Whether an account counts toward "cash on hand" (the reconciliation banner).
+// Defaults to checking + savings; a per-account `includeInCash` flag overrides
+// so a specific account can be added to or removed from the calculation.
+export function includeInCashOnHand(a) {
+  if (a?.includeInCash != null) return !!a.includeInCash;
+  return a?.type === 'checking' || a?.type === 'savings';
+}
+
 // Count of months from a 'YYYY-MM' start to a 'YYYY-MM' end, inclusive
 // (both the start and current month count as funded). Never less than 1.
 export function monthsInclusive(startMonth, currentMonth) {

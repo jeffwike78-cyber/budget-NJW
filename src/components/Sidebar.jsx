@@ -1,4 +1,5 @@
 import { OverviewIcon, TransactionsIcon, BudgetIcon, SinkingFundsIcon, AccountsIcon } from './icons';
+import { signedBalance } from '../lib/budgetMath';
 
 // Tax Report isn't a daily tab — it's reached from Settings (used once a year).
 const NAV_ITEMS = [
@@ -41,14 +42,17 @@ export default function Sidebar({ view, setView, totalBalance, accounts = [] }) 
           >
             <span className="sidebar-accounts-title">Account balances</span>
             <ul className="sidebar-accounts-list">
-              {accounts.map((a) => (
-                <li key={a.id} className="sidebar-account-row">
-                  <span className="sidebar-account-name">{a.name}</span>
-                  <span className={`sidebar-account-value${Number(a.balance || 0) < 0 ? ' negative' : ''}`}>
-                    {usd(a.balance)}
-                  </span>
-                </li>
-              ))}
+              {accounts.map((a) => {
+                const bal = signedBalance(a);
+                return (
+                  <li key={a.id} className="sidebar-account-row">
+                    <span className="sidebar-account-name">{a.name}</span>
+                    <span className={`sidebar-account-value${bal < 0 ? ' negative' : ''}`}>
+                      {bal < 0 ? `-$${Math.abs(bal).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : usd(bal)}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </button>
         )}
