@@ -47,7 +47,7 @@ export default async function handler(req, res) {
     );
     if (error) throw error;
 
-    await setPlaidStatus(admin, item_id, { institutionName, accountId, linked: true });
+    await setPlaidStatus(admin, item_id, { institutionName, linked: true });
 
     // Pull the first batch right away rather than waiting for the webhook.
     let result = {};
