@@ -88,6 +88,29 @@ export default function Accounts({ budgetState, setBudgetState }) {
     }
   }
 
+  async function removeBank(bank) {
+    if (!window.confirm(`Disconnect ${bank.institutionName || 'this bank'}? This removes its accounts and imported transactions. Your envelopes and manual entries are kept.`)) {
+      return;
+    }
+    setSyncingId(bank.itemId);
+    setSyncMsg(null);
+    try {
+      const res = await fetch('/api/plaid/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId: bank.itemId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Disconnect failed.');
+      setSyncMsg(`${bank.institutionName || 'Bank'} disconnected.`);
+      reloadBanks();
+    } catch (err) {
+      setSyncMsg(err.message);
+    } finally {
+      setSyncingId(null);
+    }
+  }
+
   return (
     <>
       <h1 className="page-title">Accounts</h1>
@@ -110,14 +133,24 @@ export default function Accounts({ budgetState, setBudgetState }) {
                   <span className="bank-name">{b.institutionName || 'Bank'}</span>
                   <span className="bank-synced">Last synced {timeAgo(b.lastSyncedAt)}</span>
                 </div>
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={() => syncBank(b.itemId)}
-                  disabled={syncingId !== null}
-                >
-                  {syncingId === b.itemId ? 'Syncing…' : 'Sync now'}
-                </button>
+                <div className="bank-row-actions">
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    onClick={() => syncBank(b.itemId)}
+                    disabled={syncingId !== null}
+                  >
+                    {syncingId === b.itemId ? 'Working…' : 'Sync now'}
+                  </button>
+                  <button
+                    type="button"
+                    className="link-btn danger"
+                    onClick={() => removeBank(b)}
+                    disabled={syncingId !== null}
+                  >
+                    Disconnect
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
