@@ -217,7 +217,11 @@ export default function Transactions({ budgetState, setBudgetState, transactions
             Add
           </button>
         </form>
-        {addMsg && <p className={`module-note ${addOk ? 'form-ok' : 'form-error'}`}>{addMsg}</p>}
+        {addMsg && (
+          <p className={`module-note ${addOk ? 'form-ok' : 'form-error'}`} role="status" aria-live="polite">
+            {addMsg}
+          </p>
+        )}
         <div className="ai-actions">
           <button type="button" className="secondary-btn" onClick={() => scanRef.current?.click()} disabled={scanBusy}>
             {scanBusy ? 'Reading receipt…' : '📷 Scan a receipt'}
