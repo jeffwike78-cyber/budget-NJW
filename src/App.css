@@ -880,9 +880,31 @@ textarea {
 .accounts-editor-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   padding: 12px 0;
   border-bottom: 1px solid var(--border);
+}
+
+.account-reorder {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.account-reorder .reorder-btn {
+  width: 26px;
+  height: 22px;
+}
+
+.reorder-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.accounts-editor-row .account-name-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .accounts-editor-row:last-child {

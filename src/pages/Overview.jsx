@@ -61,19 +61,16 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
   const agePct = age == null ? 0 : Math.min(100, (age / 45) * 100);
 
   const creditOwed = budgetState.accounts.filter((a) => a.type === 'credit').reduce((s, a) => s + Number(a.balance || 0), 0);
-  const cashOnHand = budgetState.accounts
-    .filter((a) => a.type === 'checking' || a.type === 'savings')
-    .reduce((s, a) => s + Number(a.balance || 0), 0);
   const hasCredit = budgetState.accounts.some((a) => a.type === 'credit');
   const showPayoff = hasCredit || budgetState.settings?.payMode === 'card';
-  const covered = cashOnHand >= creditOwed;
   const usd = (n) => `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
-  // Cashflow projection over the next 45 days from checking, using income pay
-  // dates and bill/sinking-fund due dates.
+  // Bills and the card are paid from checking only — savings balances are shown
+  // for reference but never counted toward covering the card.
   const checkingBalance = budgetState.accounts
     .filter((a) => a.type === 'checking')
     .reduce((s, a) => s + Number(a.balance || 0), 0);
+  const covered = checkingBalance >= creditOwed;
   const cashflow = projectCashflow({
     startingBalance: checkingBalance,
     sources: budgetState.incomeSources,
@@ -113,7 +110,7 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
           <div className="card-header">
             <h2>Credit card payoff</h2>
             <span className={`pill ${covered ? 'pill-good' : 'pill-bad'}`}>
-              {covered ? 'Covered' : `Short ${usd(creditOwed - cashOnHand)}`}
+              {covered ? 'Covered' : `Short ${usd(creditOwed - checkingBalance)}`}
             </span>
           </div>
           <div className="payoff-figures">
@@ -122,14 +119,14 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
               <span className="payoff-value">{usd(creditOwed)}</span>
             </div>
             <div className="payoff-figure">
-              <span className="payoff-label">Cash in checking / savings</span>
-              <span className="payoff-value">{usd(cashOnHand)}</span>
+              <span className="payoff-label">Cash in checking</span>
+              <span className="payoff-value">{usd(checkingBalance)}</span>
             </div>
           </div>
           <p className="module-note">
             {covered
-              ? 'You have enough cash to pay the card in full this month.'
-              : 'Heads up — set aside more in checking so you can pay the card off in full.'}
+              ? 'Your checking balance covers the card in full this month. Savings aren’t counted here — they’re shown for reference only.'
+              : 'Heads up — build up your checking balance so it covers the card in full. Savings aren’t counted toward this.'}
           </p>
         </section>
       )}

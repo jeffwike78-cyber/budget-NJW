@@ -62,6 +62,19 @@ export default function Accounts({ budgetState, setBudgetState }) {
     setBudgetState((prev) => ({ ...prev, accounts: prev.accounts.filter((a) => a.id !== id) }));
   }
 
+  // Reorder accounts; this order is what the Overview list and the sidebar
+  // quickview follow, since both render the accounts array as-is.
+  function moveAccount(id, dir) {
+    setBudgetState((prev) => {
+      const list = [...(prev.accounts || [])];
+      const idx = list.findIndex((a) => a.id === id);
+      const swap = idx + dir;
+      if (idx < 0 || swap < 0 || swap >= list.length) return prev;
+      [list[idx], list[swap]] = [list[swap], list[idx]];
+      return { ...prev, accounts: list };
+    });
+  }
+
   function addAccount(account) {
     setBudgetState((prev) => ({ ...prev, accounts: [...(prev.accounts || []), account] }));
     setShowAdd(false);
@@ -248,8 +261,28 @@ export default function Accounts({ budgetState, setBudgetState }) {
         </div>
 
         <div className="accounts-editor">
-          {accounts.map((a) => (
+          {accounts.map((a, i) => (
             <div className="accounts-editor-row" key={a.id}>
+              <div className="account-reorder">
+                <button
+                  type="button"
+                  className="reorder-btn"
+                  aria-label={`Move ${a.name} up`}
+                  disabled={i === 0}
+                  onClick={() => moveAccount(a.id, -1)}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  className="reorder-btn"
+                  aria-label={`Move ${a.name} down`}
+                  disabled={i === accounts.length - 1}
+                  onClick={() => moveAccount(a.id, 1)}
+                >
+                  ↓
+                </button>
+              </div>
               <input
                 className="account-name-input"
                 value={a.name}
