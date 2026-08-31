@@ -39,25 +39,56 @@ function seriesFrom(anchorStr, stepFreq, from, to, push) {
   while (d <= to && guard < 2000) { push(iso(d)); d = advance(d, stepFreq); guard += 1; }
 }
 
+// Emit an event on a given day-of-month every month in range, clamped to the
+// month's length (so "31" lands on the 30th/28th where needed).
+function monthlyOnDay(day, from, to, push) {
+  const d0 = Number(day);
+  if (!(d0 >= 1 && d0 <= 31)) return;
+  let y = from.getFullYear();
+  let m = from.getMonth();
+  let guard = 0;
+  while (guard < 60) {
+    const d = new Date(y, m, Math.min(d0, daysInMonth(y, m)));
+    if (d > to) break;
+    if (d >= from) push(iso(d));
+    m += 1;
+    if (m > 11) { m = 0; y += 1; }
+    guard += 1;
+  }
+}
+
 // Income landing events between two dates (inclusive), one per pay occurrence.
-// Twice-a-month income can carry two pay dates, each recurring monthly.
+// Monthly / twice-a-month income repeats on a day-of-month so it never expires;
+// weekly/biweekly/quarterly/annual use an anchor date they step forward from.
 export function incomeEvents(sources, fromStr, toStr) {
   const from = parse(fromStr);
   const to = parse(toStr);
   const events = [];
   for (const s of sources || []) {
     const amount = Number(s.amount || 0);
-    if (!amount || !s.payDate) continue;
+    if (!amount) continue;
     const add = (dateStr) => events.push({ date: dateStr, name: s.name, amount, kind: 'income' });
-    if (s.frequency === 'one-time') {
-      const d = parse(s.payDate);
-      if (d >= from && d <= to) add(s.payDate);
+
+    if (s.frequency === 'monthly') {
+      if (s.payDay) monthlyOnDay(s.payDay, from, to, add);
+      else if (s.payDate) seriesFrom(s.payDate, 'monthly', from, to, add); // legacy
       continue;
     }
     if (s.frequency === 'semimonthly') {
-      // Two monthly series — one per pay date the user gave.
-      seriesFrom(s.payDate, 'monthly', from, to, add);
-      if (s.payDate2) seriesFrom(s.payDate2, 'monthly', from, to, add);
+      if (s.payDay || s.payDay2) {
+        if (s.payDay) monthlyOnDay(s.payDay, from, to, add);
+        if (s.payDay2) monthlyOnDay(s.payDay2, from, to, add);
+      } else if (s.payDate) {
+        seriesFrom(s.payDate, 'monthly', from, to, add); // legacy dates
+        if (s.payDate2) seriesFrom(s.payDate2, 'monthly', from, to, add);
+      }
+      continue;
+    }
+    // Weekly / biweekly / quarterly / annual / one-time need an anchor date.
+    if (!s.payDate) continue;
+    if (s.frequency === 'one-time') {
+      const d = parse(s.payDate);
+      if (d >= from && d <= to) add(s.payDate);
       continue;
     }
     seriesFrom(s.payDate, s.frequency, from, to, add);

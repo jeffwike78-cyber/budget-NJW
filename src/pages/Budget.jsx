@@ -184,20 +184,40 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                   </option>
                 ))}
               </select>
-              <input
-                type="date"
-                className="income-date-input"
-                value={s.payDate || ''}
-                onChange={(e) => updateSource(s.id, { payDate: e.target.value })}
-                title={s.frequency === 'semimonthly' ? 'First pay date of the month' : 'Next date this income lands — used for the cashflow timeline'}
-              />
-              {s.frequency === 'semimonthly' && (
+              {s.frequency === 'monthly' || s.frequency === 'semimonthly' ? (
+                <>
+                  <input
+                    type="number"
+                    min="1"
+                    max="31"
+                    inputMode="numeric"
+                    className="income-day-input"
+                    placeholder="day"
+                    value={s.payDay ?? ''}
+                    onChange={(e) => updateSource(s.id, { payDay: e.target.value })}
+                    title="Day of the month it lands (repeats every month)"
+                  />
+                  {s.frequency === 'semimonthly' && (
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      inputMode="numeric"
+                      className="income-day-input"
+                      placeholder="day 2"
+                      value={s.payDay2 ?? ''}
+                      onChange={(e) => updateSource(s.id, { payDay2: e.target.value })}
+                      title="Second day of the month it lands"
+                    />
+                  )}
+                </>
+              ) : (
                 <input
                   type="date"
                   className="income-date-input"
-                  value={s.payDate2 || ''}
-                  onChange={(e) => updateSource(s.id, { payDate2: e.target.value })}
-                  title="Second pay date of the month"
+                  value={s.payDate || ''}
+                  onChange={(e) => updateSource(s.id, { payDate: e.target.value })}
+                  title="Next date this income lands — used for the cashflow timeline"
                 />
               )}
               <span className="income-monthly">${sourceMonthly(s).toFixed(0)}/mo</span>
