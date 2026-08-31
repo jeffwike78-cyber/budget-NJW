@@ -19,4 +19,18 @@ if (!url || !anonKey) {
   );
 }
 
-export const supabase = createClient(url, anonKey);
+export const supabase = createClient(url, anonKey, {
+  auth: {
+    // Keep people signed in across app opens (and across an "Add to Home
+    // Screen" launch) — the session lives in localStorage and the token
+    // auto-refreshes, so a phone that's logged in once stays logged in.
+    persistSession: true,
+    autoRefreshToken: true,
+    // Needed so the OAuth (Google) redirect and password-reset links are
+    // picked up from the URL when the app reloads.
+    detectSessionInUrl: true,
+    // Opt in to the experimental passkey API (registerPasskey /
+    // signInWithPasskey) for biometric sign-in. Requires supabase-js ≥ 2.105.
+    experimental: { passkey: true },
+  },
+});

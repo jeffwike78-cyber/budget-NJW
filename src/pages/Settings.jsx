@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { makeDefaultBudget } from '../lib/useBudgetState';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../lib/useAuth';
@@ -118,6 +118,7 @@ export default function Settings({ budgetState, setBudgetState, setView }) {
             'You are signed in.'
           )}
         </p>
+        <PasskeyManager />
         <button type="button" className="secondary-btn" onClick={() => supabase.auth.signOut()}>
           Sign out
         </button>
@@ -165,5 +166,100 @@ export default function Settings({ budgetState, setBudgetState, setView }) {
         )}
       </section>
     </>
+  );
+}
+
+// Lets a signed-in person add a passkey (Face ID / fingerprint / device PIN) on
+// this device so next time they can open the app with one tap instead of typing
+// a password. Passkeys are tied to the production domain, so set them up there.
+function PasskeyManager() {
+  const [passkeys, setPasskeys] = useState([]);
+  const [supported, setSupported] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.auth.passkey.list();
+      if (error) throw error;
+      setPasskeys(data || []);
+    } catch {
+      // Older SDK, experimental flag off, or an unsupported browser.
+      setSupported(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function add() {
+    setBusy(true);
+    setErr(null);
+    setMsg(null);
+    try {
+      const { error } = await supabase.auth.registerPasskey();
+      if (error) throw error;
+      setMsg('Passkey added — you can now open the app with Face ID / fingerprint on this device.');
+      await load();
+    } catch (e) {
+      setErr(e.message || 'Could not add a passkey on this device.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(id) {
+    setErr(null);
+    setMsg(null);
+    try {
+      const { error } = await supabase.auth.passkey.delete({ passkeyId: id });
+      if (error) throw error;
+      await load();
+    } catch (e) {
+      setErr(e.message || 'Could not remove that passkey.');
+    }
+  }
+
+  if (!supported) {
+    return (
+      <p className="module-note">
+        Passkeys aren&apos;t available on this device or browser — you can still use email/password or Google.
+      </p>
+    );
+  }
+
+  return (
+    <div className="passkey-manager">
+      <div className="passkey-head">
+        <span className="passkey-title">Passkeys on this device</span>
+        <button type="button" className="secondary-btn" onClick={add} disabled={busy}>
+          {busy ? 'Setting up…' : '＋ Add a passkey'}
+        </button>
+      </div>
+      {passkeys.length > 0 ? (
+        <ul className="passkey-list">
+          {passkeys.map((p) => (
+            <li key={p.id} className="passkey-row">
+              <span className="passkey-name">
+                {p.friendly_name || 'Passkey'}
+                {p.created_at ? ` · added ${new Date(p.created_at).toLocaleDateString()}` : ''}
+              </span>
+              <button type="button" className="link-btn danger" onClick={() => remove(p.id)}>
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="module-note">
+          No passkeys yet. Add one here, then use <strong>Sign in with a passkey</strong> on the login
+          screen for one-tap access. Set this up on your production app URL, on each phone.
+        </p>
+      )}
+      {msg && <p className="module-note form-ok" role="status">{msg}</p>}
+      {err && <p className="module-note form-error" role="alert">{err}</p>}
+    </div>
   );
 }

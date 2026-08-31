@@ -20,6 +20,35 @@ export default function Login({ appName = 'Family Budget', recovery = false, onR
     setMode(next);
   }
 
+  async function passkeySignIn() {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const { error } = await supabase.auth.signInWithPasskey();
+      if (error) throw error;
+      // A SIGNED_IN event swaps in the app.
+    } catch (err) {
+      setError(
+        /no|not found|credential|abort/i.test(err.message || '')
+          ? 'No passkey found on this device yet. Sign in once with email or Google, then add a passkey in Settings.'
+          : err.message || 'Passkey sign-in failed.'
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function googleSignIn() {
+    setError(null);
+    setNotice(null);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) setError(error.message);
+  }
+
   async function submit(e) {
     e.preventDefault();
     setBusy(true);
@@ -76,6 +105,20 @@ export default function Login({ appName = 'Family Budget', recovery = false, onR
       <div className="auth-card card">
         <div className="auth-brand">{appName}</div>
         <h1 className="auth-title">{titles[mode]}</h1>
+
+        {mode === 'signin' && (
+          <>
+            <div className="auth-quick">
+              <button type="button" className="primary-btn auth-passkey" onClick={passkeySignIn} disabled={busy}>
+                <span aria-hidden="true">🔑</span> Sign in with a passkey
+              </button>
+              <button type="button" className="secondary-btn auth-google" onClick={googleSignIn} disabled={busy}>
+                Continue with Google
+              </button>
+            </div>
+            <div className="auth-divider"><span>or use your email</span></div>
+          </>
+        )}
 
         <form className="auth-form" onSubmit={submit}>
           {mode !== 'reset' && (
