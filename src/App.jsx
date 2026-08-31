@@ -1,15 +1,17 @@
-import { useState } from 'react';
+import { useState, Suspense, lazy } from 'react';
 import './App.css';
 import TopBar from './components/TopBar';
 import Sidebar, { MobileTabBar } from './components/Sidebar';
 import ErrorBoundary from './components/ErrorBoundary';
-import Overview from './pages/Overview';
-import Transactions from './pages/Transactions';
-import Budget from './pages/Budget';
-import SinkingFunds from './pages/SinkingFunds';
-import Accounts from './pages/Accounts';
-import TaxReport from './pages/TaxReport';
-import Settings from './pages/Settings';
+import Overview from './pages/Overview'; // eager — it's the landing page
+// Split the rest into their own chunks so the initial load stays small
+// (react-best-practices: bundle-size / code-splitting).
+const Transactions = lazy(() => import('./pages/Transactions'));
+const Budget = lazy(() => import('./pages/Budget'));
+const SinkingFunds = lazy(() => import('./pages/SinkingFunds'));
+const Accounts = lazy(() => import('./pages/Accounts'));
+const TaxReport = lazy(() => import('./pages/TaxReport'));
+const Settings = lazy(() => import('./pages/Settings'));
 import { useBudgetState } from './lib/useBudgetState';
 import { useBudgetTransactions } from './lib/useBudgetTransactions';
 
@@ -37,6 +39,7 @@ function App() {
         <Sidebar view={view} setView={setView} totalBalance={totalBalance} />
         <main className="app-main">
           <ErrorBoundary key={view}>
+          <Suspense fallback={<div className="loading-screen">Loading…</div>}>
           {view === 'overview' && (
             <Overview
               budgetState={budgetState}
@@ -85,6 +88,7 @@ function App() {
           {view === 'settings' && (
             <Settings budgetState={budgetState} setBudgetState={setBudgetState} setView={setView} />
           )}
+          </Suspense>
           </ErrorBoundary>
         </main>
       </div>
