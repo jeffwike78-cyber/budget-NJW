@@ -266,11 +266,12 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
 
       {onQuickScan && (
         <label className="fab-scan" title="Scan a receipt">
-          📷
+          <span aria-hidden="true">📷</span>
           <input
             type="file"
             accept="image/*"
             capture="environment"
+            aria-label="Scan a receipt"
             hidden
             onChange={(e) => {
               const f = e.target.files?.[0];
