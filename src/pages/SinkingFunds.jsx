@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { todayStr } from '../lib/storage';
 import { netSpentByCategory } from '../lib/spending';
-import { monthlyIncomeTotal, computeCategoryBudgets, envelopeBalances } from '../lib/budgetMath';
+import { monthlyIncomeTotal, computeCategoryBudgets, envelopeBalances, isCarryover } from '../lib/budgetMath';
 import { computeSinkingEnvelope, advanceDueDate, dueLabel } from '../lib/sinkingFunds';
 
 const STATUS_LABEL = {
@@ -84,6 +84,21 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
   const spendBudget = spending.reduce((s, e) => s + e.budget, 0);
   const spendSpent = spending.reduce((s, e) => s + e.spent, 0);
 
+  // Reconciliation: the money "assigned" to carryover envelopes (sinking +
+  // spending + transfer keep a running balance; bills reset monthly and don't)
+  // should be backed by real cash sitting in checking + savings. If assigned
+  // exceeds cash on hand, some envelopes are funded on paper but not with actual
+  // dollars yet — the usual cause of "how is $6k in envelopes when checking is
+  // $3k?".
+  const assigned = budgetable
+    .filter((c) => isCarryover(c.kind))
+    .reduce((s, c) => s + (balances[c.id]?.available ?? 0), 0);
+  const cashOnHand = (budgetState.accounts || [])
+    .filter((a) => a.type === 'checking' || a.type === 'savings')
+    .reduce((s, a) => s + Number(a.balance || 0), 0);
+  const reconcileDiff = assigned - cashOnHand;
+  const overAssigned = reconcileDiff > 1;
+
   // A page-specific display order (settings.envelopeOrder) that's independent of
   // the Budget page — so the most-used envelopes can sit at the top here without
   // moving anything on the Budget. Anything not yet in the list sorts to the end
@@ -143,6 +158,40 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
         irregular bills; <strong>monthly spending</strong> envelopes reset each month. Create or edit any of them
         on the Budget page.
       </p>
+
+      <section className={`card reconcile-banner ${overAssigned ? 'reconcile-warn' : 'reconcile-ok'}`}>
+        <div className="reconcile-row">
+          <div className="reconcile-fig">
+            <span className="reconcile-label">Assigned to envelopes</span>
+            <span className="reconcile-value">{money(assigned)}</span>
+          </div>
+          <span className="reconcile-op">vs</span>
+          <div className="reconcile-fig">
+            <span className="reconcile-label">Cash on hand</span>
+            <span className="reconcile-value">{money(cashOnHand)}</span>
+            <span className="reconcile-sub">checking + savings</span>
+          </div>
+          <span className={`pill ${overAssigned ? 'pill-bad' : 'pill-good'}`}>
+            {overAssigned ? `Over-assigned ${money(reconcileDiff)}` : `${money(-reconcileDiff)} unassigned`}
+          </span>
+        </div>
+        <p className="module-note">
+          {overAssigned ? (
+            <>
+              Your envelopes hold <strong>{money(reconcileDiff)}</strong> more than your accounts actually contain —
+              that much is set aside on paper but isn&apos;t backed by real cash yet. Lower some opening balances or
+              monthly set-asides, or move cash into checking/savings, until these two line up. (Envelope balances are
+              an accounting overlay — assigning money doesn&apos;t move it; it just earmarks cash you already have.)
+            </>
+          ) : (
+            <>
+              Your checking + savings cover everything you&apos;ve set aside, with <strong>{money(-reconcileDiff)}</strong>{' '}
+              not yet assigned to an envelope. Envelope balances are money earmarked from the cash you already hold —
+              this is how it should look.
+            </>
+          )}
+        </p>
+      </section>
 
       <h2 className="section-title">Sinking Funds</h2>
 
