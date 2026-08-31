@@ -144,8 +144,71 @@
 .sidebar-footer {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 10px;
   padding: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.sidebar-accounts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sidebar-accounts-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text);
+  opacity: 0.6;
+}
+
+.sidebar-accounts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sidebar-account-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.sidebar-account-name {
+  color: var(--text);
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-account-value {
+  color: var(--text-h);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.sidebar-account-value.negative {
+  color: var(--bad);
+}
+
+.sidebar-total-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 8px;
   border-top: 1px solid var(--border);
 }
 
@@ -817,9 +880,31 @@ textarea {
 .accounts-editor-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   padding: 12px 0;
   border-bottom: 1px solid var(--border);
+}
+
+.account-reorder {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.account-reorder .reorder-btn {
+  width: 26px;
+  height: 22px;
+}
+
+.reorder-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.accounts-editor-row .account-name-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .accounts-editor-row:last-child {
@@ -1448,4 +1533,276 @@ button, a, label, [role="button"], .sidebar-link, .mobile-tab-link, .quick-acces
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Section heading between cards (Envelopes page: Sinking Funds / Monthly Spending) */
+.section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-h);
+  letter-spacing: -0.2px;
+  margin: 28px 0 12px;
+}
+.section-title:first-of-type {
+  margin-top: 8px;
+}
+
+/* Cashflow buffer callout on the Overview cashflow card */
+.cashflow-buffer {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cashflow-buffer-warn {
+  background: var(--bad-bg);
+}
+.cashflow-buffer-ok {
+  background: var(--good-bg);
+}
+.cashflow-buffer-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  opacity: 0.75;
+}
+.cashflow-buffer-value {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  color: var(--bad);
+}
+.cashflow-buffer-value.good {
+  color: var(--good);
+}
+.cashflow-buffer .module-note {
+  margin: 2px 0 0;
+}
+
+/* ---------- Income date field labels (Budget page) ---------- */
+.income-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.income-field-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text);
+  opacity: 0.65;
+  white-space: nowrap;
+}
+
+/* ---------- Sinking-fund summary grid ---------- */
+.sf-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+}
+.sf-summary-sub {
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.7;
+  line-height: 1.4;
+}
+
+/* ---------- Upcoming bills: on-track projection ---------- */
+.sf-upcoming {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.sf-upcoming-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sf-upcoming-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.sf-upcoming-name {
+  font-weight: 600;
+  color: var(--text-h);
+}
+.sf-upcoming-due {
+  font-size: 13px;
+  color: var(--text);
+  opacity: 0.8;
+}
+.sf-progress-track {
+  position: relative;
+  overflow: visible;
+}
+.sf-progress-projected {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--text-h);
+  transform: translateX(-1px);
+}
+.sf-progress-projected::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-h);
+  transform: translateX(-50%);
+}
+.sf-progress-label {
+  font-size: 13px;
+  color: var(--text);
+}
+.sf-upcoming-note {
+  font-size: 13px;
+  color: var(--warn);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ---------- Cashflow schedule toggle (Overview) ---------- */
+.cashflow-toggle {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent, var(--text-h));
+  cursor: pointer;
+}
+
+/* ---------- Auth (login / signup / reset) ---------- */
+.auth-shell {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg);
+}
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  gap: 18px;
+}
+.auth-brand {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: 0.9;
+}
+.auth-title {
+  margin: 0;
+  font-size: 22px;
+  color: var(--text-h);
+}
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.auth-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+.auth-submit {
+  margin-top: 4px;
+}
+.auth-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ---------- Auth quick actions (passkey / Google) ---------- */
+.auth-quick {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.auth-passkey {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.auth-google {
+  width: 100%;
+}
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  opacity: 0.6;
+  font-size: 12px;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ---------- Passkey manager (Settings) ---------- */
+.passkey-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.passkey-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.passkey-title {
+  font-weight: 600;
+  color: var(--text-h);
+}
+.passkey-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.passkey-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+.passkey-name {
+  color: var(--text);
 }

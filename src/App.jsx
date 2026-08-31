@@ -12,17 +12,37 @@ const SinkingFunds = lazy(() => import('./pages/SinkingFunds'));
 const Accounts = lazy(() => import('./pages/Accounts'));
 const TaxReport = lazy(() => import('./pages/TaxReport'));
 const Settings = lazy(() => import('./pages/Settings'));
+const Login = lazy(() => import('./pages/Login'));
 import { useBudgetState } from './lib/useBudgetState';
 import { useBudgetTransactions } from './lib/useBudgetTransactions';
+import { useAuth } from './lib/useAuth';
 
 function App() {
   const [view, setView] = useState('overview');
   // A receipt photo captured from the Overview quick-scan button, handed to the
   // Transactions page to run OCR and prefill the add form.
   const [pendingScanFile, setPendingScanFile] = useState(null);
+  const { session, loading: authLoading, recovery, clearRecovery } = useAuth();
   const [budgetState, setBudgetState, budgetLoading] = useBudgetState();
   const { transactions, addTransaction, recategorize, setExcluded, setBusiness, setTaxCategory } =
     useBudgetTransactions();
+
+  // Auth gate: everyone signs in to the same shared family budget. A reset-link
+  // visit (recovery) always shows the "set a new password" screen first.
+  if (authLoading) {
+    return <div className="loading-screen">Loading…</div>;
+  }
+  if (recovery || !session) {
+    return (
+      <Suspense fallback={<div className="loading-screen">Loading…</div>}>
+        <Login
+          appName={budgetState.settings?.appName}
+          recovery={recovery}
+          onRecoveryHandled={clearRecovery}
+        />
+      </Suspense>
+    );
+  }
 
   if (budgetLoading) {
     return <div className="loading-screen">Loading your budget…</div>;
@@ -36,7 +56,7 @@ function App() {
     <div className="app-shell">
       <TopBar appName={budgetState.settings?.appName} setView={setView} />
       <div className="app-body">
-        <Sidebar view={view} setView={setView} totalBalance={totalBalance} />
+        <Sidebar view={view} setView={setView} totalBalance={totalBalance} accounts={budgetState.accounts} />
         <main className="app-main">
           <ErrorBoundary key={view}>
           <Suspense fallback={<div className="loading-screen">Loading…</div>}>
