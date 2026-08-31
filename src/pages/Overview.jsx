@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import BarChart from '../components/BarChart';
 import { PlusIcon, BudgetIcon, AccountsIcon, ArrowUpRightIcon } from '../components/icons';
 import { todayStr, todayLabel } from '../lib/storage';
@@ -31,6 +32,7 @@ function lastNMonths(n) {
 }
 
 export default function Overview({ budgetState, transactions, setView, onQuickScan }) {
+  const [showSchedule, setShowSchedule] = useState(false);
   const today = todayStr();
   const month = monthKey(today);
   const monthTx = transactions.filter((t) => monthKey(t.date) === month);
@@ -79,7 +81,7 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
     // Sinking funds are sinking-kind envelopes now; their due dates + targets
     // drive the outflow side of the timeline.
     sinkingFunds: budgetState.categories.filter((c) => c.kind === 'sinking'),
-    days: 45,
+    days: 30,
   });
   const cashflowShort = cashflow.low < 0;
 
@@ -134,7 +136,7 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
       {cashflow.timeline.length > 0 && (
         <section className={`card cashflow-card ${cashflowShort ? 'payoff-bad' : ''}`}>
           <div className="card-header">
-            <h2>Cashflow — next 45 days</h2>
+            <h2>Cashflow — next 30 days</h2>
             <span className={`pill ${cashflowShort ? 'pill-bad' : 'pill-good'}`}>
               {cashflowShort ? `Dips to ${usd(cashflow.low)} on ${shortDate(cashflow.lowDate)}` : 'Stays positive'}
             </span>
@@ -149,7 +151,7 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
               <span className={`payoff-value ${cashflowShort ? 'bad' : ''}`}>{usd(cashflow.low)}</span>
             </div>
             <div className="payoff-figure">
-              <span className="payoff-label">In 45 days</span>
+              <span className="payoff-label">In 30 days</span>
               <span className="payoff-value">{usd(cashflow.endingBalance)}</span>
             </div>
           </div>
@@ -174,23 +176,36 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
               </p>
             </div>
           )}
-          <ul className="cashflow-list">
-            {cashflow.timeline.slice(0, 12).map((e, i) => (
-              <li key={`${e.date}-${e.name}-${i}`} className="cashflow-row">
-                <span className="cashflow-date">{shortDate(e.date)}</span>
-                <span className="cashflow-name">{e.name}</span>
-                <span className={`cashflow-amount ${e.amount < 0 ? '' : 'good'}`}>
-                  {e.amount < 0 ? '-' : '+'}{usd(Math.abs(e.amount))}
-                </span>
-                <span className={`cashflow-balance ${e.balance < 0 ? 'bad' : ''}`}>{usd(e.balance)}</span>
-              </li>
-            ))}
-          </ul>
-          <p className="module-note">
-            Uses each income source&apos;s pay date, each bill&apos;s due day, scheduled transfer days, and a steady
-            daily draw for everyday spending. Add due days, transfer days, and pay dates on the Budget page to make
-            this complete.
-          </p>
+          <button
+            type="button"
+            className="cashflow-toggle"
+            onClick={() => setShowSchedule((s) => !s)}
+            aria-expanded={showSchedule}
+          >
+            {showSchedule ? 'Hide' : 'Show'} upcoming transactions schedule
+            {cashflow.timeline.length > 0 ? ` (${cashflow.timeline.length})` : ''} {showSchedule ? '▴' : '▾'}
+          </button>
+          {showSchedule && (
+            <ul className="cashflow-list">
+              {cashflow.timeline.map((e, i) => (
+                <li key={`${e.date}-${e.name}-${i}`} className="cashflow-row">
+                  <span className="cashflow-date">{shortDate(e.date)}</span>
+                  <span className="cashflow-name">{e.name}</span>
+                  <span className={`cashflow-amount ${e.amount < 0 ? '' : 'good'}`}>
+                    {e.amount < 0 ? '-' : '+'}{usd(Math.abs(e.amount))}
+                  </span>
+                  <span className={`cashflow-balance ${e.balance < 0 ? 'bad' : ''}`}>{usd(e.balance)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {showSchedule && (
+            <p className="module-note">
+              Uses each income source&apos;s pay date, each bill&apos;s due day, scheduled transfer days, and a steady
+              daily draw for everyday spending. Add due days, transfer days, and pay dates on the Budget page to make
+              this complete.
+            </p>
+          )}
         </section>
       )}
 

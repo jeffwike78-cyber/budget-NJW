@@ -45,11 +45,18 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
   const balances = envelopeBalances(budgetable, effectiveBudgets, allTimeSpent, monthSpent, budgetState.settings?.startMonth, month);
 
   const sinking = budgetable.filter((c) => c.kind === 'sinking');
-  const computed = sinking.map((c) => ({
-    envelope: c,
-    live: balances[c.id]?.available ?? 0,
-    ...computeSinkingEnvelope(c, balances[c.id]?.available ?? 0),
-  }));
+  const computed = sinking.map((c) => {
+    const live = balances[c.id]?.available ?? 0;
+    const base = computeSinkingEnvelope(c, live);
+    // What you'll actually have by the due date if you keep contributing the
+    // budgeted monthly amount: current balance + months left × monthly set-aside.
+    const monthly = effectiveBudgets[c.id] || Number(c.budgetValue || 0);
+    const target = Number(c.targetAmount || 0);
+    const projected = live + (base.remaining || 0) * monthly;
+    const onTrack = target > 0 ? projected >= target - 0.5 : true;
+    const projectedShort = target > 0 ? Math.max(0, target - projected) : 0;
+    return { envelope: c, live, monthly, projected, onTrack, projectedShort, ...base };
+  });
 
   const totalSaved = computed.reduce((s, f) => s + f.live, 0);
   const totalTarget = computed.reduce((s, f) => s + Number(f.envelope.targetAmount || 0), 0);
@@ -98,17 +105,31 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
       <section className="card">
         <div className="card-header">
           <h2>Across all funds</h2>
-          <span className="pill">{money(totalSaved)} of {money(totalTarget)} saved</span>
         </div>
-        <div className="sf-summary">
+        <div className="sf-summary sf-summary-grid">
           <div className="sf-summary-figure">
-            <span className="sf-summary-label">Set aside each month to stay on track</span>
+            <span className="sf-summary-label">Saved right now</span>
+            <span className="sf-summary-value">{money(totalSaved)}</span>
+            <span className="sf-summary-sub">total sitting in your sinking envelopes today</span>
+          </div>
+          <div className="sf-summary-figure">
+            <span className="sf-summary-label">Combined target</span>
+            <span className="sf-summary-value">{money(totalTarget)}</span>
+            <span className="sf-summary-sub">what the funds with a due-date bill add up to</span>
+          </div>
+          <div className="sf-summary-figure">
+            <span className="sf-summary-label">Catch-up pace</span>
             <span className="sf-summary-value">{money(requiredMonthly)}/mo</span>
+            <span className="sf-summary-sub">extra set-aside to make every deadline on time</span>
           </div>
         </div>
         <p className="module-note">
-          Balances update automatically as your monthly set-aside is budgeted and as you spend from a
-          fund. To change how much you save into a fund, edit its monthly amount on the Budget page.
+          <strong>Saved right now</strong> is the real cash across all your sinking envelopes — including
+          funds you keep topped up with no deadline, which is why it can be higher than the combined target.
+          <strong> Combined target</strong> only counts funds that have a target amount and a due date.
+          <strong> Catch-up pace</strong> is how much to budget per month, across those dated funds, to have
+          each one fully funded by its due date — if it&apos;s $0, you&apos;re on schedule everywhere. Balances
+          update automatically as you budget and spend; change a fund&apos;s monthly amount on the Budget page.
         </p>
       </section>
 
@@ -116,23 +137,55 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
         <section className="card">
           <div className="card-header">
             <h2>Upcoming bills</h2>
+            <span className="pill">On track to cover each one?</span>
           </div>
-          <ul className="sf-timeline">
-            {upcoming.map((f) => (
-              <li key={f.envelope.id} className="sf-timeline-row">
-                <span className={`sf-dot sf-dot-${f.status}`} />
-                <span className="sf-timeline-name">{f.envelope.name}</span>
-                <span className="sf-timeline-due">{dueLabel(f.nextDueDate)}</span>
-                <span className="sf-timeline-amount">
-                  {f.funded ? (
-                    <span className="pill pill-good">Ready</span>
-                  ) : f.stillNeeded > 0 ? (
-                    <span className={`pill ${STATUS_CLASS[f.status]}`}>short {money(f.stillNeeded)}</span>
-                  ) : null}
-                </span>
-              </li>
-            ))}
+          <ul className="sf-upcoming">
+            {upcoming.map((f) => {
+              const target = Number(f.envelope.targetAmount || 0);
+              const pct = target > 0 ? Math.min(100, (f.live / target) * 100) : 0;
+              const projPct = target > 0 ? Math.min(100, (f.projected / target) * 100) : 0;
+              const ok = f.funded || f.onTrack;
+              const badgeText = f.funded ? 'Ready' : f.onTrack ? 'On track' : `Short ${money(f.projectedShort)}`;
+              return (
+                <li key={f.envelope.id} className="sf-upcoming-row">
+                  <div className="sf-upcoming-head">
+                    <span className="sf-upcoming-name">{f.envelope.name}</span>
+                    <span className={`pill ${ok ? 'pill-good' : 'pill-bad'}`}>{badgeText}</span>
+                  </div>
+                  <div className="sf-upcoming-due">{dueLabel(f.nextDueDate)}</div>
+                  <div className="sf-progress-track bar-track">
+                    <div
+                      className={`bar-fill ${ok ? 'sf-bar-on-track' : 'sf-bar-behind'}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                    {projPct > pct && (
+                      <span
+                        className="sf-progress-projected"
+                        style={{ left: `${projPct}%` }}
+                        title={`Projected ${money(f.projected)} by the due date`}
+                      />
+                    )}
+                  </div>
+                  <div className="sf-progress-label">
+                    <strong>{money(f.live)}</strong> of {money(target)} saved
+                    {!f.funded && f.remaining > 0 && (
+                      <> · on pace for <strong>{money(f.projected)}</strong> by then at {money(f.monthly)}/mo</>
+                    )}
+                  </div>
+                  {!ok && (
+                    <p className="sf-upcoming-note">
+                      At {money(f.monthly)}/mo you&apos;ll be {money(f.projectedShort)} short. Bump this fund to
+                      about {money(f.requiredMonthly)}/mo on the Budget page to have it ready in time.
+                    </p>
+                  )}
+                </li>
+              );
+            })}
           </ul>
+          <p className="module-note">
+            The bar shows what&apos;s saved now; the marker shows where you&apos;ll land by the due date if you
+            keep contributing the budgeted monthly amount. Green means the projection covers the bill.
+          </p>
         </section>
       )}
 

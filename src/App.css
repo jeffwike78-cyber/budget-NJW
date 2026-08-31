@@ -1580,3 +1580,106 @@ button, a, label, [role="button"], .sidebar-link, .mobile-tab-link, .quick-acces
 .cashflow-buffer .module-note {
   margin: 2px 0 0;
 }
+
+/* ---------- Income date field labels (Budget page) ---------- */
+.income-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.income-field-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text);
+  opacity: 0.65;
+  white-space: nowrap;
+}
+
+/* ---------- Sinking-fund summary grid ---------- */
+.sf-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+}
+.sf-summary-sub {
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.7;
+  line-height: 1.4;
+}
+
+/* ---------- Upcoming bills: on-track projection ---------- */
+.sf-upcoming {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.sf-upcoming-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sf-upcoming-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.sf-upcoming-name {
+  font-weight: 600;
+  color: var(--text-h);
+}
+.sf-upcoming-due {
+  font-size: 13px;
+  color: var(--text);
+  opacity: 0.8;
+}
+.sf-progress-track {
+  position: relative;
+  overflow: visible;
+}
+.sf-progress-projected {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--text-h);
+  transform: translateX(-1px);
+}
+.sf-progress-projected::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-h);
+  transform: translateX(-50%);
+}
+.sf-progress-label {
+  font-size: 13px;
+  color: var(--text);
+}
+.sf-upcoming-note {
+  font-size: 13px;
+  color: var(--warn);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ---------- Cashflow schedule toggle (Overview) ---------- */
+.cashflow-toggle {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent, var(--text-h));
+  cursor: pointer;
+}

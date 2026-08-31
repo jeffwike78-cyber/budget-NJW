@@ -186,39 +186,48 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
               </select>
               {s.frequency === 'monthly' || s.frequency === 'semimonthly' ? (
                 <>
-                  <input
-                    type="number"
-                    min="1"
-                    max="31"
-                    inputMode="numeric"
-                    className="income-day-input"
-                    placeholder="day"
-                    value={s.payDay ?? ''}
-                    onChange={(e) => updateSource(s.id, { payDay: e.target.value })}
-                    title="Day of the month it lands (repeats every month)"
-                  />
-                  {s.frequency === 'semimonthly' && (
+                  <label className="income-field">
+                    <span className="income-field-label">Pay day of month</span>
                     <input
                       type="number"
                       min="1"
                       max="31"
                       inputMode="numeric"
                       className="income-day-input"
-                      placeholder="day 2"
-                      value={s.payDay2 ?? ''}
-                      onChange={(e) => updateSource(s.id, { payDay2: e.target.value })}
-                      title="Second day of the month it lands"
+                      placeholder="e.g. 5"
+                      value={s.payDay ?? ''}
+                      onChange={(e) => updateSource(s.id, { payDay: e.target.value })}
+                      title="Day of the month it lands (repeats every month)"
                     />
+                  </label>
+                  {s.frequency === 'semimonthly' && (
+                    <label className="income-field">
+                      <span className="income-field-label">2nd pay day</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="31"
+                        inputMode="numeric"
+                        className="income-day-input"
+                        placeholder="e.g. 20"
+                        value={s.payDay2 ?? ''}
+                        onChange={(e) => updateSource(s.id, { payDay2: e.target.value })}
+                        title="Second day of the month it lands"
+                      />
+                    </label>
                   )}
                 </>
               ) : (
-                <input
-                  type="date"
-                  className="income-date-input"
-                  value={s.payDate || ''}
-                  onChange={(e) => updateSource(s.id, { payDate: e.target.value })}
-                  title="Next date this income lands — used for the cashflow timeline"
-                />
+                <label className="income-field">
+                  <span className="income-field-label">Next pay date</span>
+                  <input
+                    type="date"
+                    className="income-date-input"
+                    value={s.payDate || ''}
+                    onChange={(e) => updateSource(s.id, { payDate: e.target.value })}
+                    title="Next date this income lands — used for the cashflow timeline"
+                  />
+                </label>
               )}
               <span className="income-monthly">${sourceMonthly(s).toFixed(0)}/mo</span>
               <button type="button" className="link-btn danger" onClick={() => deleteSource(s.id)}>
