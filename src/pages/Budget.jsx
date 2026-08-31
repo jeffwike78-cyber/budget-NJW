@@ -420,26 +420,28 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                       <div className={`bar-fill${over ? ' over' : ''}`} style={{ width: `${pct}%` }} />
                     </div>
 
-                    {categoryTx.length > 0 && (
-                      <button
-                        type="button"
-                        className="category-expand-toggle"
-                        onClick={() => toggleCategory(c.id)}
-                      >
-                        {`${isExpanded ? 'Hide' : 'Show'} ${categoryTx.length} transaction${categoryTx.length === 1 ? '' : 's'} ${isExpanded ? '▴' : '▾'}`}
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="category-expand-toggle"
+                      onClick={() => toggleCategory(c.id)}
+                    >
+                      {isExpanded ? 'Hide' : 'Show'} transactions
+                      {categoryTx.length > 0 ? ` (${categoryTx.length})` : ''} {isExpanded ? '▴' : '▾'}
+                    </button>
 
-                    {isExpanded && categoryTx.length > 0 && (
-                      <TxList
-                        transactions={categoryTx}
-                        categories={budgetState.categories}
-                        onRecategorize={handleRecategorize}
-                        onToggleExcluded={setExcluded}
-                        onSetTaxCategory={setTaxCategory}
-                        taxLabels={budgetState.taxLabels}
-                      />
-                    )}
+                    {isExpanded &&
+                      (categoryTx.length > 0 ? (
+                        <TxList
+                          transactions={categoryTx}
+                          categories={budgetState.categories}
+                          onRecategorize={handleRecategorize}
+                          onToggleExcluded={setExcluded}
+                          onSetTaxCategory={setTaxCategory}
+                          taxLabels={budgetState.taxLabels}
+                        />
+                      ) : (
+                        <p className="module-note">No transactions in this category this month.</p>
+                      ))}
                   </div>
                 );
               })}
