@@ -1415,3 +1415,6 @@ textarea {
 .bank-row-actions { display: inline-flex; align-items: center; gap: 8px; }
 
 .income-day-input { width: 62px; }
+
+/* Remaining: green when $0 or positive, red when over budget */
+.budget-zero.zero-under .budget-zero-fig:last-child .budget-zero-value { color: var(--good); }

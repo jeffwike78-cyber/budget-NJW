@@ -420,16 +420,15 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                       <div className={`bar-fill${over ? ' over' : ''}`} style={{ width: `${pct}%` }} />
                     </div>
 
-                    <button
-                      type="button"
-                      className="category-expand-toggle"
-                      onClick={() => toggleCategory(c.id)}
-                      disabled={categoryTx.length === 0}
-                    >
-                      {categoryTx.length === 0
-                        ? 'No transactions this month'
-                        : `${isExpanded ? 'Hide' : 'Show'} ${categoryTx.length} transaction${categoryTx.length === 1 ? '' : 's'} ${isExpanded ? '▴' : '▾'}`}
-                    </button>
+                    {categoryTx.length > 0 && (
+                      <button
+                        type="button"
+                        className="category-expand-toggle"
+                        onClick={() => toggleCategory(c.id)}
+                      >
+                        {`${isExpanded ? 'Hide' : 'Show'} ${categoryTx.length} transaction${categoryTx.length === 1 ? '' : 's'} ${isExpanded ? '▴' : '▾'}`}
+                      </button>
+                    )}
 
                     {isExpanded && categoryTx.length > 0 && (
                       <TxList
