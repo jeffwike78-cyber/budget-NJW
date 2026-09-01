@@ -1,6 +1,35 @@
-import { SettingsIcon } from './icons';
+import { useState } from 'react';
+import { SettingsIcon, RefreshIcon, SyncIcon } from './icons';
 
 export default function TopBar({ appName = 'Family Budget', setView }) {
+  const [syncing, setSyncing] = useState(false);
+
+  // Refresh: reload the app so it re-reads the latest saved balances and
+  // transactions from the database (e.g. after a change on another device).
+  function refresh() {
+    window.location.reload();
+  }
+
+  // Sync all: pull new transactions + balances from every linked bank, then
+  // reload so they show up right away. Available from any page.
+  async function syncAll() {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/plaid/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Sync failed.');
+      window.location.reload();
+    } catch (err) {
+      setSyncing(false);
+      window.alert(err.message || 'Sync failed. Please try again.');
+    }
+  }
+
   return (
     <header className="top-bar">
       <div className="top-bar-brand">
@@ -14,9 +43,29 @@ export default function TopBar({ appName = 'Family Budget', setView }) {
       </div>
       <div className="top-bar-actions">
         <button
+          className={`top-bar-icon-btn${syncing ? ' is-syncing' : ''}`}
+          type="button"
+          aria-label={syncing ? 'Syncing accounts…' : 'Sync all accounts'}
+          title="Sync all accounts"
+          onClick={syncAll}
+          disabled={syncing}
+        >
+          <SyncIcon />
+        </button>
+        <button
+          className="top-bar-icon-btn"
+          type="button"
+          aria-label="Refresh"
+          title="Refresh"
+          onClick={refresh}
+        >
+          <RefreshIcon />
+        </button>
+        <button
           className="top-bar-icon-btn"
           type="button"
           aria-label="Settings"
+          title="Settings"
           onClick={() => setView?.('settings')}
         >
           <SettingsIcon />
