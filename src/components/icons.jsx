@@ -112,6 +112,26 @@ export function LogoutIcon(props) {
   );
 }
 
+export function RefreshIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <path d="M21 3v6h-6" />
+    </Icon>
+  );
+}
+
+export function SyncIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M21 2v6h-6" />
+      <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+      <path d="M3 22v-6h6" />
+      <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+    </Icon>
+  );
+}
+
 export function PlusIcon(props) {
   return (
     <Icon {...props}>

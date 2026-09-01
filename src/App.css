@@ -1885,3 +1885,8 @@ button, a, label, [role="button"], .sidebar-link, .mobile-tab-link, .quick-acces
   min-height: 0;
   margin: 0;
 }
+
+/* Sync button spinner (top bar) */
+@keyframes topbar-spin { to { transform: rotate(360deg); } }
+.top-bar-icon-btn.is-syncing svg { animation: topbar-spin 0.9s linear infinite; transform-origin: center; }
+.top-bar-icon-btn:disabled { opacity: 0.6; cursor: default; }
