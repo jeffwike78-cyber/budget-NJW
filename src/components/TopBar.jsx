@@ -43,23 +43,25 @@ export default function TopBar({ appName = 'Family Budget', setView }) {
       </div>
       <div className="top-bar-actions">
         <button
-          className={`top-bar-icon-btn${syncing ? ' is-syncing' : ''}`}
+          className={`top-bar-btn${syncing ? ' is-syncing' : ''}`}
           type="button"
           aria-label={syncing ? 'Syncing accounts…' : 'Sync all accounts'}
-          title="Sync all accounts"
+          title="Pull new transactions and balances from your banks"
           onClick={syncAll}
           disabled={syncing}
         >
           <SyncIcon />
+          <span className="top-bar-btn-label">{syncing ? 'Syncing…' : 'Sync'}</span>
         </button>
         <button
-          className="top-bar-icon-btn"
+          className="top-bar-btn"
           type="button"
-          aria-label="Refresh"
-          title="Refresh"
+          aria-label="Refresh the page"
+          title="Reload the app with the latest saved data"
           onClick={refresh}
         >
           <RefreshIcon />
+          <span className="top-bar-btn-label">Refresh</span>
         </button>
         <button
           className="top-bar-icon-btn"

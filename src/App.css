@@ -1886,7 +1886,33 @@ button, a, label, [role="button"], .sidebar-link, .mobile-tab-link, .quick-acces
   margin: 0;
 }
 
+/* Labeled action buttons (top bar: Sync, Refresh) */
+.top-bar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-h);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.top-bar-btn:hover { border-color: var(--accent-border); }
+.top-bar-btn:disabled { opacity: 0.6; cursor: default; }
+.top-bar-btn-label { line-height: 1; }
+
 /* Sync button spinner (top bar) */
 @keyframes topbar-spin { to { transform: rotate(360deg); } }
-.top-bar-icon-btn.is-syncing svg { animation: topbar-spin 0.9s linear infinite; transform-origin: center; }
+.top-bar-btn.is-syncing svg { animation: topbar-spin 0.9s linear infinite; transform-origin: center; }
 .top-bar-icon-btn:disabled { opacity: 0.6; cursor: default; }
+
+/* Keep the labels on the smallest screens — that's the whole point — but tighten spacing. */
+@media (max-width: 380px) {
+  .top-bar-btn { padding: 0 9px; font-size: 12px; }
+  .top-bar-actions { gap: 6px; }
+}

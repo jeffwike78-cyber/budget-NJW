@@ -121,13 +121,14 @@ export function RefreshIcon(props) {
   );
 }
 
+// Cloud with a down arrow — "pull transactions/balances down from the banks",
+// deliberately distinct from the Refresh circular arrow.
 export function SyncIcon(props) {
   return (
     <Icon {...props}>
-      <path d="M21 2v6h-6" />
-      <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-      <path d="M3 22v-6h6" />
-      <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+      <path d="M7 18a4 4 0 0 1-.5-7.97 5.5 5.5 0 0 1 10.7-1.28A4.5 4.5 0 0 1 17 18" />
+      <path d="M12 12v6" />
+      <path d="M9.5 15.5 12 18l2.5-2.5" />
     </Icon>
   );
 }
