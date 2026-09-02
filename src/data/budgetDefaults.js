@@ -145,3 +145,13 @@ export const DEFAULT_INCOME = {
   paycheckAmount: 11168,
   frequency: 'monthly',
 };
+
+// Labels for money coming IN (deposits). Unlike envelopes, these don't affect
+// any budget — they're just how you tag a deposit (paycheck vs. a one-off extra)
+// for your own reporting. Rename/add/remove them in Settings.
+export const DEFAULT_INCOME_CATEGORIES = [
+  { id: 'inc-paycheck', name: 'Paycheck' },
+  { id: 'inc-misc', name: 'Miscellaneous Income' },
+  { id: 'inc-reimbursement', name: 'Reimbursement' },
+  { id: 'inc-gift', name: 'Gift / Other' },
+];

@@ -96,6 +96,18 @@ export default function Settings({ budgetState, setBudgetState, setView }) {
 
       <section className="card">
         <div className="card-header">
+          <h2>Income categories</h2>
+        </div>
+        <p className="module-note">
+          Labels for money coming in (paycheck, a one-off extra, a reimbursement…). These don&apos;t affect your
+          budget or envelopes — they&apos;re just how a deposit gets tagged, so you can tell expected income from
+          extra. Pick one on any deposit in Transactions.
+        </p>
+        <IncomeCategoriesEditor budgetState={budgetState} setBudgetState={setBudgetState} />
+      </section>
+
+      <section className="card">
+        <div className="card-header">
           <h2>Tax Report</h2>
         </div>
         <p className="module-note">
@@ -166,6 +178,53 @@ export default function Settings({ budgetState, setBudgetState, setView }) {
         )}
       </section>
     </>
+  );
+}
+
+function IncomeCategoriesEditor({ budgetState, setBudgetState }) {
+  const cats = budgetState.incomeCategories || [];
+  const [name, setName] = useState('');
+
+  function update(id, patch) {
+    setBudgetState((prev) => ({
+      ...prev,
+      incomeCategories: (prev.incomeCategories || []).map((c) => (c.id === id ? { ...c, ...patch } : c)),
+    }));
+  }
+  function remove(id) {
+    setBudgetState((prev) => ({
+      ...prev,
+      incomeCategories: (prev.incomeCategories || []).filter((c) => c.id !== id),
+    }));
+  }
+  function add(e) {
+    e.preventDefault();
+    const n = name.trim();
+    if (!n) return;
+    setBudgetState((prev) => ({
+      ...prev,
+      incomeCategories: [...(prev.incomeCategories || []), { id: `inc-${Date.now()}`, name: n }],
+    }));
+    setName('');
+  }
+
+  return (
+    <div className="income-cat-editor">
+      {cats.map((c) => (
+        <div className="income-cat-row" key={c.id}>
+          <input value={c.name} onChange={(e) => update(c.id, { name: e.target.value })} />
+          <button type="button" className="link-btn danger" onClick={() => remove(c.id)}>
+            Remove
+          </button>
+        </div>
+      ))}
+      <form className="add-inline-form" onSubmit={add}>
+        <input placeholder="New income category" value={name} onChange={(e) => setName(e.target.value)} />
+        <button type="submit" className="secondary-btn">
+          + Add
+        </button>
+      </form>
+    </div>
   );
 }
 

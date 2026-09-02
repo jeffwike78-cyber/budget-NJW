@@ -4,12 +4,14 @@ import {
   DEFAULT_SINKING_FUNDS,
   DEFAULT_INCOME_SOURCES,
   DEFAULT_INCOME,
+  DEFAULT_INCOME_CATEGORIES,
 } from '../data/budgetDefaults';
 import { useSupabaseState } from './supabaseState';
 
 const DEFAULT_STATE = {
   accounts: DEFAULT_ACCOUNTS,
   categories: DEFAULT_CATEGORIES,
+  incomeCategories: DEFAULT_INCOME_CATEGORIES,
   sinkingFunds: DEFAULT_SINKING_FUNDS,
   incomeSources: DEFAULT_INCOME_SOURCES,
   income: DEFAULT_INCOME, // legacy fallback
@@ -41,6 +43,7 @@ function normalizeBudget(b) {
     ...b,
     accounts: nonEmpty(b?.accounts, DEFAULT_STATE.accounts),
     categories,
+    incomeCategories: nonEmpty(b?.incomeCategories, DEFAULT_STATE.incomeCategories),
     sinkingFunds: nonEmpty(b?.sinkingFunds, DEFAULT_STATE.sinkingFunds),
     incomeSources: nonEmpty(b?.incomeSources, DEFAULT_STATE.incomeSources),
     merchantMemory: b?.merchantMemory || {},
