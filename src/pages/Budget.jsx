@@ -507,19 +507,19 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
           </span>
         </div>
 
-        <table className="budget-print-table">
-          <thead>
-            <tr><th>Income source</th><th className="num">Monthly</th></tr>
-          </thead>
-          <tbody>
-            {incomeSources.map((s) => (
-              <tr key={s.id}><td>{s.name || 'Income'}</td><td className="num">${sourceMonthly(s).toFixed(0)}</td></tr>
-            ))}
-            <tr className="budget-print-total"><td>Total income</td><td className="num">${income.toFixed(0)}</td></tr>
-          </tbody>
-        </table>
+        <div className="budget-print-flow">
+          <table className="budget-print-table budget-print-group">
+            <thead>
+              <tr><th colSpan={2}>Income</th></tr>
+            </thead>
+            <tbody>
+              {incomeSources.map((s) => (
+                <tr key={s.id}><td>{s.name || 'Income'}</td><td className="num">${sourceMonthly(s).toFixed(0)}</td></tr>
+              ))}
+              <tr className="budget-print-subtotal"><td>Total income</td><td className="num">${income.toFixed(0)}</td></tr>
+            </tbody>
+          </table>
 
-        <div className="budget-print-groups">
           {groupOrder.map((group) => {
             const rows = byGroup[group];
             const subtotal = rows.reduce((s, c) => s + (effectiveBudgets[c.id] || 0), 0);
