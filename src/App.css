@@ -1970,3 +1970,24 @@ button, a, label, [role="button"], .sidebar-link, .mobile-tab-link, .quick-acces
 .income-cat-editor { display: flex; flex-direction: column; gap: 8px; }
 .income-cat-row { display: flex; align-items: center; gap: 10px; }
 .income-cat-row input { flex: 1; min-width: 0; }
+
+/* ---------- Split transaction editor ---------- */
+.tx-split {
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface-2);
+  padding: 12px;
+  margin: 2px 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tx-split-head { font-size: 13px; color: var(--text-h); }
+.tx-split-row { display: flex; align-items: center; gap: 8px; }
+.tx-split-row select { flex: 1; min-width: 0; }
+.tx-split-amt { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.tx-split-amt input { width: 90px; }
+.tx-split-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.tx-split-remainder { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tx-split-remainder.good { color: var(--good); }
+.tx-split-remainder.bad { color: var(--bad); }
