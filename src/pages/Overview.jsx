@@ -43,6 +43,15 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
   const totalSpent = Object.values(netSpentByCategory(monthTx)).reduce((a, b) => a + b, 0);
   const remaining = totalBudgeted - totalSpent;
 
+  // Expected (budgeted) income vs. what's actually landed this month. Actual =
+  // this month's deposits (amount < 0) that aren't excluded (transfers/card
+  // payments are auto-excluded, so they don't count as income).
+  const expectedIncome = income;
+  const actualIncome = monthTx
+    .filter((t) => Number(t.amount) < 0 && !t.excluded)
+    .reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+  const incomeAhead = actualIncome - expectedIncome;
+
   const totalBalance = budgetState.accounts.reduce((sum, a) => sum + signedBalance(a), 0);
 
   const chartMonths = lastNMonths(6);
@@ -206,6 +215,38 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
               this complete.
             </p>
           )}
+        </section>
+      )}
+
+      {expectedIncome > 0 && (
+        <section className="card">
+          <div className="card-header">
+            <h2>Income this month</h2>
+            <span className={`pill ${incomeAhead >= 0 ? 'pill-good' : 'pill-warn'}`}>
+              {incomeAhead >= 0 ? `${usd(incomeAhead)} above plan` : `${usd(-incomeAhead)} to go`}
+            </span>
+          </div>
+          <div className="payoff-figures">
+            <div className="payoff-figure">
+              <span className="payoff-label">Expected (budgeted)</span>
+              <span className="payoff-value">{usd(expectedIncome)}</span>
+            </div>
+            <div className="payoff-figure">
+              <span className="payoff-label">Received so far</span>
+              <span className="payoff-value good">{usd(actualIncome)}</span>
+            </div>
+          </div>
+          <p className="module-note">
+            {incomeAhead >= 0 ? (
+              <>You&apos;ve received <strong>{usd(actualIncome)}</strong> so far — <strong>{usd(incomeAhead)}</strong>{' '}
+              more than the {usd(expectedIncome)} you budgeted. Extra income beyond your plan; assign it in the
+              Budget or move it to savings.</>
+            ) : (
+              <>You&apos;ve received <strong>{usd(actualIncome)}</strong> of your <strong>{usd(expectedIncome)}</strong>{' '}
+              budgeted income so far — <strong>{usd(-incomeAhead)}</strong> still expected this month. Tag deposits
+              with an income category in Transactions.</>
+            )}
+          </p>
         </section>
       )}
 
