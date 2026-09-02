@@ -1916,3 +1916,39 @@ button, a, label, [role="button"], .sidebar-link, .mobile-tab-link, .quick-acces
   .top-bar-btn { padding: 0 9px; font-size: 12px; }
   .top-bar-actions { gap: 6px; }
 }
+
+/* ---------- Budget page title row (with Print button) ---------- */
+.page-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.page-title-row .page-title { margin: 0; }
+
+/* ---------- Print-only Budget sheet ---------- */
+.budget-print { color: #111; font-size: 11px; }
+.budget-print-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  border-bottom: 2px solid #111; padding-bottom: 6px; margin-bottom: 10px;
+}
+.budget-print-head h2 { margin: 0; font-size: 18px; }
+.budget-print-month { font-size: 13px; color: #444; }
+.budget-print-summary {
+  display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 12px; font-size: 12px;
+}
+.budget-print-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+.budget-print-table th, .budget-print-table td {
+  text-align: left; padding: 2px 4px; border-bottom: 1px solid #ddd;
+}
+.budget-print-table th { border-bottom: 1px solid #111; font-size: 11px; }
+.budget-print-table .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.budget-print-total td, .budget-print-subtotal td { font-weight: 700; border-top: 1px solid #111; border-bottom: none; }
+.budget-print-group { break-inside: avoid; }
+.budget-print-group th { text-transform: uppercase; letter-spacing: 0.03em; }
+
+@media print {
+  .budget-print-groups { column-count: 2; column-gap: 24px; }
+  @page { size: letter portrait; margin: 0.5in; }
+}

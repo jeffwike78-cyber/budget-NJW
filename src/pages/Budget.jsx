@@ -141,10 +141,18 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
     }
   }
 
+  const printMonthLabel = new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
   return (
     <>
-      <h1 className="page-title">Budget</h1>
+      <div className="page-title-row no-print">
+        <h1 className="page-title">Budget</h1>
+        <button type="button" className="secondary-btn" onClick={() => window.print()}>
+          🖨 Print Budget
+        </button>
+      </div>
 
+      <div className="no-print">
       <section className="card">
         <div className="card-header">
           <h2>Income</h2>
@@ -481,6 +489,58 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
           </button>
         )}
       </section>
+      </div>
+
+      {/* Print-only one-page budget sheet (shown only when printing / Save as PDF). */}
+      <div className="print-only budget-print">
+        <div className="budget-print-head">
+          <h2>{budgetState.settings?.appName || 'Family Budget'} — Monthly Budget</h2>
+          <span className="budget-print-month">{printMonthLabel}</span>
+        </div>
+
+        <div className="budget-print-summary">
+          <span><strong>Income:</strong> ${income.toFixed(0)}/mo</span>
+          <span><strong>Budgeted:</strong> ${totalBudgeted.toFixed(0)}/mo</span>
+          <span>
+            <strong>{leftToBudget < 0 ? 'Over by:' : 'Left to budget:'}</strong> ${Math.abs(leftToBudget).toFixed(0)}
+          </span>
+        </div>
+
+        <table className="budget-print-table">
+          <thead>
+            <tr><th>Income source</th><th className="num">Monthly</th></tr>
+          </thead>
+          <tbody>
+            {incomeSources.map((s) => (
+              <tr key={s.id}><td>{s.name || 'Income'}</td><td className="num">${sourceMonthly(s).toFixed(0)}</td></tr>
+            ))}
+            <tr className="budget-print-total"><td>Total income</td><td className="num">${income.toFixed(0)}</td></tr>
+          </tbody>
+        </table>
+
+        <div className="budget-print-groups">
+          {groupOrder.map((group) => {
+            const rows = byGroup[group];
+            const subtotal = rows.reduce((s, c) => s + (effectiveBudgets[c.id] || 0), 0);
+            return (
+              <table className="budget-print-table budget-print-group" key={group}>
+                <thead>
+                  <tr><th colSpan={2}>{group}</th></tr>
+                </thead>
+                <tbody>
+                  {rows.map((c) => (
+                    <tr key={c.id}>
+                      <td>{c.name}</td>
+                      <td className="num">${(effectiveBudgets[c.id] || 0).toFixed(0)}</td>
+                    </tr>
+                  ))}
+                  <tr className="budget-print-subtotal"><td>Subtotal</td><td className="num">${subtotal.toFixed(0)}</td></tr>
+                </tbody>
+              </table>
+            );
+          })}
+        </div>
+      </div>
     </>
   );
 }
