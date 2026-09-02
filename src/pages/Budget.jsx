@@ -17,7 +17,7 @@ function monthKey(dateStr = todayStr()) {
   return dateStr.slice(0, 7);
 }
 
-export default function Budget({ budgetState, setBudgetState, transactions, recategorize, setExcluded, setTaxCategory }) {
+export default function Budget({ budgetState, setBudgetState, transactions, recategorize, setExcluded, setTaxCategory, splitTransaction }) {
   const [expandedCategories, setExpandedCategories] = useState(() => new Set());
   const [showAdd, setShowAdd] = useState(false);
 
@@ -468,6 +468,7 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                           categories={budgetState.categories}
                           incomeCategories={budgetState.incomeCategories}
                           onRecategorize={handleRecategorize}
+                          onSplit={splitTransaction}
                           onToggleExcluded={setExcluded}
                           onSetTaxCategory={setTaxCategory}
                           taxLabels={budgetState.taxLabels}

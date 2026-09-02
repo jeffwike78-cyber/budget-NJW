@@ -122,6 +122,39 @@ export function useBudgetTransactions() {
     }
   }
 
+  // Split one transaction across several envelopes: insert a child row per part
+  // (they sum to the original and each carry their own category), then mark the
+  // original Ignored so nothing double-counts. The receipt/photo rides along on
+  // the first child so it stays viewable on a counted row.
+  async function splitTransaction(parent, parts) {
+    try {
+      const rows = parts.map((p) => {
+        const row = {
+          date: parent.date,
+          description: parent.description,
+          amount: Number(p.amount),
+          category_id: p.categoryId || null,
+          account_id: parent.accountId,
+          source: 'split',
+        };
+        if (p.note) row.note = p.note;
+        return row;
+      });
+      if (parent.receiptPath && rows[0]) rows[0].receipt_path = parent.receiptPath;
+      const { error: insErr } = await supabase.from('budget_transactions').insert(rows);
+      if (insErr) return { message: describeError(insErr) };
+      const { error: exErr } = await supabase
+        .from('budget_transactions')
+        .update({ excluded: true })
+        .eq('id', parent.id);
+      if (exErr) return { message: describeError(exErr) };
+      await reload();
+      return null;
+    } catch (err) {
+      return { message: describeError(err) };
+    }
+  }
+
   async function recategorize(id, categoryId) {
     try {
       const { error } = await supabase.from('budget_transactions').update({ category_id: categoryId }).eq('id', id);
@@ -152,5 +185,5 @@ export function useBudgetTransactions() {
   const setBusiness = (id, value) => setFlag(id, 'business', value);
   const setTaxCategory = (id, value) => setFlag(id, 'tax_category', value || null);
 
-  return { transactions, loading, addTransaction, recategorize, setExcluded, setBusiness, setTaxCategory };
+  return { transactions, loading, addTransaction, splitTransaction, recategorize, setExcluded, setBusiness, setTaxCategory };
 }

@@ -3,7 +3,7 @@ import { findReceipt } from '../lib/findReceipt';
 import { uploadReceipt, getReceiptUrl } from '../lib/receiptsClient';
 import { TAX_CATEGORIES, taxLabel } from '../lib/tax';
 
-function TxRow({ t, categories, incomeCategories = [], onRecategorize, onToggleExcluded, onSetTaxCategory, taxLabels, showReceiptLookup }) {
+function TxRow({ t, categories, incomeCategories = [], onRecategorize, onSplit, onToggleExcluded, onSetTaxCategory, taxLabels, showReceiptLookup }) {
   // Money coming in (negative amount = deposit) gets income labels; money going
   // out gets the budget envelopes.
   const isIncome = Number(t.amount) < 0;
@@ -11,7 +11,58 @@ function TxRow({ t, categories, incomeCategories = [], onRecategorize, onToggleE
   const [lookupBusy, setLookupBusy] = useState(false);
   const [lookupMsg, setLookupMsg] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [showSplit, setShowSplit] = useState(false);
+  const [parts, setParts] = useState([]);
+  const [splitBusy, setSplitBusy] = useState(false);
+  const [splitMsg, setSplitMsg] = useState(null);
   const fileRef = useRef(null);
+
+  const total = Math.abs(Number(t.amount));
+  const partsSum = parts.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const remainder = total - partsSum;
+
+  function openSplit() {
+    setSplitMsg(null);
+    setParts([
+      { categoryId: t.categoryId && options.some((c) => c.id === t.categoryId) ? t.categoryId : '', amount: '' },
+      { categoryId: '', amount: '' },
+    ]);
+    setShowSplit(true);
+  }
+  function updatePart(i, patch) {
+    setParts((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  }
+  function addPart() {
+    setParts((prev) => [...prev, { categoryId: '', amount: '' }]);
+  }
+  function removePart(i) {
+    setParts((prev) => prev.filter((_, idx) => idx !== i));
+  }
+  async function saveSplit() {
+    const cleaned = parts
+      .map((p) => ({ categoryId: p.categoryId, amount: Number(p.amount) }))
+      .filter((p) => p.amount > 0);
+    if (cleaned.length < 2) {
+      setSplitMsg('Add at least two lines with an amount.');
+      return;
+    }
+    if (cleaned.some((p) => !p.categoryId)) {
+      setSplitMsg('Pick an envelope for every line.');
+      return;
+    }
+    const sum = cleaned.reduce((s, p) => s + p.amount, 0);
+    if (Math.abs(sum - total) > 0.01) {
+      setSplitMsg(`Lines must add up to $${total.toFixed(2)} (they total $${sum.toFixed(2)}).`);
+      return;
+    }
+    const sign = Number(t.amount) < 0 ? -1 : 1;
+    setSplitBusy(true);
+    setSplitMsg(null);
+    const err = await onSplit(t, cleaned.map((p) => ({ categoryId: p.categoryId, amount: sign * p.amount })));
+    setSplitBusy(false);
+    if (err) setSplitMsg(err.message || 'Could not split this transaction.');
+    else setShowSplit(false);
+  }
 
   async function lookUp() {
     setLookupBusy(true);
@@ -52,8 +103,10 @@ function TxRow({ t, categories, incomeCategories = [], onRecategorize, onToggleE
   }
 
   const isBiz = t.business || t.taxCategory === 'business-1' || t.taxCategory === 'business-2';
+  const canSplit = onSplit && t.source !== 'split' && !t.excluded;
 
   return (
+    <>
     <div className={`tx-row${isBiz ? ' tx-row-business' : ''}`}>
       <span className="tx-date">{(t.date || '').slice(5)}</span>
       <span className="tx-desc">
@@ -111,6 +164,16 @@ function TxRow({ t, categories, incomeCategories = [], onRecategorize, onToggleE
           </button>
         )}
         <input ref={fileRef} type="file" accept="image/*,application/pdf" hidden onChange={onPickFile} />
+        {canSplit && (
+          <button
+            type="button"
+            className={`tx-tag-btn${showSplit ? ' active' : ''}`}
+            title="Split this transaction across multiple envelopes"
+            onClick={() => (showSplit ? setShowSplit(false) : openSplit())}
+          >
+            ✂ Split
+          </button>
+        )}
         <button
           type="button"
           className="tx-tag-btn"
@@ -121,6 +184,62 @@ function TxRow({ t, categories, incomeCategories = [], onRecategorize, onToggleE
         </button>
       </div>
     </div>
+
+    {showSplit && (
+      <div className="tx-split">
+        <div className="tx-split-head">
+          Split <strong>${total.toFixed(2)}</strong> across envelopes
+        </div>
+        {parts.map((p, i) => (
+          <div className="tx-split-row" key={i}>
+            <select value={p.categoryId} onChange={(e) => updatePart(i, { categoryId: e.target.value })}>
+              <option value="" disabled>
+                Choose envelope…
+              </option>
+              {options.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <span className="tx-split-amt">
+              $
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                placeholder="0.00"
+                value={p.amount}
+                onChange={(e) => updatePart(i, { amount: e.target.value })}
+              />
+            </span>
+            {parts.length > 2 && (
+              <button type="button" className="link-btn danger" onClick={() => removePart(i)} aria-label="Remove line">
+                ✕
+              </button>
+            )}
+          </div>
+        ))}
+        <div className="tx-split-foot">
+          <button type="button" className="link-btn" onClick={addPart}>
+            + Add line
+          </button>
+          <span className={`tx-split-remainder ${Math.abs(remainder) < 0.01 ? 'good' : 'bad'}`}>
+            {remainder >= 0 ? `Remaining: $${remainder.toFixed(2)}` : `Over by $${Math.abs(remainder).toFixed(2)}`}
+          </span>
+        </div>
+        {splitMsg && <span className="module-note form-error">{splitMsg}</span>}
+        <div className="tx-split-foot">
+          <button type="button" className="primary-btn" onClick={saveSplit} disabled={splitBusy}>
+            {splitBusy ? 'Saving…' : 'Save split'}
+          </button>
+          <button type="button" className="link-btn" onClick={() => setShowSplit(false)}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
@@ -132,6 +251,7 @@ export default function TxList({
   categories,
   incomeCategories = [],
   onRecategorize,
+  onSplit,
   onToggleExcluded,
   onSetTaxCategory,
   taxLabels,
@@ -142,7 +262,7 @@ export default function TxList({
   const active = transactions.filter((t) => !t.excluded);
   const ignored = transactions.filter((t) => t.excluded);
 
-  const rowProps = { categories, incomeCategories, onRecategorize, onToggleExcluded, onSetTaxCategory, taxLabels, showReceiptLookup };
+  const rowProps = { categories, incomeCategories, onRecategorize, onSplit, onToggleExcluded, onSetTaxCategory, taxLabels, showReceiptLookup };
 
   if (active.length === 0 && ignored.length === 0) {
     return <p className="module-note">{emptyLabel}</p>;
