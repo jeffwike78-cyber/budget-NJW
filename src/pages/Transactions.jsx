@@ -254,6 +254,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
           <TxList
             transactions={needsReview}
             categories={budgetState.categories}
+            incomeCategories={budgetState.incomeCategories}
             onRecategorize={handleRecategorize}
             onToggleExcluded={setExcluded}
             onSetTaxCategory={setTaxCategory}
@@ -271,6 +272,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
         <TxList
           transactions={transactions}
           categories={budgetState.categories}
+          incomeCategories={budgetState.incomeCategories}
           onRecategorize={handleRecategorize}
           onToggleExcluded={setExcluded}
           onSetTaxCategory={setTaxCategory}

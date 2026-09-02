@@ -411,10 +411,21 @@ textarea {
   gap: 16px;
 }
 
-@media (min-width: 720px) {
+/* Stay a single full-width column on phones and tablets (the primary use), so
+   every card on the Overview is the same width; only split into two columns on
+   a real desktop, where there's room. */
+@media (min-width: 1000px) {
   .overview-grid {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+/* Every top-level Overview card spans the full content width so the hero cards
+   (Age of Money / Credit payoff / Cashflow) line up with the cards below them. */
+.aom-card,
+.payoff-card,
+.cashflow-card {
+  width: 100%;
 }
 
 .overview-chart-card {
@@ -1952,3 +1963,8 @@ button, a, label, [role="button"], .sidebar-link, .mobile-tab-link, .quick-acces
   .budget-print-groups { column-count: 2; column-gap: 24px; }
   @page { size: letter portrait; margin: 0.5in; }
 }
+
+/* ---------- Income categories editor (Settings) ---------- */
+.income-cat-editor { display: flex; flex-direction: column; gap: 8px; }
+.income-cat-row { display: flex; align-items: center; gap: 10px; }
+.income-cat-row input { flex: 1; min-width: 0; }

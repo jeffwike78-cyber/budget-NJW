@@ -3,7 +3,11 @@ import { findReceipt } from '../lib/findReceipt';
 import { uploadReceipt, getReceiptUrl } from '../lib/receiptsClient';
 import { TAX_CATEGORIES, taxLabel } from '../lib/tax';
 
-function TxRow({ t, categories, onRecategorize, onToggleExcluded, onSetTaxCategory, taxLabels, showReceiptLookup }) {
+function TxRow({ t, categories, incomeCategories = [], onRecategorize, onToggleExcluded, onSetTaxCategory, taxLabels, showReceiptLookup }) {
+  // Money coming in (negative amount = deposit) gets income labels; money going
+  // out gets the budget envelopes.
+  const isIncome = Number(t.amount) < 0;
+  const options = isIncome && incomeCategories.length > 0 ? incomeCategories : categories;
   const [lookupBusy, setLookupBusy] = useState(false);
   const [lookupMsg, setLookupMsg] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -65,12 +69,12 @@ function TxRow({ t, categories, onRecategorize, onToggleExcluded, onSetTaxCatego
         {t.amount < 0 ? '+' : '-'}${Math.abs(Number(t.amount)).toFixed(2)}
       </span>
       <select value={t.categoryId || ''} onChange={(e) => onRecategorize(t.id, e.target.value)}>
-        {!t.categoryId && (
+        {!options.some((c) => c.id === t.categoryId) && (
           <option value="" disabled>
-            Uncategorized (income)
+            {isIncome ? 'Uncategorized (income)' : 'Uncategorized'}
           </option>
         )}
-        {categories.map((c) => (
+        {options.map((c) => (
           <option key={c.id} value={c.id}>
             {c.name}
           </option>
@@ -126,6 +130,7 @@ function TxRow({ t, categories, onRecategorize, onToggleExcluded, onSetTaxCatego
 export default function TxList({
   transactions,
   categories,
+  incomeCategories = [],
   onRecategorize,
   onToggleExcluded,
   onSetTaxCategory,
@@ -137,7 +142,7 @@ export default function TxList({
   const active = transactions.filter((t) => !t.excluded);
   const ignored = transactions.filter((t) => t.excluded);
 
-  const rowProps = { categories, onRecategorize, onToggleExcluded, onSetTaxCategory, taxLabels, showReceiptLookup };
+  const rowProps = { categories, incomeCategories, onRecategorize, onToggleExcluded, onSetTaxCategory, taxLabels, showReceiptLookup };
 
   if (active.length === 0 && ignored.length === 0) {
     return <p className="module-note">{emptyLabel}</p>;

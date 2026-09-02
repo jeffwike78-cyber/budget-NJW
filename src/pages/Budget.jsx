@@ -466,6 +466,7 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                         <TxList
                           transactions={categoryTx}
                           categories={budgetState.categories}
+                          incomeCategories={budgetState.incomeCategories}
                           onRecategorize={handleRecategorize}
                           onToggleExcluded={setExcluded}
                           onSetTaxCategory={setTaxCategory}
