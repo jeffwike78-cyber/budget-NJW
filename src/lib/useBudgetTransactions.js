@@ -155,6 +155,17 @@ export function useBudgetTransactions() {
     }
   }
 
+  async function deleteTransaction(id) {
+    try {
+      const { error } = await supabase.from('budget_transactions').delete().eq('id', id);
+      if (error) return { message: describeError(error) };
+      await reload();
+      return null;
+    } catch (err) {
+      return { message: describeError(err) };
+    }
+  }
+
   async function recategorize(id, categoryId) {
     try {
       const { error } = await supabase.from('budget_transactions').update({ category_id: categoryId }).eq('id', id);
@@ -185,5 +196,5 @@ export function useBudgetTransactions() {
   const setBusiness = (id, value) => setFlag(id, 'business', value);
   const setTaxCategory = (id, value) => setFlag(id, 'tax_category', value || null);
 
-  return { transactions, loading, addTransaction, splitTransaction, recategorize, setExcluded, setBusiness, setTaxCategory };
+  return { transactions, loading, addTransaction, splitTransaction, deleteTransaction, recategorize, setExcluded, setBusiness, setTaxCategory };
 }

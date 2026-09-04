@@ -8,11 +8,20 @@ function normalize(desc) {
   return desc.trim().toLowerCase();
 }
 
-export default function Transactions({ budgetState, setBudgetState, transactions, addTransaction, recategorize, setExcluded, setTaxCategory, splitTransaction, pendingScanFile, onScanConsumed }) {
+export default function Transactions({ budgetState, setBudgetState, transactions, addTransaction, recategorize, setExcluded, setTaxCategory, splitTransaction, deleteTransaction, pendingScanFile, onScanConsumed }) {
   // Needs Review is for unclear spending, not unclear deposits — money coming
   // in (amount < 0, the reverse of "positive = expense") never belongs here,
   // even if it somehow got flagged that way.
   const needsReview = transactions.filter((t) => t.categoryId === 'needs-review' && Number(t.amount) > 0);
+  const needsReviewIds = new Set(needsReview.map((t) => t.id));
+  // Reviewed = everything active that isn't waiting on review; Hidden = ignored.
+  const reviewed = transactions.filter((t) => !t.excluded && !needsReviewIds.has(t.id));
+  const hidden = transactions.filter((t) => t.excluded);
+  const REVIEWED_CAP = 60;
+  const [showReviewed, setShowReviewed] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
+  const [showAllReviewed, setShowAllReviewed] = useState(false);
+  const reviewedShown = showAllReviewed ? reviewed : reviewed.slice(0, REVIEWED_CAP);
   const [form, setForm] = useState({
     description: '', // vendor / where it was spent (shown in the list)
     note: '', // what was purchased (from the receipt)
@@ -236,51 +245,95 @@ export default function Transactions({ budgetState, setBudgetState, transactions
         </p>
       </section>
 
-      {needsReview.length > 0 && (
-        <section className="card needs-review-card">
-          <div className="card-header">
-            <h2>Needs Review</h2>
-            <span className="pill">{needsReview.length} flagged</span>
-          </div>
-          <p className="module-note">
-            These couldn&apos;t be placed automatically — let the AI take a pass, or pick a category yourself.
-          </p>
-          <div className="ai-actions">
-            <button type="button" className="primary-btn" onClick={autoCategorize} disabled={aiBusy}>
-              {aiBusy ? 'Categorizing…' : '✨ Auto-categorize with AI'}
-            </button>
-            {aiStatus && <span className="module-note ai-status">{aiStatus}</span>}
-          </div>
+      <section className="card needs-review-card">
+        <div className="card-header">
+          <h2>Needs Review</h2>
+          <span className={`pill ${needsReview.length > 0 ? 'pill-warn' : 'pill-good'}`}>
+            {needsReview.length > 0 ? `${needsReview.length} to review` : 'All caught up'}
+          </span>
+        </div>
+        {needsReview.length > 0 ? (
+          <>
+            <p className="module-note">
+              New or unclear transactions land here — let the AI take a pass, or pick a category yourself. Once
+              categorized, they move to Reviewed.
+            </p>
+            <div className="ai-actions">
+              <button type="button" className="primary-btn" onClick={autoCategorize} disabled={aiBusy}>
+                {aiBusy ? 'Categorizing…' : '✨ Auto-categorize with AI'}
+              </button>
+              {aiStatus && <span className="module-note ai-status">{aiStatus}</span>}
+            </div>
+            <TxList
+              transactions={needsReview}
+              categories={budgetState.categories}
+              incomeCategories={budgetState.incomeCategories}
+              onRecategorize={handleRecategorize}
+              onSplit={splitTransaction}
+              onDelete={deleteTransaction}
+              onToggleExcluded={setExcluded}
+              onSetTaxCategory={setTaxCategory}
+              taxLabels={budgetState.taxLabels}
+              showReceiptLookup
+              flat
+            />
+          </>
+        ) : (
+          <p className="module-note">Nothing to review right now — new transactions will show up here.</p>
+        )}
+      </section>
+
+      <section className="card">
+        <button type="button" className="tx-section-toggle" onClick={() => setShowReviewed((s) => !s)} aria-expanded={showReviewed}>
+          <span>Reviewed</span>
+          <span className="tx-section-count">{reviewed.length} {showReviewed ? '▴' : '▾'}</span>
+        </button>
+        {showReviewed && (
+          <>
+            <TxList
+              transactions={reviewedShown}
+              categories={budgetState.categories}
+              incomeCategories={budgetState.incomeCategories}
+              onRecategorize={handleRecategorize}
+              onSplit={splitTransaction}
+              onDelete={deleteTransaction}
+              onToggleExcluded={setExcluded}
+              onSetTaxCategory={setTaxCategory}
+              taxLabels={budgetState.taxLabels}
+              showReceiptLookup
+              flat
+              emptyLabel="No reviewed transactions yet."
+            />
+            {reviewed.length > REVIEWED_CAP && (
+              <button type="button" className="category-expand-toggle" onClick={() => setShowAllReviewed((s) => !s)}>
+                {showAllReviewed ? 'Show recent only' : `Show all ${reviewed.length}`}
+              </button>
+            )}
+          </>
+        )}
+      </section>
+
+      <section className="card">
+        <button type="button" className="tx-section-toggle" onClick={() => setShowHidden((s) => !s)} aria-expanded={showHidden}>
+          <span>Hidden / ignored</span>
+          <span className="tx-section-count">{hidden.length} {showHidden ? '▴' : '▾'}</span>
+        </button>
+        {showHidden && (
           <TxList
-            transactions={needsReview}
+            transactions={hidden}
             categories={budgetState.categories}
             incomeCategories={budgetState.incomeCategories}
             onRecategorize={handleRecategorize}
             onSplit={splitTransaction}
+            onDelete={deleteTransaction}
             onToggleExcluded={setExcluded}
             onSetTaxCategory={setTaxCategory}
             taxLabels={budgetState.taxLabels}
             showReceiptLookup
+            flat
+            emptyLabel="Nothing hidden."
           />
-        </section>
-      )}
-
-      <section className="card">
-        <div className="card-header">
-          <h2>All transactions</h2>
-          <span className="pill">{transactions.length} total</span>
-        </div>
-        <TxList
-          transactions={transactions}
-          categories={budgetState.categories}
-          incomeCategories={budgetState.incomeCategories}
-          onRecategorize={handleRecategorize}
-          onSplit={splitTransaction}
-          onToggleExcluded={setExcluded}
-          onSetTaxCategory={setTaxCategory}
-          taxLabels={budgetState.taxLabels}
-          showReceiptLookup
-        />
+        )}
       </section>
     </>
   );
