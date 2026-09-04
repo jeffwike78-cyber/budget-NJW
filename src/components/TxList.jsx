@@ -3,7 +3,7 @@ import { findReceipt } from '../lib/findReceipt';
 import { uploadReceipt, getReceiptUrl } from '../lib/receiptsClient';
 import { TAX_CATEGORIES, taxLabel } from '../lib/tax';
 
-function TxRow({ t, categories, incomeCategories = [], onRecategorize, onSplit, onToggleExcluded, onSetTaxCategory, taxLabels, showReceiptLookup }) {
+function TxRow({ t, categories, incomeCategories = [], onRecategorize, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, taxLabels, showReceiptLookup }) {
   // Money coming in (negative amount = deposit) gets income labels; money going
   // out gets the budget envelopes.
   const isIncome = Number(t.amount) < 0;
@@ -105,6 +105,19 @@ function TxRow({ t, categories, incomeCategories = [], onRecategorize, onSplit, 
   const isBiz = t.business || t.taxCategory === 'business-1' || t.taxCategory === 'business-2';
   const canSplit = onSplit && t.source !== 'split' && !t.excluded;
 
+  // Editing an ignored transaction's category brings it back in automatically —
+  // no separate "Include" click needed.
+  function changeCategory(value) {
+    onRecategorize(t.id, value);
+    if (t.excluded) onToggleExcluded(t.id, false);
+  }
+  async function removeTx() {
+    if (!onDelete) return;
+    if (!window.confirm(`Delete "${t.description}" (${t.amount < 0 ? '+' : '-'}$${Math.abs(Number(t.amount)).toFixed(2)})? This can't be undone.`)) return;
+    const err = await onDelete(t.id);
+    if (err) window.alert(err.message || 'Could not delete.');
+  }
+
   return (
     <>
     <div className={`tx-row${isBiz ? ' tx-row-business' : ''}`}>
@@ -121,7 +134,7 @@ function TxRow({ t, categories, incomeCategories = [], onRecategorize, onSplit, 
       <span className={`tx-amount ${t.amount < 0 ? 'good' : ''}`}>
         {t.amount < 0 ? '+' : '-'}${Math.abs(Number(t.amount)).toFixed(2)}
       </span>
-      <select value={t.categoryId || ''} onChange={(e) => onRecategorize(t.id, e.target.value)}>
+      <select value={t.categoryId || ''} onChange={(e) => changeCategory(e.target.value)}>
         {!options.some((c) => c.id === t.categoryId) && (
           <option value="" disabled>
             {isIncome ? 'Uncategorized (income)' : 'Uncategorized'}
@@ -182,6 +195,11 @@ function TxRow({ t, categories, incomeCategories = [], onRecategorize, onSplit, 
         >
           {t.excluded ? 'Include' : 'Ignore'}
         </button>
+        {onDelete && (
+          <button type="button" className="tx-tag-btn tx-delete-btn" title="Delete this transaction" onClick={removeTx}>
+            🗑
+          </button>
+        )}
       </div>
     </div>
 
@@ -252,20 +270,34 @@ export default function TxList({
   incomeCategories = [],
   onRecategorize,
   onSplit,
+  onDelete,
   onToggleExcluded,
   onSetTaxCategory,
   taxLabels,
   showReceiptLookup = false,
   emptyLabel = 'Nothing here yet.',
+  flat = false,
 }) {
   const [showIgnored, setShowIgnored] = useState(false);
   const active = transactions.filter((t) => !t.excluded);
   const ignored = transactions.filter((t) => t.excluded);
 
-  const rowProps = { categories, incomeCategories, onRecategorize, onSplit, onToggleExcluded, onSetTaxCategory, taxLabels, showReceiptLookup };
+  const rowProps = { categories, incomeCategories, onRecategorize, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, taxLabels, showReceiptLookup };
 
-  if (active.length === 0 && ignored.length === 0) {
+  if (transactions.length === 0) {
     return <p className="module-note">{emptyLabel}</p>;
+  }
+
+  // Flat mode: the page groups transactions into its own sections, so just
+  // render every row given — no active/ignored split.
+  if (flat) {
+    return (
+      <div className="tx-table">
+        {transactions.map((t) => (
+          <TxRow key={t.id} t={t} {...rowProps} />
+        ))}
+      </div>
+    );
   }
 
   return (

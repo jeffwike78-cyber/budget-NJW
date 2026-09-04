@@ -1055,8 +1055,8 @@ textarea {
   font: inherit;
   font-weight: 600;
   color: var(--text-h);
-  background: transparent;
-  border: 1px solid transparent;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
   padding: 6px 8px;
   min-width: 0;
@@ -1959,8 +1959,15 @@ button, a, label, [role="button"], .sidebar-link, .mobile-tab-link, .quick-acces
   border-bottom: 1px solid #111; padding-bottom: 1px;
 }
 
-/* Flow income + every group into two balanced columns so it fits one page. */
-.budget-print-flow { column-count: 2; column-gap: 20px; }
+/* Two side-by-side columns (flex is honored in print where CSS columns aren't,
+   e.g. iOS Safari) — each group is half width so the whole sheet fits one page. */
+.budget-print-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 18px;
+}
+.budget-print-group { width: calc(50% - 9px); }
 
 @media print {
   @page { size: letter portrait; margin: 0.4in; }
@@ -1991,3 +1998,21 @@ button, a, label, [role="button"], .sidebar-link, .mobile-tab-link, .quick-acces
 .tx-split-remainder { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .tx-split-remainder.good { color: var(--good); }
 .tx-split-remainder.bad { color: var(--bad); }
+
+/* ---------- Transactions page sections (Reviewed / Hidden) ---------- */
+.tx-section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-h);
+}
+.tx-section-count { font-size: 13px; font-weight: 600; color: var(--text); opacity: 0.75; }
+.tx-delete-btn:hover { color: var(--bad); border-color: var(--bad); }
