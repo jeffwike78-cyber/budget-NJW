@@ -155,6 +155,54 @@ export function useBudgetTransactions() {
     }
   }
 
+  // Add a transaction that's split across several envelopes in one step (used by
+  // the receipt-scan / add form). Each part becomes its own counted row sharing
+  // the vendor/date/account. For a scanned receipt we also drop a single
+  // full-total, excluded "anchor" row (source='receipt') so that when the real
+  // bank charge posts it reconciles against the total and gets excluded instead
+  // of double-counting the split — see mergeReceiptMatches in syncTransactions.
+  async function addSplitTransaction(base, parts) {
+    try {
+      const isReceipt = !!base.receiptPath;
+      const total = parts.reduce((s, p) => s + Number(p.amount), 0);
+      if (isReceipt) {
+        const anchor = {
+          date: base.date,
+          description: base.description,
+          amount: total,
+          category_id: null,
+          account_id: base.accountId,
+          source: 'receipt',
+          excluded: true,
+          receipt_path: base.receiptPath,
+        };
+        if (base.note) anchor.note = base.note;
+        const { error: anchorErr } = await supabase.from('budget_transactions').insert(anchor);
+        if (anchorErr) return { message: describeError(anchorErr) };
+      }
+      const rows = parts.map((p, i) => {
+        const row = {
+          date: base.date,
+          description: base.description,
+          amount: Number(p.amount),
+          category_id: p.categoryId || null,
+          account_id: base.accountId,
+          source: 'split',
+        };
+        if (base.note) row.note = base.note;
+        // Keep the photo viewable on a counted row (the anchor is hidden).
+        if (isReceipt && i === 0) row.receipt_path = base.receiptPath;
+        return row;
+      });
+      const { error: insErr } = await supabase.from('budget_transactions').insert(rows);
+      if (insErr) return { message: describeError(insErr) };
+      await reload();
+      return null;
+    } catch (err) {
+      return { message: describeError(err) };
+    }
+  }
+
   async function deleteTransaction(id) {
     try {
       const { error } = await supabase.from('budget_transactions').delete().eq('id', id);
@@ -196,5 +244,5 @@ export function useBudgetTransactions() {
   const setBusiness = (id, value) => setFlag(id, 'business', value);
   const setTaxCategory = (id, value) => setFlag(id, 'tax_category', value || null);
 
-  return { transactions, loading, addTransaction, splitTransaction, deleteTransaction, recategorize, setExcluded, setBusiness, setTaxCategory };
+  return { transactions, loading, addTransaction, addSplitTransaction, splitTransaction, deleteTransaction, recategorize, setExcluded, setBusiness, setTaxCategory };
 }

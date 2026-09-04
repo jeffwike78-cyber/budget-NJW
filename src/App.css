@@ -1999,6 +1999,13 @@ button, a, label, [role="button"], .sidebar-link, .mobile-tab-link, .quick-acces
 .tx-split-remainder.good { color: var(--good); }
 .tx-split-remainder.bad { color: var(--bad); }
 
+/* Split editor shown inside the add-transaction form */
+.tx-split-inline { margin-top: 10px; }
+.tx-split-toggle.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* ---------- Transactions page sections (Reviewed / Hidden) ---------- */
 .tx-section-toggle {
   display: flex;

@@ -40,10 +40,11 @@ export default async function handler(req, res) {
     const catList = categories.map((c) => `- ${c.id}: ${c.name}`).join('\n');
     const system = `You extract structured data from a photo of a purchase receipt. Read it carefully — merchant name, the date, and especially the GRAND TOTAL (the final amount charged, after tax/tip, not a subtotal or an individual line item).
 Respond with ONLY JSON, no prose or code fences:
-{"merchant": string, "date": "YYYY-MM-DD" or null, "amount": number, "summary": string, "categoryId": string or null}
+{"merchant": string, "date": "YYYY-MM-DD" or null, "amount": number, "summary": string, "categoryId": string or null, "cardLast4": string or null}
 - amount = the grand total as a positive number.
 - summary = a short, comma-separated list of the actual items purchased (read the line items), e.g. "milk, eggs, paper towels". If items aren't legible, give a brief description.
-- categoryId = the best-fitting envelope id from the list, or null if unclear.`;
+- categoryId = the best-fitting envelope id from the list, or null if unclear.
+- cardLast4 = the last 4 digits of the card that was used to pay, if the receipt shows them (often printed as "************1234", "XXXXXXXX1234", "Card ending 1234", or next to VISA/MC/DEBIT). Return just the 4 digits as a string, or null if not shown or paid by cash.`;
     const userContent = [
       { type: 'image', source: { type: 'base64', media_type: mediaType, data: dataBase64 } },
       { type: 'text', text: `Envelopes:\n${catList}\n\nExtract the receipt JSON now.` },
@@ -63,6 +64,7 @@ Respond with ONLY JSON, no prose or code fences:
     const merchant = String(parsed.merchant || '').slice(0, 120);
     const categoryId =
       parsed.categoryId && categories.some((c) => c.id === parsed.categoryId) ? parsed.categoryId : null;
+    const cardLast4 = /^\d{4}$/.test(String(parsed.cardLast4 || '')) ? String(parsed.cardLast4) : null;
 
     // Stash the image so it can be attached when the transaction is created.
     const path = `pending/${randomUUID()}.jpg`;
@@ -71,7 +73,7 @@ Respond with ONLY JSON, no prose or code fences:
       upsert: true,
     });
 
-    res.status(200).json({ ok: true, merchant, amount, date, categoryId, summary: parsed.summary || null, receiptPath: path });
+    res.status(200).json({ ok: true, merchant, amount, date, categoryId, cardLast4, summary: parsed.summary || null, receiptPath: path });
   } catch (err) {
     console.error('receipt ocr failed:', err?.message || err);
     res.status(502).json({ error: err.message || 'Receipt scan failed.' });
