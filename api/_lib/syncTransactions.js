@@ -300,7 +300,13 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
       console.error('Auto receipt lookup phase failed:', err?.message || err);
     }
 
-    await setPlaidStatus(supabaseAdmin, itemRowId, { linked: true, lastSyncedAt: new Date().toISOString() });
+    // Clear any prior sync error now that this bank synced cleanly.
+    await setPlaidStatus(supabaseAdmin, itemRowId, {
+      linked: true,
+      lastSyncedAt: new Date().toISOString(),
+      lastError: null,
+      lastErrorCode: null,
+    });
 
     return { synced: changed.length, removed: removed.length };
   } finally {

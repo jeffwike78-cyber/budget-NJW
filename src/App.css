@@ -1238,6 +1238,7 @@ textarea {
 .bank-info { display: flex; flex-direction: column; gap: 2px; }
 .bank-name { font-weight: 600; color: var(--text-h); }
 .bank-synced { font-size: 12px; color: var(--text); }
+.bank-error { font-size: 12px; color: var(--bad); max-width: 42ch; line-height: 1.4; }
 .bank-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .plaid-connect { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 

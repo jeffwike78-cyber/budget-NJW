@@ -94,8 +94,13 @@ export default function Accounts({ budgetState, setBudgetState }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Sync failed.');
-      const totalSynced = Object.values(data.results || {}).reduce((s, r) => s + (r?.synced || 0), 0);
-      setSyncMsg(totalSynced > 0 ? `Synced ${totalSynced} transaction${totalSynced === 1 ? '' : 's'}.` : 'Up to date — no new transactions.');
+      // A partial failure still returns 200 — surface which bank needs attention.
+      if (data.error) {
+        setSyncMsg(data.error);
+      } else {
+        const totalSynced = Object.values(data.results || {}).reduce((s, r) => s + (r?.synced || 0), 0);
+        setSyncMsg(totalSynced > 0 ? `Synced ${totalSynced} transaction${totalSynced === 1 ? '' : 's'}.` : 'Up to date — no new transactions.');
+      }
       reloadBanks();
     } catch (err) {
       setSyncMsg(err.message);
@@ -148,6 +153,11 @@ export default function Accounts({ budgetState, setBudgetState }) {
                 <div className="bank-info">
                   <span className="bank-name">{b.institutionName || 'Bank'}</span>
                   <span className="bank-synced">Last synced {timeAgo(b.lastSyncedAt)}</span>
+                  {b.lastError && (
+                    <span className="bank-error">
+                      ⚠ {b.lastError} Reconnect this bank (Disconnect, then Connect a bank) to fix it.
+                    </span>
+                  )}
                 </div>
                 <div className="bank-row-actions">
                   <button
