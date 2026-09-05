@@ -161,13 +161,26 @@ async function mergeReceiptMatches(supabaseAdmin, added) {
 
 async function syncBalance(supabaseAdmin, plaid, item) {
   const { data } = await plaid.accountsBalanceGet({ access_token: item.access_token });
-  const list = (data.accounts || []).map((a) => ({
+  const accounts = data.accounts || [];
+  const list = accounts.map((a) => ({
     id: budgetAccountId(a.account_id),
     name: `${item.institution_name || 'Bank'} · ${a.name || a.official_name || a.subtype || 'Account'}${a.mask ? ` ••${a.mask}` : ''}`,
     type: mapAccountType(a),
     balance: accountBalance(a),
   }));
   await upsertPlaidAccounts(supabaseAdmin, list);
+  // Record a short per-account label on the item's status so the Accounts page
+  // can tell two same-named banks (e.g. two Chase logins) apart.
+  try {
+    await setPlaidStatus(supabaseAdmin, item.id, {
+      accounts: accounts.map((a) => ({
+        label: a.name || a.official_name || a.subtype || 'Account',
+        mask: a.mask || null,
+      })),
+    });
+  } catch (err) {
+    console.error('Failed to record account labels:', err?.message || err);
+  }
 }
 
 // After the normal import, chase email receipts for the transactions that
