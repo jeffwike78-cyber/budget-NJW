@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import PlaidConnectButton from '../components/PlaidConnectButton';
+import { usePlaidConnect } from '../lib/usePlaidConnect';
 import { useConnectedBanks } from '../lib/useConnectedBanks';
 import { useGmailAccounts } from '../lib/useGmailAccounts';
 import { signedBalance, includeInCashOnHand } from '../lib/budgetMath';
@@ -28,6 +28,17 @@ export default function Accounts({ budgetState, setBudgetState }) {
   const [syncMsg, setSyncMsg] = useState(null);
   const { accounts: emailAccounts, reload: reloadEmail, connect: connectGmail, disconnect: disconnectGmail } = useGmailAccounts();
   const [emailMsg, setEmailMsg] = useState(null);
+
+  const { start: startPlaid, busy: plaidBusy, error: plaidError } = usePlaidConnect({
+    onLinked: (data) => {
+      reloadBanks();
+      setSyncMsg(
+        data?.updated
+          ? 'Reconnected — resynced in place, no transactions lost.'
+          : 'Bank connected — pulling in your transactions.'
+      );
+    },
+  });
 
   // After returning from Google, show a note and refresh the account list.
   useEffect(() => {
@@ -152,14 +163,30 @@ export default function Accounts({ budgetState, setBudgetState }) {
               <li key={b.itemId} className="bank-row">
                 <div className="bank-info">
                   <span className="bank-name">{b.institutionName || 'Bank'}</span>
+                  {Array.isArray(b.accounts) && b.accounts.length > 0 && (
+                    <span className="bank-accounts">
+                      {b.accounts.map((a) => `${a.label}${a.mask ? ` ••${a.mask}` : ''}`).join(' · ')}
+                    </span>
+                  )}
                   <span className="bank-synced">Last synced {timeAgo(b.lastSyncedAt)}</span>
                   {b.lastError && (
                     <span className="bank-error">
-                      ⚠ {b.lastError} Reconnect this bank (Disconnect, then Connect a bank) to fix it.
+                      ⚠ {b.lastError} Tap <strong>Reconnect</strong> to fix it — your imported
+                      transactions are kept.
                     </span>
                   )}
                 </div>
                 <div className="bank-row-actions">
+                  {b.lastError && (
+                    <button
+                      type="button"
+                      className="primary-btn"
+                      onClick={() => startPlaid(b.itemId)}
+                      disabled={plaidBusy || syncingId !== null}
+                    >
+                      {plaidBusy ? 'Working…' : 'Reconnect'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="secondary-btn"
@@ -183,13 +210,12 @@ export default function Accounts({ budgetState, setBudgetState }) {
         )}
 
         <div className="bank-actions">
-          <PlaidConnectButton
-            label={banks.length > 0 ? 'Connect another bank' : 'Connect a bank'}
-            onLinked={() => {
-              reloadBanks();
-              setSyncMsg('Bank connected — pulling in your transactions.');
-            }}
-          />
+          <div className="plaid-connect">
+            <button type="button" className="primary-btn" onClick={() => startPlaid()} disabled={plaidBusy}>
+              {plaidBusy ? 'Working…' : banks.length > 0 ? 'Connect another bank' : 'Connect a bank'}
+            </button>
+            {plaidError && <span className="module-note form-error">{plaidError}</span>}
+          </div>
           {syncMsg && <span className="module-note ai-status">{syncMsg}</span>}
         </div>
       </section>
