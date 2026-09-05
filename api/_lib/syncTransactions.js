@@ -159,6 +159,30 @@ async function mergeReceiptMatches(supabaseAdmin, added) {
   }
 }
 
+function accountLabels(accounts) {
+  return (accounts || []).map((a) => ({
+    label: a.name || a.official_name || a.subtype || 'Account',
+    mask: a.mask || null,
+  }));
+}
+
+// Record a short per-account label (name + last-4) on the item's status so the
+// Accounts page can tell two same-named banks (e.g. two Chase logins) apart —
+// and, critically, so a connection that can't sync transactions can still be
+// identified before the user reconnects it. Uses accountsGet, which lists the
+// item's accounts independently of the (possibly failing) transactions product.
+async function recordAccountLabels(supabaseAdmin, plaid, item) {
+  try {
+    const { data } = await plaid.accountsGet({ access_token: item.access_token });
+    const labels = accountLabels(data.accounts);
+    if (labels.length > 0) {
+      await setPlaidStatus(supabaseAdmin, item.id, { accounts: labels });
+    }
+  } catch (err) {
+    console.error('Failed to record account labels:', err?.response?.data ?? err?.message ?? err);
+  }
+}
+
 async function syncBalance(supabaseAdmin, plaid, item) {
   const { data } = await plaid.accountsBalanceGet({ access_token: item.access_token });
   const accounts = data.accounts || [];
@@ -169,15 +193,8 @@ async function syncBalance(supabaseAdmin, plaid, item) {
     balance: accountBalance(a),
   }));
   await upsertPlaidAccounts(supabaseAdmin, list);
-  // Record a short per-account label on the item's status so the Accounts page
-  // can tell two same-named banks (e.g. two Chase logins) apart.
   try {
-    await setPlaidStatus(supabaseAdmin, item.id, {
-      accounts: accounts.map((a) => ({
-        label: a.name || a.official_name || a.subtype || 'Account',
-        mask: a.mask || null,
-      })),
-    });
+    await setPlaidStatus(supabaseAdmin, item.id, { accounts: accountLabels(accounts) });
   } catch (err) {
     console.error('Failed to record account labels:', err?.message || err);
   }
@@ -238,13 +255,22 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
     const removed = [];
     let hasMore = true;
 
-    while (hasMore) {
-      const resp = await plaid.transactionsSync({ access_token: item.access_token, cursor: cursor || undefined });
-      added.push(...resp.data.added);
-      modified.push(...resp.data.modified);
-      removed.push(...resp.data.removed);
-      hasMore = resp.data.has_more;
-      cursor = resp.data.next_cursor;
+    try {
+      while (hasMore) {
+        const resp = await plaid.transactionsSync({ access_token: item.access_token, cursor: cursor || undefined });
+        added.push(...resp.data.added);
+        modified.push(...resp.data.modified);
+        removed.push(...resp.data.removed);
+        hasMore = resp.data.has_more;
+        cursor = resp.data.next_cursor;
+      }
+    } catch (txErr) {
+      // The transactions product failed (e.g. a stale login → NO_ACCOUNTS), but
+      // the account list is usually still readable — record it so the user can
+      // see which account this connection is before reconnecting it. Then let
+      // the failure propagate so the caller flags the item.
+      await recordAccountLabels(supabaseAdmin, plaid, item);
+      throw txErr;
     }
 
     const budget = await loadBudget(supabaseAdmin);
