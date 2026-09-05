@@ -25,7 +25,7 @@ function App() {
   const [pendingScanFile, setPendingScanFile] = useState(null);
   const { session, loading: authLoading, recovery, clearRecovery } = useAuth();
   const [budgetState, setBudgetState, budgetLoading] = useBudgetState();
-  const { transactions, addTransaction, splitTransaction, deleteTransaction, recategorize, setExcluded, setBusiness, setTaxCategory } =
+  const { transactions, addTransaction, addSplitTransaction, splitTransaction, deleteTransaction, recategorize, setExcluded, setBusiness, setTaxCategory } =
     useBudgetTransactions();
 
   // Auth gate: everyone signs in to the same shared family budget. A reset-link
@@ -79,6 +79,7 @@ function App() {
               setBudgetState={setBudgetState}
               transactions={transactions}
               addTransaction={addTransaction}
+              addSplitTransaction={addSplitTransaction}
               pendingScanFile={pendingScanFile}
               onScanConsumed={() => setPendingScanFile(null)}
               {...txActions}

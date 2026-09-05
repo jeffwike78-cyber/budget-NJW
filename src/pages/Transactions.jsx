@@ -8,7 +8,16 @@ function normalize(desc) {
   return desc.trim().toLowerCase();
 }
 
-export default function Transactions({ budgetState, setBudgetState, transactions, addTransaction, recategorize, setExcluded, setTaxCategory, splitTransaction, deleteTransaction, pendingScanFile, onScanConsumed }) {
+// Find the account whose name carries these last-4 digits (Plaid names look
+// like "Chase · Total Checking ••5319"), so a scanned receipt lands on the card
+// that actually paid instead of always defaulting to the first account.
+function accountIdForLast4(accounts, last4) {
+  if (!last4) return null;
+  const match = (accounts || []).find((a) => String(a.name || '').includes(last4));
+  return match ? match.id : null;
+}
+
+export default function Transactions({ budgetState, setBudgetState, transactions, addTransaction, addSplitTransaction, recategorize, setExcluded, setTaxCategory, splitTransaction, deleteTransaction, pendingScanFile, onScanConsumed }) {
   // Needs Review is for unclear spending, not unclear deposits — money coming
   // in (amount < 0, the reverse of "positive = expense") never belongs here,
   // even if it somehow got flagged that way.
@@ -30,6 +39,10 @@ export default function Transactions({ budgetState, setBudgetState, transactions
     categoryId: budgetState.categories?.[0]?.id || '',
     accountId: budgetState.accounts?.[0]?.id || '',
   });
+  // Split-across-envelopes mode for the add form: when on, the single category
+  // select is replaced by category+amount lines that must add up to the amount.
+  const [splitMode, setSplitMode] = useState(false);
+  const [splitParts, setSplitParts] = useState([]);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiStatus, setAiStatus] = useState(null);
   const [scanBusy, setScanBusy] = useState(false);
@@ -46,6 +59,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
     try {
       const data = await scanReceipt(file);
       const matchedCategory = data.categoryId && budgetState.categories.some((c) => c.id === data.categoryId);
+      const matchedAccountId = accountIdForLast4(budgetState.accounts, data.cardLast4);
       setForm((f) => ({
         ...f,
         description: data.merchant || f.description, // Vendor
@@ -53,9 +67,16 @@ export default function Transactions({ budgetState, setBudgetState, transactions
         amount: data.amount ? String(data.amount) : f.amount,
         date: data.date || f.date, // full receipt date
         categoryId: matchedCategory ? data.categoryId : f.categoryId,
+        accountId: matchedAccountId || f.accountId, // card used, read from the receipt
       }));
       setScanMeta({ receiptPath: data.receiptPath || null });
-      setScanMsg('Filled in from your receipt — review the fields and tap Add.');
+      const accountNote =
+        data.cardLast4 && matchedAccountId
+          ? ` Matched the card ending ${data.cardLast4} to your account.`
+          : data.cardLast4
+          ? ` Card ending ${data.cardLast4} didn’t match a known account — pick the account below.`
+          : '';
+      setScanMsg(`Filled in from your receipt — review the fields and tap Add.${accountNote} You can also split it across envelopes below.`);
     } catch (err) {
       setScanMsg(err.message);
     } finally {
@@ -84,18 +105,97 @@ export default function Transactions({ budgetState, setBudgetState, transactions
     setForm((f) => ({ ...f, description: value, categoryId: remembered || f.categoryId }));
   }
 
+  // --- Split-across-envelopes controls for the add form ---
+  const splitTotal = Math.abs(Number(form.amount) || 0);
+  const splitPartsSum = splitParts.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const splitRemainder = splitTotal - splitPartsSum;
+  function toggleSplitMode() {
+    if (splitMode) {
+      setSplitMode(false);
+      return;
+    }
+    setSplitParts([
+      { categoryId: form.categoryId || '', amount: '' },
+      { categoryId: '', amount: '' },
+    ]);
+    setSplitMode(true);
+  }
+  function updateSplitPart(i, patch) {
+    setSplitParts((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  }
+  function addSplitPart() {
+    setSplitParts((prev) => [...prev, { categoryId: '', amount: '' }]);
+  }
+  function removeSplitPart(i) {
+    setSplitParts((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  function resetForm() {
+    setForm((f) => ({ ...f, description: '', note: '', amount: '', date: todayStr() }));
+    setScanMeta(null);
+    setScanMsg(null);
+    setSplitMode(false);
+    setSplitParts([]);
+  }
+
   async function submit(e) {
     e.preventDefault();
     if (!form.description.trim() || !form.amount) return;
     setAddMsg(null);
     setAddOk(false);
+    const vendor = form.description.trim();
+    const note = form.note?.trim() || null;
+
+    if (splitMode) {
+      const cleaned = splitParts
+        .map((p) => ({ categoryId: p.categoryId, amount: Number(p.amount) }))
+        .filter((p) => p.amount > 0);
+      if (cleaned.length < 2) {
+        setAddMsg('Add at least two envelope lines to split, or turn split off.');
+        return;
+      }
+      if (cleaned.some((p) => !p.categoryId)) {
+        setAddMsg('Pick an envelope for every split line.');
+        return;
+      }
+      const sum = cleaned.reduce((s, p) => s + p.amount, 0);
+      if (Math.abs(sum - splitTotal) > 0.01) {
+        setAddMsg(`Split lines must add up to $${splitTotal.toFixed(2)} (they total $${sum.toFixed(2)}).`);
+        return;
+      }
+      const error = await addSplitTransaction(
+        {
+          date: form.date || todayStr(),
+          description: vendor,
+          accountId: form.accountId,
+          note,
+          receiptPath: scanMeta?.receiptPath || null,
+        },
+        cleaned
+      );
+      if (error) {
+        setAddMsg(`Couldn’t save: ${error.message || JSON.stringify(error)}`);
+        return;
+      }
+      // Remember each envelope for this vendor so the next scan pre-fills it.
+      setBudgetState((prev) => {
+        const merchantMemory = { ...prev.merchantMemory };
+        merchantMemory[normalize(vendor)] = cleaned[0].categoryId;
+        return { ...prev, merchantMemory };
+      });
+      resetForm();
+      setAddMsg(`Added “${vendor}” split across ${cleaned.length} envelopes ✓`);
+      setAddOk(true);
+      return;
+    }
+
     const error = await addTransaction({
       date: form.date || todayStr(),
-      description: form.description.trim(), // Vendor
+      description: vendor, // Vendor
       amount: Number(form.amount),
       categoryId: form.categoryId,
       accountId: form.accountId,
-      note: form.note?.trim() || null, // Description (what was purchased)
+      note, // Description (what was purchased)
       // A scanned receipt becomes a 'receipt' transaction (so it auto-links to
       // the bank charge later) and carries its attached photo.
       source: scanMeta ? 'receipt' : 'manual',
@@ -110,12 +210,9 @@ export default function Transactions({ budgetState, setBudgetState, transactions
       ...prev,
       merchantMemory: { ...prev.merchantMemory, [normalize(form.description)]: form.categoryId },
     }));
-    const savedVendor = form.description.trim();
-    setForm((f) => ({ ...f, description: '', note: '', amount: '', date: todayStr() }));
-    setScanMeta(null);
-    setScanMsg(null);
+    resetForm();
     // Positive confirmation so a save is never ambiguous — clears on the next edit.
-    setAddMsg(`Added “${savedVendor}” ✓`);
+    setAddMsg(`Added “${vendor}” ✓`);
     setAddOk(true);
   }
 
@@ -208,13 +305,15 @@ export default function Transactions({ budgetState, setBudgetState, transactions
               onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
             />
           </div>
-          <select value={form.categoryId} onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}>
-            {budgetState.categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          {!splitMode && (
+            <select value={form.categoryId} onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}>
+              {budgetState.categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
           <select value={form.accountId} onChange={(e) => setForm((f) => ({ ...f, accountId: e.target.value }))}>
             {budgetState.accounts.map((a) => (
               <option key={a.id} value={a.id}>
@@ -222,10 +321,64 @@ export default function Transactions({ budgetState, setBudgetState, transactions
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            className={`secondary-btn tx-split-toggle${splitMode ? ' active' : ''}`}
+            onClick={toggleSplitMode}
+            title="Split this purchase across multiple envelopes"
+          >
+            {splitMode ? '✕ No split' : '✂ Split across envelopes'}
+          </button>
           <button type="submit" className="primary-btn">
             Add
           </button>
         </form>
+
+        {splitMode && (
+          <div className="tx-split tx-split-inline">
+            <div className="tx-split-head">
+              Split <strong>${splitTotal.toFixed(2)}</strong> across envelopes
+            </div>
+            {splitParts.map((p, i) => (
+              <div className="tx-split-row" key={i}>
+                <select value={p.categoryId} onChange={(e) => updateSplitPart(i, { categoryId: e.target.value })}>
+                  <option value="" disabled>
+                    Choose envelope…
+                  </option>
+                  {budgetState.categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <span className="tx-split-amt">
+                  $
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={p.amount}
+                    onChange={(e) => updateSplitPart(i, { amount: e.target.value })}
+                  />
+                </span>
+                {splitParts.length > 2 && (
+                  <button type="button" className="link-btn danger" onClick={() => removeSplitPart(i)} aria-label="Remove line">
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+            <div className="tx-split-foot">
+              <button type="button" className="link-btn" onClick={addSplitPart}>
+                + Add line
+              </button>
+              <span className={`tx-split-remainder ${Math.abs(splitRemainder) < 0.01 ? 'good' : 'bad'}`}>
+                {splitRemainder >= 0 ? `Remaining: $${splitRemainder.toFixed(2)}` : `Over by $${Math.abs(splitRemainder).toFixed(2)}`}
+              </span>
+            </div>
+          </div>
+        )}
         {addMsg && (
           <p className={`module-note ${addOk ? 'form-ok' : 'form-error'}`} role="status" aria-live="polite">
             {addMsg}

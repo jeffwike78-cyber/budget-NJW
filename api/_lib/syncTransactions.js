@@ -110,7 +110,7 @@ async function mergeReceiptMatches(supabaseAdmin, added) {
   if (!added.length) return;
   const { data: pending } = await supabaseAdmin
     .from('budget_transactions')
-    .select('id, date, amount, category_id, note, receipt_path')
+    .select('id, date, amount, category_id, note, receipt_path, excluded')
     .eq('source', 'receipt');
   if (!pending || pending.length === 0) return;
 
@@ -144,7 +144,12 @@ async function mergeReceiptMatches(supabaseAdmin, added) {
     const update = {};
     if (best.note) update.note = best.note;
     if (best.receipt_path) update.receipt_path = best.receipt_path;
-    if ((plaidRow.category_id === 'needs-review' || !plaidRow.category_id) && best.category_id && best.category_id !== 'needs-review') {
+    if (best.excluded) {
+      // The receipt was split across envelopes at scan time: its child rows
+      // already carry the real amounts and categories. Exclude the posted bank
+      // charge so the same money isn't counted twice, and leave the children be.
+      update.excluded = true;
+    } else if ((plaidRow.category_id === 'needs-review' || !plaidRow.category_id) && best.category_id && best.category_id !== 'needs-review') {
       update.category_id = best.category_id;
     }
     if (Object.keys(update).length > 0) {
@@ -295,7 +300,13 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
       console.error('Auto receipt lookup phase failed:', err?.message || err);
     }
 
-    await setPlaidStatus(supabaseAdmin, itemRowId, { linked: true, lastSyncedAt: new Date().toISOString() });
+    // Clear any prior sync error now that this bank synced cleanly.
+    await setPlaidStatus(supabaseAdmin, itemRowId, {
+      linked: true,
+      lastSyncedAt: new Date().toISOString(),
+      lastError: null,
+      lastErrorCode: null,
+    });
 
     return { synced: changed.length, removed: removed.length };
   } finally {

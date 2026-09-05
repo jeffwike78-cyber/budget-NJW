@@ -23,6 +23,9 @@ export default function TopBar({ appName = 'Family Budget', setView }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Sync failed.');
+      // A partial failure still returns 200 (the healthy banks synced). Tell the
+      // user which bank needs attention, then reload so the new data shows.
+      if (data.error) window.alert(data.error);
       window.location.reload();
     } catch (err) {
       setSyncing(false);
