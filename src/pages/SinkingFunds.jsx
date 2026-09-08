@@ -37,6 +37,7 @@ function monthKey(dateStr = todayStr()) {
 // envelope, so the two stay in sync.
 export default function SinkingFunds({ budgetState, setBudgetState, transactions }) {
   const [showBills, setShowBills] = useState(false);
+  const [showMove, setShowMove] = useState(false);
   const [move, setMove] = useState({ from: '', to: '', amount: '', note: '' });
   const [moveMsg, setMoveMsg] = useState(null);
   const month = monthKey();
@@ -245,10 +246,12 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
       </section>
 
       <section className="card">
-        <div className="card-header">
-          <h2>Move money</h2>
-          <span className="pill">Cover an overspend · top up a fund</span>
-        </div>
+        <button type="button" className="tx-section-toggle" onClick={() => setShowMove((s) => !s)} aria-expanded={showMove}>
+          <span>Move money</span>
+          <span className="tx-section-count">Cover an overspend · top up a fund {showMove ? '▴' : '▾'}</span>
+        </button>
+        {showMove && (
+        <>
         <p className="module-note">
           Shuffle money between envelopes without it counting as spending or income. Moving <em>from</em> one
           envelope <em>to</em> another is cash-neutral (great for covering an over-budget envelope from one with
@@ -319,6 +322,8 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
               ))}
             </ul>
           </div>
+        )}
+        </>
         )}
       </section>
 
