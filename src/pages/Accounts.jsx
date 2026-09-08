@@ -65,6 +65,15 @@ export default function Accounts({ budgetState, setBudgetState }) {
   // Net worth: credit balances (money owed) count against the total.
   const total = accounts.reduce((sum, a) => sum + signedBalance(a), 0);
 
+  // Everyday credit card cycle settings (see Overview reminder).
+  const cc = budgetState.settings?.creditCard || { accountId: '', statementDay: '', dueDay: '' };
+  function setCard(field, value) {
+    setBudgetState((prev) => ({
+      ...prev,
+      settings: { ...(prev.settings || {}), creditCard: { ...(prev.settings?.creditCard || {}), [field]: value } },
+    }));
+  }
+
   function updateAccount(id, patch) {
     setBudgetState((prev) => ({
       ...prev,
@@ -217,6 +226,51 @@ export default function Accounts({ budgetState, setBudgetState }) {
             {plaidError && <span className="module-note form-error">{plaidError}</span>}
           </div>
           {syncMsg && <span className="module-note ai-status">{syncMsg}</span>}
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-header">
+          <h2>Everyday credit card</h2>
+        </div>
+        <p className="module-note">
+          Pick the card you put everyday spending on, and set its statement and payment-due days. The Overview page
+          will then show a reminder as the due date approaches, plus the current balance to pay off.
+        </p>
+        <div className="cc-config">
+          <label className="cc-field">
+            <span>Card</span>
+            <select value={cc.accountId} onChange={(e) => setCard('accountId', e.target.value)}>
+              <option value="">— none —</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="cc-field">
+            <span>Statement closes (day)</span>
+            <input
+              type="number"
+              min="1"
+              max="31"
+              inputMode="numeric"
+              placeholder="e.g. 18"
+              value={cc.statementDay ?? ''}
+              onChange={(e) => setCard('statementDay', e.target.value)}
+            />
+          </label>
+          <label className="cc-field">
+            <span>Payment due (day)</span>
+            <input
+              type="number"
+              min="1"
+              max="31"
+              inputMode="numeric"
+              placeholder="e.g. 25"
+              value={cc.dueDay ?? ''}
+              onChange={(e) => setCard('dueDay', e.target.value)}
+            />
+          </label>
         </div>
       </section>
 

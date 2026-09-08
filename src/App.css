@@ -1238,6 +1238,18 @@ textarea {
 .bank-info { display: flex; flex-direction: column; gap: 2px; }
 .bank-name { font-weight: 600; color: var(--text-h); }
 .bank-synced { font-size: 12px; color: var(--text); }
+/* Everyday credit card config + due-date reminder */
+.cc-config { display: flex; flex-wrap: wrap; gap: 12px; }
+.cc-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text); flex: 1 1 140px; min-width: 130px; }
+.cc-field select, .cc-field input { width: 100%; }
+.cc-reminder { border-left: 4px solid var(--accent); }
+.cc-reminder-soon { border-left-color: var(--bad); }
+.cc-reminder-row { display: flex; align-items: center; gap: 12px; }
+.cc-reminder-icon { font-size: 22px; }
+.cc-reminder-text { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.cc-reminder-title { font-weight: 600; color: var(--text-h); }
+.cc-reminder-sub { font-size: 13px; color: var(--text); }
+
 /* Analysis page */
 .analysis-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
 .analysis-month { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text); }
