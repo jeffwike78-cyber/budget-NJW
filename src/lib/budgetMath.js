@@ -26,12 +26,20 @@ export function kindLabel(kind) {
   return ENVELOPE_KINDS.find((k) => k.value === kind)?.label || 'Everyday spending';
 }
 
-// A credit-card balance is money owed (a liability). Plaid and manual entry both
-// store the owed amount as a positive number, so for display and net-worth
-// totals a credit account counts as negative. Everything else is as-stored.
+// Money owed (a liability) is stored as a positive number, so for display and
+// net-worth totals it counts as negative. This covers credit cards and manual
+// liabilities (mortgage, auto/student loans). Everything else — cash, savings,
+// investments, and manual assets like a home or vehicle — counts as-stored.
 export function signedBalance(a) {
   const bal = Number(a?.balance || 0);
-  return a?.type === 'credit' ? -bal : bal;
+  return a?.type === 'credit' || a?.type === 'liability' ? -bal : bal;
+}
+
+// Manual asset/liability account types (net-worth items that aren't spendable
+// cash and don't sync via Plaid).
+export const LIABILITY_TYPES = ['credit', 'liability'];
+export function isLiability(a) {
+  return LIABILITY_TYPES.includes(a?.type);
 }
 
 // Whether an account counts toward "cash on hand" (the reconciliation banner).

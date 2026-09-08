@@ -1238,6 +1238,15 @@ textarea {
 .bank-info { display: flex; flex-direction: column; gap: 2px; }
 .bank-name { font-weight: 600; color: var(--text-h); }
 .bank-synced { font-size: 12px; color: var(--text); }
+/* Net worth summary (Accounts page) */
+.networth-grid { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin: 4px 0 6px; }
+.networth-fig { display: flex; flex-direction: column; gap: 2px; }
+.networth-label { font-size: 12px; color: var(--text); font-weight: 600; }
+.networth-value { font-size: 20px; font-weight: 700; color: var(--text-h); font-variant-numeric: tabular-nums; }
+.networth-value.good { color: var(--good); }
+.networth-value.bad { color: var(--bad); }
+.networth-op { font-size: 18px; color: var(--text); font-weight: 700; }
+
 /* "Think rich" money-health tiles */
 .mh-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 @media (max-width: 640px) { .mh-grid { grid-template-columns: 1fr; } }

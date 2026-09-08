@@ -2,9 +2,17 @@ import { useState, useEffect } from 'react';
 import { usePlaidConnect } from '../lib/usePlaidConnect';
 import { useConnectedBanks } from '../lib/useConnectedBanks';
 import { useGmailAccounts } from '../lib/useGmailAccounts';
-import { signedBalance, includeInCashOnHand } from '../lib/budgetMath';
+import { signedBalance, includeInCashOnHand, isLiability, LIABILITY_TYPES } from '../lib/budgetMath';
 
-const ACCOUNT_TYPES = ['checking', 'savings', 'investing', 'credit'];
+const ACCOUNT_TYPES = ['checking', 'savings', 'investing', 'asset', 'credit', 'liability'];
+const TYPE_LABEL = {
+  checking: 'checking',
+  savings: 'savings',
+  investing: 'investing',
+  asset: 'asset (home, vehicle…)',
+  credit: 'credit card',
+  liability: 'loan / liability',
+};
 
 function money(n) {
   const v = Number(n || 0);
@@ -62,8 +70,11 @@ export default function Accounts({ budgetState, setBudgetState }) {
     }
   }
   const accounts = budgetState.accounts || [];
-  // Net worth: credit balances (money owed) count against the total.
+  // Net worth: assets minus liabilities. Liabilities (credit + manual loans)
+  // are stored as positive amounts owed and count against the total.
   const total = accounts.reduce((sum, a) => sum + signedBalance(a), 0);
+  const assetsTotal = accounts.filter((a) => !isLiability(a)).reduce((s, a) => s + signedBalance(a), 0);
+  const liabilitiesTotal = accounts.filter(isLiability).reduce((s, a) => s + Math.abs(signedBalance(a)), 0);
 
   // Everyday credit card cycle settings (see Overview reminder).
   const cc = budgetState.settings?.creditCard || { accountId: '', statementDay: '', dueDay: '' };
@@ -347,6 +358,35 @@ export default function Accounts({ budgetState, setBudgetState }) {
         </div>
       </section>
 
+      <section className="card networth-card">
+        <div className="card-header">
+          <h2>Net worth</h2>
+          <span className={`pill ${total < 0 ? 'pill-bad' : 'pill-good'}`}>{money(total)}</span>
+        </div>
+        <div className="networth-grid">
+          <div className="networth-fig">
+            <span className="networth-label">Assets</span>
+            <span className="networth-value good">{money(assetsTotal)}</span>
+          </div>
+          <span className="networth-op">−</span>
+          <div className="networth-fig">
+            <span className="networth-label">Liabilities</span>
+            <span className="networth-value bad">{money(liabilitiesTotal)}</span>
+          </div>
+          <span className="networth-op">=</span>
+          <div className="networth-fig">
+            <span className="networth-label">Net worth</span>
+            <span className={`networth-value ${total < 0 ? 'bad' : ''}`}>{money(total)}</span>
+          </div>
+        </div>
+        <p className="module-note">
+          Add your home, vehicles, and other assets — plus loans/mortgages not linked through a bank — as accounts
+          below (types <strong>asset</strong> and <strong>loan / liability</strong>). Update those values now and
+          then; linked bank, card, and investment balances refresh automatically. This total feeds the Net worth
+          card and trend on the Overview.
+        </p>
+      </section>
+
       <section className="card">
         <div className="card-header">
           <h2>Your accounts</h2>
@@ -388,12 +428,12 @@ export default function Accounts({ budgetState, setBudgetState }) {
               >
                 {ACCOUNT_TYPES.map((t) => (
                   <option key={t} value={t}>
-                    {t}
+                    {TYPE_LABEL[t] || t}
                   </option>
                 ))}
               </select>
-              <span className="accounts-editor-balance" title={a.type === 'credit' ? 'Amount owed — shown as negative in totals' : undefined}>
-                {a.type === 'credit' ? '−$' : '$'}
+              <span className="accounts-editor-balance" title={isLiability(a) ? 'Amount owed — counts against net worth' : undefined}>
+                {isLiability(a) ? '−$' : '$'}
                 <input
                   type="number"
                   className="budget-input"
@@ -401,14 +441,18 @@ export default function Accounts({ budgetState, setBudgetState }) {
                   onChange={(e) => updateAccount(a.id, { balance: e.target.value })}
                 />
               </span>
-              <label className="account-cash-toggle" title="Count this account toward Cash on Hand on the Envelopes page">
-                <input
-                  type="checkbox"
-                  checked={includeInCashOnHand(a)}
-                  onChange={(e) => updateAccount(a.id, { includeInCash: e.target.checked })}
-                />
-                Cash
-              </label>
+              {(a.type === 'checking' || a.type === 'savings') ? (
+                <label className="account-cash-toggle" title="Count this account toward Cash on Hand on the Envelopes page">
+                  <input
+                    type="checkbox"
+                    checked={includeInCashOnHand(a)}
+                    onChange={(e) => updateAccount(a.id, { includeInCash: e.target.checked })}
+                  />
+                  Cash
+                </label>
+              ) : (
+                <span className="account-cash-toggle account-cash-na" aria-hidden="true" />
+              )}
               <button type="button" className="link-btn danger" onClick={() => deleteAccount(a.id)}>
                 Remove
               </button>
@@ -446,11 +490,11 @@ function AddAccountForm({ onAdd, onCancel }) {
       <select value={type} onChange={(e) => setType(e.target.value)}>
         {ACCOUNT_TYPES.map((t) => (
           <option key={t} value={t}>
-            {t}
+            {TYPE_LABEL[t] || t}
           </option>
         ))}
       </select>
-      <input type="number" placeholder="Balance" value={balance} onChange={(e) => setBalance(e.target.value)} />
+      <input type="number" placeholder={LIABILITY_TYPES.includes(type) ? 'Amount owed' : 'Balance / value'} value={balance} onChange={(e) => setBalance(e.target.value)} />
       <button type="submit" className="primary-btn">
         Add
       </button>
