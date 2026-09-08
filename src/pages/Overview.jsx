@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import BarChart from '../components/BarChart';
 import { PlusIcon, BudgetIcon, AccountsIcon, ArrowUpRightIcon } from '../components/icons';
 import { todayStr, todayLabel } from '../lib/storage';
 import { isPayrollDeposit } from '../lib/income';
 import { netSpentByCategory } from '../lib/spending';
-import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, signedBalance } from '../lib/budgetMath';
+import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, signedBalance, includeInCashOnHand } from '../lib/budgetMath';
 import { ageOfMoney, ageOfMoneyAdvice, ageOfMoneyStatus } from '../lib/ageOfMoney';
 import { projectCashflow } from '../lib/cashflow';
 import { creditCardStatus, formatDueDate } from '../lib/creditCard';
@@ -32,7 +32,7 @@ function lastNMonths(n) {
   return out;
 }
 
-export default function Overview({ budgetState, transactions, setView, onQuickScan }) {
+export default function Overview({ budgetState, setBudgetState, transactions, setView, onQuickScan }) {
   const [showSchedule, setShowSchedule] = useState(false);
   const today = todayStr();
   const month = monthKey(today);
@@ -56,6 +56,50 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
 
   const totalBalance = budgetState.accounts.reduce((sum, a) => sum + signedBalance(a), 0);
   const card = creditCardStatus(budgetState.settings, budgetState.accounts);
+
+  // --- "Think rich" money-health metrics ---
+  // Cash on hand (the emergency-fund base): checking + savings by default.
+  const cashOnHand = budgetState.accounts.filter(includeInCashOnHand).reduce((s, a) => s + signedBalance(a), 0);
+
+  // Savings rate: kept / received. Use the most recent COMPLETED month when
+  // there is one (stable), falling back to this month early on.
+  function monthFinance(key) {
+    const tx = transactions.filter((t) => monthKey(t.date) === key);
+    const spending = Object.values(netSpentByCategory(tx)).reduce((s, v) => s + v, 0);
+    const inc = tx.filter((t) => Number(t.amount) < 0 && !t.excluded).reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+    const rate = inc > 0 ? Math.round(((inc - spending) / inc) * 100) : null;
+    return { income: inc, spending, rate };
+  }
+  const prevKey = lastNMonths(2)[0];
+  const prevFin = monthFinance(prevKey);
+  const thisFin = monthFinance(month);
+  const savings = prevFin.income > 0 ? { ...prevFin, key: prevKey } : { ...thisFin, key: month };
+  const savingsLabel = monthLabel(savings.key);
+
+  // Emergency-fund runway: months of expenses your cash covers. Denominator is
+  // planned monthly spend (fall back to recent actual if no plan).
+  const monthlyExpenses = totalBudgeted > 0 ? totalBudgeted : prevFin.spending || thisFin.spending || 0;
+  const runwayMonths = monthlyExpenses > 0 ? cashOnHand / monthlyExpenses : null;
+
+  // Net-worth trend: snapshots recorded as the app is used (see effect below).
+  const nwHistory = budgetState.netWorthHistory || {};
+  const nwKeys = Object.keys({ ...nwHistory, [month]: totalBalance }).sort();
+  const nwSeries = nwKeys.map((k) => (k === month ? Math.round(totalBalance) : Math.round(nwHistory[k])));
+  const nwFirst = nwSeries[0];
+  const nwChange = nwSeries.length > 1 ? nwSeries[nwSeries.length - 1] - nwFirst : null;
+
+  // Record/refresh this month's net-worth snapshot when it changes (once), so
+  // the trend accumulates without a manual step. Guarded to avoid a write loop.
+  useEffect(() => {
+    if (!setBudgetState) return;
+    const rounded = Math.round(totalBalance);
+    if (nwHistory[month] === rounded) return;
+    setBudgetState((prev) => ({
+      ...prev,
+      netWorthHistory: { ...(prev.netWorthHistory || {}), [month]: rounded },
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month, totalBalance]);
 
   const chartMonths = lastNMonths(6);
   const chartData = chartMonths.map((key) => {
@@ -136,6 +180,44 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
           <div className={`bar-fill aom-bar-${ageStatus}`} style={{ width: `${agePct}%` }} />
         </div>
         <p className="module-note aom-advice">{ageOfMoneyAdvice(age)}</p>
+      </section>
+
+      <section className="card money-health">
+        <div className="card-header">
+          <h2>Money health</h2>
+          <span className="pill">the numbers the wealthy watch</span>
+        </div>
+        <div className="mh-grid">
+          <div className="mh-tile">
+            <span className="mh-label">Savings rate</span>
+            <span className={`mh-value ${savings.rate == null ? '' : savings.rate >= 20 ? 'good' : savings.rate >= 0 ? '' : 'bad'}`}>
+              {savings.rate == null ? '—' : `${savings.rate}%`}
+            </span>
+            <span className="mh-sub">{savings.rate == null ? 'No income recorded yet' : `${savingsLabel} · goal 20%+`}</span>
+          </div>
+          <div className="mh-tile">
+            <span className="mh-label">Emergency runway</span>
+            <span className={`mh-value ${runwayMonths == null ? '' : runwayMonths >= 3 ? 'good' : runwayMonths >= 1 ? 'warn' : 'bad'}`}>
+              {runwayMonths == null ? '—' : `${runwayMonths.toFixed(1)} mo`}
+            </span>
+            <span className="mh-sub">{runwayMonths == null ? 'Set a budget to see this' : `${usd(cashOnHand)} cash · goal 3–6 mo`}</span>
+          </div>
+          <div className="mh-tile">
+            <span className="mh-label">Net worth</span>
+            <span className={`mh-value ${totalBalance < 0 ? 'bad' : ''}`}>{usd(totalBalance)}</span>
+            <span className="mh-sub">
+              {nwChange == null
+                ? 'Trend builds as months pass'
+                : `${nwChange >= 0 ? '▲' : '▼'} ${usd(Math.abs(nwChange))} since ${monthLabel(nwKeys[0])}`}
+            </span>
+            <Sparkline values={nwSeries} up={nwChange == null || nwChange >= 0} />
+          </div>
+        </div>
+        <p className="module-note">
+          <strong>Savings rate</strong> is how much of what you earn you keep — the real engine of wealth.
+          <strong> Runway</strong> is how many months your cash would cover expenses if income stopped (aim 3–6).
+          <strong> Net worth</strong> is what you own minus what you owe — watch the slope over time, not any one month.
+        </p>
       </section>
 
       {showPayoff && (
@@ -384,5 +466,27 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
         </label>
       )}
     </>
+  );
+}
+
+// A tiny inline net-worth sparkline. Decorative — the value and change are
+// stated in text next to it, so it's aria-hidden.
+function Sparkline({ values = [], up = true }) {
+  if (!values || values.length < 2) {
+    return <div className="mh-spark mh-spark-empty" aria-hidden="true" />;
+  }
+  const w = 120;
+  const h = 32;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const step = w / (values.length - 1);
+  const points = values
+    .map((v, i) => `${(i * step).toFixed(1)},${(h - ((v - min) / span) * (h - 4) - 2).toFixed(1)}`)
+    .join(' ');
+  return (
+    <svg className={`mh-spark ${up ? 'up' : 'down'}`} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden="true">
+      <polyline points={points} fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }

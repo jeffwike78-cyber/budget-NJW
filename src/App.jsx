@@ -66,6 +66,7 @@ function App() {
           {view === 'overview' && (
             <Overview
               budgetState={budgetState}
+              setBudgetState={setBudgetState}
               transactions={transactions}
               setView={setView}
               onQuickScan={(file) => {

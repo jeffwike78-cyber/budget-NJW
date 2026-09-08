@@ -23,6 +23,9 @@ const DEFAULT_STATE = {
   // Saved AI monthly analyses, newest last: { month, generatedAt, model, report }.
   // Kept so each new report can reference past ones and observe longer trends.
   analyses: [],
+  // Monthly net-worth snapshots { 'YYYY-MM': number }, recorded as the app is
+  // used, so the net-worth trend builds up over time.
+  netWorthHistory: {},
   // The month the envelope ledger starts accruing from (YYYY-MM). Carryover
   // balances = opening balance + budget funded each month since this + spending.
   settings: { startMonth: '2026-09', appName: 'Family Budget' },
@@ -56,6 +59,7 @@ function normalizeBudget(b) {
     merchantMemory: b?.merchantMemory || {},
     adjustments: Array.isArray(b?.adjustments) ? b.adjustments : [],
     analyses: Array.isArray(b?.analyses) ? b.analyses : [],
+    netWorthHistory: b?.netWorthHistory && typeof b.netWorthHistory === 'object' ? b.netWorthHistory : {},
     settings: { ...DEFAULT_STATE.settings, ...(b?.settings || {}) },
   };
 }
