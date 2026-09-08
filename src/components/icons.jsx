@@ -75,6 +75,15 @@ export function ReportIcon(props) {
   );
 }
 
+export function AnalysisIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M3 3v18h18" />
+      <path d="M7 15l4-5 3 3 5-7" />
+    </Icon>
+  );
+}
+
 export function UserIcon(props) {
   return (
     <Icon {...props}>

@@ -1,0 +1,144 @@
+import { useState } from 'react';
+import { todayStr } from '../lib/storage';
+import { monthsList } from '../lib/budgetMath';
+import { buildAnalysisData, generateAnalysis } from '../lib/analysisClient';
+
+function monthKey(dateStr = todayStr()) {
+  return dateStr.slice(0, 7);
+}
+function monthLabel(m) {
+  return new Date(`${m}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+}
+
+export default function Analysis({ budgetState, setBudgetState, transactions }) {
+  const current = monthKey();
+  // Months available to analyze: start month through the current month, newest
+  // first. Default to the most recent completed month when there is one.
+  const months = monthsList(budgetState.settings?.startMonth || current, current).slice().reverse();
+  const defaultMonth = months.find((m) => m < current) || months[0] || current;
+  const [selected, setSelected] = useState(defaultMonth);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const saved = (budgetState.analyses || []).find((a) => a.month === selected);
+  const report = saved?.report;
+
+  async function runAnalysis() {
+    setBusy(true);
+    setError(null);
+    try {
+      const data = buildAnalysisData(budgetState, transactions, selected);
+      const result = await generateAnalysis(data);
+      const entry = { month: selected, generatedAt: new Date().toISOString(), report: result };
+      setBudgetState((prev) => {
+        const rest = (prev.analyses || []).filter((a) => a.month !== selected);
+        const next = [...rest, entry].sort((a, b) => a.month.localeCompare(b.month));
+        return { ...prev, analyses: next };
+      });
+    } catch (err) {
+      setError(err.message || 'Could not generate the analysis.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <h1 className="page-title">Analysis</h1>
+      <p className="page-intro no-print">
+        A monthly read on your money from AI — where spending is drifting, what&apos;s going well, and concrete
+        ways to save more. It looks back over past months too, so the picture sharpens over time.
+      </p>
+
+      <section className="card no-print">
+        <div className="analysis-controls">
+          <label className="analysis-month">
+            <span>Month</span>
+            <select value={selected} onChange={(e) => setSelected(e.target.value)}>
+              {months.map((m) => (
+                <option key={m} value={m}>
+                  {monthLabel(m)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" className="primary-btn" onClick={runAnalysis} disabled={busy}>
+            {busy ? 'Analyzing…' : report ? 'Regenerate' : 'Generate analysis'}
+          </button>
+          {report && (
+            <button type="button" className="secondary-btn" onClick={() => window.print()}>
+              🖨 Print / Save PDF
+            </button>
+          )}
+        </div>
+        {saved && (
+          <p className="module-note">
+            Last generated {new Date(saved.generatedAt).toLocaleString()}. Regenerate to refresh with the latest
+            transactions.
+          </p>
+        )}
+        {error && <p className="module-note form-error">{error}</p>}
+      </section>
+
+      {report ? (
+        <section className="card analysis-report">
+          <div className="analysis-report-head">
+            <span className="analysis-report-month">{monthLabel(selected)}</span>
+            <h2>{report.headline}</h2>
+            {typeof report.savingsRate === 'number' && (
+              <span className={`pill ${report.savingsRate >= 15 ? 'pill-good' : report.savingsRate >= 0 ? 'pill-warn' : 'pill-bad'}`}>
+                Savings rate {report.savingsRate}%
+              </span>
+            )}
+          </div>
+          {report.summary && <p className="analysis-summary">{report.summary}</p>}
+
+          {report.sections?.map((s, i) => (
+            <div className="analysis-section" key={i}>
+              <h3>{s.heading}</h3>
+              <ul>
+                {s.points.map((p, j) => (
+                  <li key={j}>{p}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+
+          {report.recommendations?.length > 0 && (
+            <div className="analysis-section analysis-recs">
+              <h3>Recommendations</h3>
+              <ul>
+                {report.recommendations.map((p, j) => (
+                  <li key={j}>{p}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {report.watch?.length > 0 && (
+            <div className="analysis-section">
+              <h3>Watch next month</h3>
+              <ul>
+                {report.watch.map((p, j) => (
+                  <li key={j}>{p}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <p className="analysis-disclaimer">
+            Generated by AI from your budget and transactions for {monthLabel(selected)}. A helpful second opinion —
+            not professional financial advice.
+          </p>
+        </section>
+      ) : (
+        <section className="card no-print">
+          <p className="module-note">
+            No analysis for {monthLabel(selected)} yet. Tap <strong>Generate analysis</strong> and the AI will review
+            that month against your budget and recent history.
+          </p>
+        </section>
+      )}
+    </>
+  );
+}
