@@ -52,6 +52,40 @@ export function monthsInclusive(startMonth, currentMonth) {
   return Math.max(1, n);
 }
 
+// The list of 'YYYY-MM' months from start to current, inclusive. Capped so a
+// bad/empty start can never spin the loop forever.
+export function monthsList(startMonth, currentMonth) {
+  if (!startMonth || !currentMonth) return [currentMonth].filter(Boolean);
+  const out = [];
+  let [y, m] = startMonth.split('-').map(Number);
+  const [cy, cm] = currentMonth.split('-').map(Number);
+  for (let i = 0; i < 600; i++) {
+    const key = `${y}-${String(m).padStart(2, '0')}`;
+    out.push(key);
+    if (y > cy || (y === cy && m >= cm)) break;
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+  }
+  return out;
+}
+
+// The budgeted amount for one category in one month: a per-month override if the
+// user set one (settings.monthlyBudgets on the category), otherwise the base
+// plan amount. An override is a fixed dollar figure; `null`/'' means no override.
+export function budgetForMonth(category, baseBudgets, month) {
+  const override = category?.monthlyBudgets?.[month];
+  if (override != null && override !== '' && !Number.isNaN(Number(override))) return Number(override);
+  return Number(baseBudgets?.[category.id] || 0);
+}
+
+// Per-category budgets for a specific month (base plan with any month override
+// applied). Used for this-month display, totals, and "left to budget".
+export function effectiveBudgetsForMonth(categories, baseBudgets, month) {
+  const out = {};
+  for (const c of categories) out[c.id] = budgetForMonth(c, baseBudgets, month);
+  return out;
+}
+
 // How many times a year each pay cadence lands.
 const FREQ_PER_YEAR = {
   weekly: 52,
@@ -122,16 +156,21 @@ export function adjustmentMaps(adjustments, currentMonth) {
 // `spentAll` / `spentMonth` are category→dollars maps (see netSpentByCategory).
 // `adjustAll` / `adjustMonth` are manual money-move totals (see adjustmentMaps);
 // they add to the balance without being treated as spending or income.
-export function envelopeBalances(categories, effectiveBudgets, spentAll, spentMonth, startMonth, currentMonth, adjustAll = {}, adjustMonth = {}) {
-  const monthsFunded = monthsInclusive(startMonth, currentMonth);
+// `baseBudgets` is the base-plan amount per category (see computeCategoryBudgets).
+// Carryover balances SUM each month's budget from the start — so a per-month
+// override (or a revised base going forward) changes only the months it applies
+// to, never rewriting a fund's already-accumulated history.
+export function envelopeBalances(categories, baseBudgets, spentAll, spentMonth, startMonth, currentMonth, adjustAll = {}, adjustMonth = {}) {
+  const months = monthsList(startMonth, currentMonth);
   const out = {};
   for (const c of categories) {
-    const budget = Number(effectiveBudgets[c.id] || 0);
     const carry = isCarryover(c.kind);
     const spentThisMonth = Number(spentMonth[c.id] || 0);
+    const budget = budgetForMonth(c, baseBudgets, currentMonth); // this month's effective amount
     if (carry) {
       const opening = Number(c.openingBalance || 0);
-      const funded = opening + budget * monthsFunded + Number(adjustAll[c.id] || 0);
+      const fundedFromBudget = months.reduce((sum, m) => sum + budgetForMonth(c, baseBudgets, m), 0);
+      const funded = opening + fundedFromBudget + Number(adjustAll[c.id] || 0);
       const spentToDate = Number(spentAll[c.id] || 0);
       out[c.id] = { carry: true, available: funded - spentToDate, spentThisMonth, budget };
     } else {
