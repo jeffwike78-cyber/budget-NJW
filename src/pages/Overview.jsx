@@ -4,7 +4,7 @@ import { PlusIcon, BudgetIcon, AccountsIcon, ArrowUpRightIcon } from '../compone
 import { todayStr, todayLabel } from '../lib/storage';
 import { isPayrollDeposit } from '../lib/income';
 import { netSpentByCategory } from '../lib/spending';
-import { monthlyIncomeTotal, computeCategoryBudgets, signedBalance } from '../lib/budgetMath';
+import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, signedBalance } from '../lib/budgetMath';
 import { ageOfMoney, ageOfMoneyAdvice, ageOfMoneyStatus } from '../lib/ageOfMoney';
 import { projectCashflow } from '../lib/cashflow';
 
@@ -38,7 +38,8 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
   const monthTx = transactions.filter((t) => monthKey(t.date) === month);
 
   const income = monthlyIncomeTotal(budgetState);
-  const effectiveBudgets = computeCategoryBudgets(budgetState.categories, income);
+  const baseBudgets = computeCategoryBudgets(budgetState.categories, income);
+  const effectiveBudgets = effectiveBudgetsForMonth(budgetState.categories, baseBudgets, month);
   const totalBudgeted = Object.values(effectiveBudgets).reduce((a, b) => a + b, 0);
   const totalSpent = Object.values(netSpentByCategory(monthTx)).reduce((a, b) => a + b, 0);
   const remaining = totalBudgeted - totalSpent;

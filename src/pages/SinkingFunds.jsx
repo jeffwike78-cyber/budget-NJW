@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { todayStr } from '../lib/storage';
 import { netSpentByCategory } from '../lib/spending';
-import { monthlyIncomeTotal, computeCategoryBudgets, envelopeBalances, adjustmentMaps, isCarryover, signedBalance, includeInCashOnHand } from '../lib/budgetMath';
+import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, envelopeBalances, adjustmentMaps, isCarryover, signedBalance, includeInCashOnHand } from '../lib/budgetMath';
 import { computeSinkingEnvelope, advanceDueDate, dueLabel } from '../lib/sinkingFunds';
 
 const STATUS_LABEL = {
@@ -42,11 +42,12 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
   const month = monthKey();
   const income = monthlyIncomeTotal(budgetState);
   const budgetable = (budgetState.categories || []).filter((c) => c.id !== 'needs-review');
-  const effectiveBudgets = computeCategoryBudgets(budgetable, income);
+  const baseBudgets = computeCategoryBudgets(budgetable, income);
+  const effectiveBudgets = effectiveBudgetsForMonth(budgetable, baseBudgets, month);
   const allTimeSpent = netSpentByCategory(transactions);
   const monthSpent = netSpentByCategory(transactions.filter((t) => monthKey(t.date) === month));
   const { all: adjustAll, month: adjustMonth } = adjustmentMaps(budgetState.adjustments, month);
-  const balances = envelopeBalances(budgetable, effectiveBudgets, allTimeSpent, monthSpent, budgetState.settings?.startMonth, month, adjustAll, adjustMonth);
+  const balances = envelopeBalances(budgetable, baseBudgets, allTimeSpent, monthSpent, budgetState.settings?.startMonth, month, adjustAll, adjustMonth);
 
   const sinking = budgetable.filter((c) => c.kind === 'sinking');
   const computed = sinking.map((c) => {

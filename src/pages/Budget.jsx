@@ -6,6 +6,7 @@ import {
   monthlyIncomeTotal,
   sourceMonthly,
   computeCategoryBudgets,
+  effectiveBudgetsForMonth,
   envelopeBalances,
   adjustmentMaps,
   isCarryover,
@@ -21,6 +22,10 @@ function monthKey(dateStr = todayStr()) {
 export default function Budget({ budgetState, setBudgetState, transactions, recategorize, setExcluded, setTaxCategory, splitTransaction }) {
   const [expandedCategories, setExpandedCategories] = useState(() => new Set());
   const [showAdd, setShowAdd] = useState(false);
+  // "This month only" mode reveals a per-envelope override input that sets just
+  // the current month's amount, without changing the base plan or rewriting a
+  // sinking fund's accumulated history.
+  const [editMonthly, setEditMonthly] = useState(false);
 
   function toggleCategory(categoryId) {
     setExpandedCategories((prev) => {
@@ -48,11 +53,13 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
   // Needs Review isn't a real spending category — it's a flag, not something to
   // set a dollar target for — so it's excluded from the budget-bar list.
   const budgetableCategories = budgetState.categories.filter((c) => c.id !== 'needs-review');
-  const effectiveBudgets = computeCategoryBudgets(budgetableCategories, income);
+  const baseBudgets = computeCategoryBudgets(budgetableCategories, income);
+  // This month's amounts (base plan with any per-month overrides applied).
+  const effectiveBudgets = effectiveBudgetsForMonth(budgetableCategories, baseBudgets, month);
   const { all: adjustAll, month: adjustMonth } = adjustmentMaps(budgetState.adjustments, month);
   const balances = envelopeBalances(
     budgetableCategories,
-    effectiveBudgets,
+    baseBudgets,
     allTimeSpent,
     spentByCategory,
     budgetState.settings?.startMonth,
@@ -84,6 +91,23 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
       categories: prev.categories.map((c) => (c.id === categoryId ? { ...c, [field]: value } : c)),
     }));
   }
+
+  // Set (or clear, with '') this category's budgeted amount for just one month.
+  function setMonthlyOverride(categoryId, m, value) {
+    setBudgetState((prev) => ({
+      ...prev,
+      categories: prev.categories.map((c) => {
+        if (c.id !== categoryId) return c;
+        const mb = { ...(c.monthlyBudgets || {}) };
+        if (value === '' || value == null) delete mb[m];
+        else mb[m] = Number(value);
+        return { ...c, monthlyBudgets: mb };
+      }),
+    }));
+  }
+
+  // A friendly label for the current month, e.g. "September".
+  const monthLabel = new Date(`${month}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 
   function deleteCategory(categoryId) {
     setBudgetState((prev) => ({
@@ -290,6 +314,24 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
           a sinking fund to zero it out.
         </p>
 
+        <div className="budget-month-mode">
+          <button
+            type="button"
+            className={`secondary-btn${editMonthly ? ' active' : ''}`}
+            onClick={() => setEditMonthly((v) => !v)}
+            aria-pressed={editMonthly}
+          >
+            {editMonthly ? `✓ Adjusting ${monthLabel} only` : `Adjust ${monthLabel} only`}
+          </button>
+          {editMonthly && (
+            <span className="module-note">
+              Set an amount for <strong>{monthLabel}</strong> only. Your base plan is unchanged, and past months
+              keep the amounts they were funded at — so a sinking fund&apos;s balance won&apos;t jump. Clear the box to
+              fall back to the plan.
+            </span>
+          )}
+        </div>
+
         {groupOrder.map((group) => (
           <div className="category-group" key={group}>
             <h3 className="category-group-title">{group}</h3>
@@ -455,6 +497,27 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                     <div className="bar-track">
                       <div className={`bar-fill${over ? ' over' : ''}`} style={{ width: `${pct}%` }} />
                     </div>
+
+                    {editMonthly && (
+                      <div className="category-month-override">
+                        <span className="category-month-label">{monthLabel} only</span>
+                        <span className="category-type-value">
+                          $
+                          <input
+                            type="number"
+                            className="budget-input"
+                            value={c.monthlyBudgets?.[month] ?? ''}
+                            placeholder={`plan ${Number(baseBudgets[c.id] || 0).toFixed(0)}`}
+                            onChange={(e) => setMonthlyOverride(c.id, month, e.target.value)}
+                          />
+                        </span>
+                        {c.monthlyBudgets?.[month] != null && (
+                          <button type="button" className="link-btn" onClick={() => setMonthlyOverride(c.id, month, '')}>
+                            Reset to plan
+                          </button>
+                        )}
+                      </div>
+                    )}
 
                     <button
                       type="button"
