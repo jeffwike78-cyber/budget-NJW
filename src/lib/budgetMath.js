@@ -96,12 +96,33 @@ export function monthlyIncomeTotal(state) {
   return monthlyIncome(state?.income);
 }
 
+// Sum manual envelope adjustments (money moves) into per-category maps: one for
+// everything up to and including the current month (for carryover balances) and
+// one for just the current month (for monthly-reset envelopes). A positive
+// amount adds money into the envelope; negative pulls it out.
+export function adjustmentMaps(adjustments, currentMonth) {
+  const all = {};
+  const month = {};
+  for (const a of adjustments || []) {
+    const amt = Number(a?.amount || 0);
+    if (!a?.categoryId || !amt) continue;
+    const m = a.month || (a.createdAt ? String(a.createdAt).slice(0, 7) : currentMonth);
+    // Only count adjustments dated on or before the month being viewed.
+    if (m > currentMonth) continue;
+    all[a.categoryId] = (all[a.categoryId] || 0) + amt;
+    if (m === currentMonth) month[a.categoryId] = (month[a.categoryId] || 0) + amt;
+  }
+  return { all, month };
+}
+
 // The running "available" balance for each envelope, honoring its kind:
 //   - bills reset every month → available = this month's budget − spent this month
 //   - carryover envelopes keep a rolling balance → available =
 //       opening balance + (budget funded each month since the start) − all spending
 // `spentAll` / `spentMonth` are category→dollars maps (see netSpentByCategory).
-export function envelopeBalances(categories, effectiveBudgets, spentAll, spentMonth, startMonth, currentMonth) {
+// `adjustAll` / `adjustMonth` are manual money-move totals (see adjustmentMaps);
+// they add to the balance without being treated as spending or income.
+export function envelopeBalances(categories, effectiveBudgets, spentAll, spentMonth, startMonth, currentMonth, adjustAll = {}, adjustMonth = {}) {
   const monthsFunded = monthsInclusive(startMonth, currentMonth);
   const out = {};
   for (const c of categories) {
@@ -110,11 +131,11 @@ export function envelopeBalances(categories, effectiveBudgets, spentAll, spentMo
     const spentThisMonth = Number(spentMonth[c.id] || 0);
     if (carry) {
       const opening = Number(c.openingBalance || 0);
-      const funded = opening + budget * monthsFunded;
+      const funded = opening + budget * monthsFunded + Number(adjustAll[c.id] || 0);
       const spentToDate = Number(spentAll[c.id] || 0);
       out[c.id] = { carry: true, available: funded - spentToDate, spentThisMonth, budget };
     } else {
-      out[c.id] = { carry: false, available: budget - spentThisMonth, spentThisMonth, budget };
+      out[c.id] = { carry: false, available: budget + Number(adjustMonth[c.id] || 0) - spentThisMonth, spentThisMonth, budget };
     }
   }
   return out;

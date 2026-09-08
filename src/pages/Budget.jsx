@@ -7,6 +7,7 @@ import {
   sourceMonthly,
   computeCategoryBudgets,
   envelopeBalances,
+  adjustmentMaps,
   isCarryover,
   ENVELOPE_KINDS,
   INCOME_FREQUENCIES,
@@ -48,13 +49,16 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
   // set a dollar target for — so it's excluded from the budget-bar list.
   const budgetableCategories = budgetState.categories.filter((c) => c.id !== 'needs-review');
   const effectiveBudgets = computeCategoryBudgets(budgetableCategories, income);
+  const { all: adjustAll, month: adjustMonth } = adjustmentMaps(budgetState.adjustments, month);
   const balances = envelopeBalances(
     budgetableCategories,
     effectiveBudgets,
     allTimeSpent,
     spentByCategory,
     budgetState.settings?.startMonth,
-    month
+    month,
+    adjustAll,
+    adjustMonth
   );
   const hasRemainderCategory = budgetableCategories.some((c) => c.budgetType === 'remainder');
   const totalBudgeted = Object.values(effectiveBudgets).reduce((a, b) => a + b, 0);
