@@ -1,15 +1,16 @@
 -- Run this once in Supabase: Project → SQL Editor → New query → paste → Run.
 --
--- The app now has a login screen (Supabase Auth email/password) so the family
--- signs in to use it, but there is still ONE shared budget: everything lives in
--- one fixed row (or, for transactions, one shared table). The RLS policies below
--- use `using (true)` with no role clause, which means `to public` — i.e. both
--- the signed-in (authenticated) and anonymous (anon) roles pass them. So the
--- login gates the app's UI, not the database itself: the anon key ships in the
--- frontend bundle, so anyone with the Project URL + anon key could still reach
--- this data via the API directly. Treat the deployed URL as sensitive. (To lock
--- the database to signed-in users only, you'd change `to public` policies to
--- `to authenticated` — a later hardening step, not required for the app to work.)
+-- The app has a login screen (Supabase Auth). There is ONE shared budget:
+-- everything lives in one fixed row (or, for transactions, one shared table).
+-- The RLS policies below are scoped `to authenticated`, so ONLY signed-in users
+-- can read or write — the anonymous key that ships in the frontend bundle can no
+-- longer reach this data directly. Because any authenticated user can read the
+-- single shared row, you MUST also disable open sign-ups in Supabase
+-- (Authentication → Providers/Settings → turn off "Allow new users to sign up"),
+-- so only your own invited accounts exist. To harden an already-deployed
+-- database that used the old `to public` policies, run supabase/harden-rls.sql.
+-- The service_role key (server-side Edge Functions / Vercel API) bypasses RLS,
+-- so the Plaid sync keeps working.
 
 create table if not exists app_state (
   id text primary key default 'main',
@@ -20,14 +21,14 @@ create table if not exists app_state (
 
 alter table app_state enable row level security;
 
-create policy "anyone with the anon key can read" on app_state
-  for select using (true);
+create policy "signed-in read" on app_state
+  for select to authenticated using (true);
 
-create policy "anyone with the anon key can insert" on app_state
-  for insert with check (true);
+create policy "signed-in insert" on app_state
+  for insert to authenticated with check (true);
 
-create policy "anyone with the anon key can update" on app_state
-  for update using (true);
+create policy "signed-in update" on app_state
+  for update to authenticated using (true);
 
 -- Transactions get their own table (rather than living inside app_state's
 -- budget jsonb) so the Plaid sync can upsert/delete individual rows cleanly
@@ -53,17 +54,17 @@ create table if not exists budget_transactions (
 
 alter table budget_transactions enable row level security;
 
-create policy "anyone with the anon key can read transactions" on budget_transactions
-  for select using (true);
+create policy "signed-in read tx" on budget_transactions
+  for select to authenticated using (true);
 
-create policy "anyone with the anon key can insert transactions" on budget_transactions
-  for insert with check (true);
+create policy "signed-in insert tx" on budget_transactions
+  for insert to authenticated with check (true);
 
-create policy "anyone with the anon key can update transactions" on budget_transactions
-  for update using (true);
+create policy "signed-in update tx" on budget_transactions
+  for update to authenticated using (true);
 
-create policy "anyone with the anon key can delete transactions" on budget_transactions
-  for delete using (true);
+create policy "signed-in delete tx" on budget_transactions
+  for delete to authenticated using (true);
 
 -- Enables realtime updates (see src/lib/useBudgetTransactions.js) so a
 -- webhook-triggered Plaid sync shows up in the dashboard immediately,
@@ -114,5 +115,5 @@ create table if not exists investment_holdings (
 
 alter table investment_holdings enable row level security;
 
-create policy "anyone with the anon key can read holdings" on investment_holdings
-  for select using (true);
+create policy "signed-in read holdings" on investment_holdings
+  for select to authenticated using (true);
