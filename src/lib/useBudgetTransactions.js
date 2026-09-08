@@ -72,7 +72,13 @@ export function useBudgetTransactions() {
   }, []);
 
   useEffect(() => {
-    reload();
+    // Transactions are behind RLS scoped to signed-in users — only load once
+    // there's a session, and reload on sign-in. onAuthStateChange fires with the
+    // restored session on start and again on login.
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) reload();
+      else setLoading(false);
+    });
     let channel;
     try {
       channel = supabase
@@ -85,6 +91,7 @@ export function useBudgetTransactions() {
       console.error('Failed to subscribe to transaction changes:', err);
     }
     return () => {
+      sub?.subscription?.unsubscribe();
       if (channel) supabase.removeChannel(channel);
     };
   }, [reload]);

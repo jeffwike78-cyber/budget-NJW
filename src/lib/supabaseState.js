@@ -34,9 +34,18 @@ export function useSupabaseState(column, defaultValue, normalize) {
       setData(normalize ? normalize(resolved) : resolved);
       setLoading(false);
     }
-    load();
+    // The data is behind RLS scoped to signed-in users, so only query once
+    // there's a session. onAuthStateChange fires immediately with the restored
+    // session (or null) and again on login, so this both loads on start and
+    // refreshes right after sign-in.
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) return;
+      if (session) load();
+      else setLoading(false);
+    });
     return () => {
       cancelled = true;
+      sub?.subscription?.unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [column]);
