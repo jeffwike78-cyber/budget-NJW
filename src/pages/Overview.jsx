@@ -4,7 +4,7 @@ import { PlusIcon, BudgetIcon, AccountsIcon, ArrowUpRightIcon } from '../compone
 import { todayStr, todayLabel } from '../lib/storage';
 import { isPayrollDeposit } from '../lib/income';
 import { netSpentByCategory } from '../lib/spending';
-import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, signedBalance, includeInCashOnHand } from '../lib/budgetMath';
+import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, signedBalance } from '../lib/budgetMath';
 import { ageOfMoney, ageOfMoneyAdvice, ageOfMoneyStatus } from '../lib/ageOfMoney';
 import { projectCashflow } from '../lib/cashflow';
 import { creditCardStatus, formatDueDate } from '../lib/creditCard';
@@ -58,8 +58,12 @@ export default function Overview({ budgetState, setBudgetState, transactions, se
   const card = creditCardStatus(budgetState.settings, budgetState.accounts);
 
   // --- "Think rich" money-health metrics ---
-  // Cash on hand (the emergency-fund base): checking + savings by default.
-  const cashOnHand = budgetState.accounts.filter(includeInCashOnHand).reduce((s, a) => s + signedBalance(a), 0);
+  // Emergency-fund cash = every checking + savings account (liquid money you
+  // could tap in a pinch). By type, so it always includes savings, independent
+  // of the Envelopes "count as cash" toggle (which governs reconciliation).
+  const emergencyCash = budgetState.accounts
+    .filter((a) => a.type === 'checking' || a.type === 'savings')
+    .reduce((s, a) => s + signedBalance(a), 0);
 
   // Savings rate: kept / received. Use the most recent COMPLETED month when
   // there is one (stable), falling back to this month early on.
@@ -79,7 +83,7 @@ export default function Overview({ budgetState, setBudgetState, transactions, se
   // Emergency-fund runway: months of expenses your cash covers. Denominator is
   // planned monthly spend (fall back to recent actual if no plan).
   const monthlyExpenses = totalBudgeted > 0 ? totalBudgeted : prevFin.spending || thisFin.spending || 0;
-  const runwayMonths = monthlyExpenses > 0 ? cashOnHand / monthlyExpenses : null;
+  const runwayMonths = monthlyExpenses > 0 ? emergencyCash / monthlyExpenses : null;
 
   // Net-worth trend: snapshots recorded as the app is used (see effect below).
   const nwHistory = budgetState.netWorthHistory || {};
@@ -200,7 +204,7 @@ export default function Overview({ budgetState, setBudgetState, transactions, se
             <span className={`mh-value ${runwayMonths == null ? '' : runwayMonths >= 3 ? 'good' : runwayMonths >= 1 ? 'warn' : 'bad'}`}>
               {runwayMonths == null ? '—' : `${runwayMonths.toFixed(1)} mo`}
             </span>
-            <span className="mh-sub">{runwayMonths == null ? 'Set a budget to see this' : `${usd(cashOnHand)} cash · goal 3–6 mo`}</span>
+            <span className="mh-sub">{runwayMonths == null ? 'Set a budget to see this' : `${usd(emergencyCash)} in checking + savings · goal 3–6 mo`}</span>
           </div>
           <div className="mh-tile">
             <span className="mh-label">Net worth</span>
