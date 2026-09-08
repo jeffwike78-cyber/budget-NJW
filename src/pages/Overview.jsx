@@ -7,6 +7,7 @@ import { netSpentByCategory } from '../lib/spending';
 import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, signedBalance } from '../lib/budgetMath';
 import { ageOfMoney, ageOfMoneyAdvice, ageOfMoneyStatus } from '../lib/ageOfMoney';
 import { projectCashflow } from '../lib/cashflow';
+import { creditCardStatus, formatDueDate } from '../lib/creditCard';
 
 function shortDate(str) {
   return new Date(str + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -54,6 +55,7 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
   const incomeAhead = actualIncome - expectedIncome;
 
   const totalBalance = budgetState.accounts.reduce((sum, a) => sum + signedBalance(a), 0);
+  const card = creditCardStatus(budgetState.settings, budgetState.accounts);
 
   const chartMonths = lastNMonths(6);
   const chartData = chartMonths.map((key) => {
@@ -98,6 +100,25 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
   return (
     <>
       <h1 className="page-title">Welcome!</h1>
+
+      {card.configured && (
+        <section className={`card cc-reminder ${card.dueSoon ? 'cc-reminder-soon' : ''}`}>
+          <div className="cc-reminder-row">
+            <span className="cc-reminder-icon" aria-hidden="true">💳</span>
+            <div className="cc-reminder-text">
+              <span className="cc-reminder-title">
+                {card.accountName} payment due {formatDueDate(card.dueDate)}
+                {card.daysUntilDue === 0 ? ' — today' : ` — in ${card.daysUntilDue} day${card.daysUntilDue === 1 ? '' : 's'}`}
+              </span>
+              <span className="cc-reminder-sub">
+                {card.balance != null && <>Balance to pay: <strong>{usd(card.balance)}</strong>. </>}
+                {card.statementDate != null && <>Statement closes {formatDueDate(card.statementDate)} (in {card.daysUntilStatement} day{card.daysUntilStatement === 1 ? '' : 's'}).</>}
+              </span>
+            </div>
+            {card.dueSoon && <span className="pill pill-warn">Due soon</span>}
+          </div>
+        </section>
+      )}
 
       <section className={`card aom-card aom-${ageStatus}`}>
         <div className="aom-top">
