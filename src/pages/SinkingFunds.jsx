@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { todayStr } from '../lib/storage';
 import { netSpentByCategory } from '../lib/spending';
-import { monthlyIncomeTotal, computeCategoryBudgets, envelopeBalances, isCarryover, signedBalance, includeInCashOnHand } from '../lib/budgetMath';
+import { monthlyIncomeTotal, computeCategoryBudgets, envelopeBalances, adjustmentMaps, isCarryover, signedBalance, includeInCashOnHand } from '../lib/budgetMath';
 import { computeSinkingEnvelope, advanceDueDate, dueLabel } from '../lib/sinkingFunds';
 
 const STATUS_LABEL = {
@@ -37,13 +37,16 @@ function monthKey(dateStr = todayStr()) {
 // envelope, so the two stay in sync.
 export default function SinkingFunds({ budgetState, setBudgetState, transactions }) {
   const [showBills, setShowBills] = useState(false);
+  const [move, setMove] = useState({ from: '', to: '', amount: '', note: '' });
+  const [moveMsg, setMoveMsg] = useState(null);
   const month = monthKey();
   const income = monthlyIncomeTotal(budgetState);
   const budgetable = (budgetState.categories || []).filter((c) => c.id !== 'needs-review');
   const effectiveBudgets = computeCategoryBudgets(budgetable, income);
   const allTimeSpent = netSpentByCategory(transactions);
   const monthSpent = netSpentByCategory(transactions.filter((t) => monthKey(t.date) === month));
-  const balances = envelopeBalances(budgetable, effectiveBudgets, allTimeSpent, monthSpent, budgetState.settings?.startMonth, month);
+  const { all: adjustAll, month: adjustMonth } = adjustmentMaps(budgetState.adjustments, month);
+  const balances = envelopeBalances(budgetable, effectiveBudgets, allTimeSpent, monthSpent, budgetState.settings?.startMonth, month, adjustAll, adjustMonth);
 
   const sinking = budgetable.filter((c) => c.kind === 'sinking');
   const computed = sinking.map((c) => {
@@ -151,6 +154,52 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
     updateFund(f.envelope.id, { nextDueDate: advanceDueDate(f.nextDueDate, f.envelope.frequency) });
   }
 
+  const nameOf = (id) => budgetable.find((c) => c.id === id)?.name || 'an envelope';
+
+  // Record a manual money move. "To" gets +amount; if a "From" envelope is
+  // chosen, it gets −amount (a true transfer, cash-neutral). With no "From",
+  // it's a top-up from cash you already hold. Both legs share a moveId so the
+  // pair can be undone together.
+  function submitMove(e) {
+    e.preventDefault();
+    setMoveMsg(null);
+    const amount = Number(move.amount);
+    if (!move.to) return setMoveMsg('Pick an envelope to move money into.');
+    if (!(amount > 0)) return setMoveMsg('Enter an amount greater than zero.');
+    if (move.from && move.from === move.to) return setMoveMsg('Pick two different envelopes.');
+    const moveId = crypto.randomUUID();
+    const stamp = new Date().toISOString();
+    const entries = [
+      { id: crypto.randomUUID(), moveId, month, categoryId: move.to, amount, note: move.note?.trim() || null, from: move.from || null, createdAt: stamp },
+    ];
+    if (move.from) {
+      entries.push({ id: crypto.randomUUID(), moveId, month, categoryId: move.from, amount: -amount, note: move.note?.trim() || null, from: null, createdAt: stamp });
+    }
+    setBudgetState((prev) => ({ ...prev, adjustments: [...(prev.adjustments || []), ...entries] }));
+    setMoveMsg(
+      move.from
+        ? `Moved ${money(amount)} from ${nameOf(move.from)} to ${nameOf(move.to)} ✓`
+        : `Added ${money(amount)} to ${nameOf(move.to)} ✓`
+    );
+    setMove({ from: '', to: '', amount: '', note: '' });
+  }
+
+  function undoMove(moveId) {
+    setBudgetState((prev) => ({ ...prev, adjustments: (prev.adjustments || []).filter((a) => a.moveId !== moveId) }));
+  }
+
+  // Recent moves, newest first, grouped by moveId so a transfer shows as one row.
+  const moveLog = [];
+  const seen = new Set();
+  for (const a of [...(budgetState.adjustments || [])].reverse()) {
+    if (seen.has(a.moveId)) continue;
+    seen.add(a.moveId);
+    const legs = (budgetState.adjustments || []).filter((x) => x.moveId === a.moveId);
+    const into = legs.find((x) => x.amount > 0);
+    const outOf = legs.find((x) => x.amount < 0);
+    moveLog.push({ moveId: a.moveId, into, outOf, note: a.note, createdAt: a.createdAt });
+  }
+
   return (
     <>
       <h1 className="page-title">Envelopes</h1>
@@ -192,6 +241,84 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
             </>
           )}
         </p>
+      </section>
+
+      <section className="card">
+        <div className="card-header">
+          <h2>Move money</h2>
+          <span className="pill">Cover an overspend · top up a fund</span>
+        </div>
+        <p className="module-note">
+          Shuffle money between envelopes without it counting as spending or income. Moving <em>from</em> one
+          envelope <em>to</em> another is cash-neutral (great for covering an over-budget envelope from one with
+          room). Leave <strong>From</strong> blank to add cash you already hold into an envelope.
+        </p>
+        <form className="move-form" onSubmit={submitMove}>
+          <label className="move-field">
+            <span>From (optional)</span>
+            <select value={move.from} onChange={(e) => setMove((m) => ({ ...m, from: e.target.value }))}>
+              <option value="">— cash on hand —</option>
+              {budgetable.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="move-field">
+            <span>To</span>
+            <select value={move.to} onChange={(e) => setMove((m) => ({ ...m, to: e.target.value }))}>
+              <option value="" disabled>Choose envelope…</option>
+              {budgetable.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="move-field">
+            <span>Amount</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              placeholder="$"
+              value={move.amount}
+              onChange={(e) => setMove((m) => ({ ...m, amount: e.target.value }))}
+            />
+          </label>
+          <label className="move-field move-field-wide">
+            <span>Note (optional)</span>
+            <input
+              type="text"
+              placeholder="e.g. cover August life insurance"
+              value={move.note}
+              onChange={(e) => setMove((m) => ({ ...m, note: e.target.value }))}
+            />
+          </label>
+          <button type="submit" className="primary-btn">Move</button>
+        </form>
+        {moveMsg && <p className="module-note form-ok" role="status">{moveMsg}</p>}
+        {moveLog.length > 0 && (
+          <div className="move-log">
+            <div className="move-log-title">Recent moves</div>
+            <ul>
+              {moveLog.slice(0, 8).map((mv) => (
+                <li key={mv.moveId} className="move-log-row">
+                  <span className="move-log-desc">
+                    {mv.outOf ? (
+                      <>
+                        {money(mv.into?.amount || 0)}: <strong>{nameOf(mv.outOf.categoryId)}</strong> → <strong>{nameOf(mv.into?.categoryId)}</strong>
+                      </>
+                    ) : (
+                      <>
+                        {money(mv.into?.amount || 0)} into <strong>{nameOf(mv.into?.categoryId)}</strong> <span className="move-log-src">(from cash)</span>
+                      </>
+                    )}
+                    {mv.note && <span className="move-log-note"> · {mv.note}</span>}
+                  </span>
+                  <button type="button" className="link-btn danger" onClick={() => undoMove(mv.moveId)}>Undo</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
 
       <h2 className="section-title">Monthly Spending</h2>

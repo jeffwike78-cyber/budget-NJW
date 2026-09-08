@@ -16,6 +16,10 @@ const DEFAULT_STATE = {
   incomeSources: DEFAULT_INCOME_SOURCES,
   income: DEFAULT_INCOME, // legacy fallback
   merchantMemory: {}, // { normalizedDescription: categoryId } — learned from past corrections
+  // Manual envelope adjustments / money moves — not spending or income, just
+  // earmarking cash between envelopes (e.g. cover an overspend, top up a fund).
+  // Each: { id, moveId, month, categoryId, amount (+ into envelope / − out), note, from }
+  adjustments: [],
   // The month the envelope ledger starts accruing from (YYYY-MM). Carryover
   // balances = opening balance + budget funded each month since this + spending.
   settings: { startMonth: '2026-09', appName: 'Family Budget' },
@@ -47,6 +51,7 @@ function normalizeBudget(b) {
     sinkingFunds: nonEmpty(b?.sinkingFunds, DEFAULT_STATE.sinkingFunds),
     incomeSources: nonEmpty(b?.incomeSources, DEFAULT_STATE.incomeSources),
     merchantMemory: b?.merchantMemory || {},
+    adjustments: Array.isArray(b?.adjustments) ? b.adjustments : [],
     settings: { ...DEFAULT_STATE.settings, ...(b?.settings || {}) },
   };
 }
