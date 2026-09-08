@@ -20,6 +20,9 @@ const DEFAULT_STATE = {
   // earmarking cash between envelopes (e.g. cover an overspend, top up a fund).
   // Each: { id, moveId, month, categoryId, amount (+ into envelope / − out), note, from }
   adjustments: [],
+  // Saved AI monthly analyses, newest last: { month, generatedAt, model, report }.
+  // Kept so each new report can reference past ones and observe longer trends.
+  analyses: [],
   // The month the envelope ledger starts accruing from (YYYY-MM). Carryover
   // balances = opening balance + budget funded each month since this + spending.
   settings: { startMonth: '2026-09', appName: 'Family Budget' },
@@ -52,6 +55,7 @@ function normalizeBudget(b) {
     incomeSources: nonEmpty(b?.incomeSources, DEFAULT_STATE.incomeSources),
     merchantMemory: b?.merchantMemory || {},
     adjustments: Array.isArray(b?.adjustments) ? b.adjustments : [],
+    analyses: Array.isArray(b?.analyses) ? b.analyses : [],
     settings: { ...DEFAULT_STATE.settings, ...(b?.settings || {}) },
   };
 }
