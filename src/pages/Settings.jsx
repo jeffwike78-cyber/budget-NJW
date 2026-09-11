@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { makeDefaultBudget } from '../lib/useBudgetState';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../lib/useAuth';
+import { listBudgetVersions, summarizeBudget } from '../lib/budgetHistory';
 
 // One place for the knobs that don't belong on a specific page: what the app
 // is called, when the envelope ledger starts counting, how you pay for things,
@@ -136,6 +137,13 @@ export default function Settings({ budgetState, setBudgetState, setView }) {
         </button>
       </section>
 
+      <section className="card">
+        <div className="card-header">
+          <h2>Budget history &amp; restore</h2>
+        </div>
+        <BudgetHistory setBudgetState={setBudgetState} />
+      </section>
+
       <section className="card danger-zone">
         <div className="card-header">
           <h2>Danger zone</h2>
@@ -177,6 +185,98 @@ export default function Settings({ budgetState, setBudgetState, setView }) {
           </button>
         )}
       </section>
+    </>
+  );
+}
+
+function fmtWhen(iso) {
+  try {
+    return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  } catch {
+    return iso;
+  }
+}
+
+// Lists saved budget versions (from app_state_history) and lets you roll back to
+// one. Restoring first snapshots the current version, so it's reversible.
+function BudgetHistory({ setBudgetState }) {
+  const [state, setState] = useState({ loading: true, installed: true, versions: [] });
+  const [openId, setOpenId] = useState(null);
+  const [msg, setMsg] = useState(null);
+
+  const load = useCallback(async () => {
+    setState((s) => ({ ...s, loading: true }));
+    const { installed, versions } = await listBudgetVersions(30);
+    setState({ loading: false, installed, versions });
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function restore(v) {
+    const when = fmtWhen(v.saved_at);
+    if (!window.confirm(`Restore the budget from ${when}? Your current budget is saved to history first, so you can undo this.`)) return;
+    setMsg(null);
+    setBudgetState(v.budget);
+    setMsg(`Restored the version from ${when} ✓`);
+    // The restore just created a new history entry (the prior version), so refresh.
+    setTimeout(load, 600);
+  }
+
+  if (state.loading) return <p className="module-note">Loading saved versions…</p>;
+
+  if (!state.installed) {
+    return (
+      <p className="module-note">
+        Version history isn&apos;t turned on yet. Run <code>supabase/budget-history.sql</code> once in Supabase →
+        SQL Editor, and every budget change from then on will be listed here to restore with one tap.
+      </p>
+    );
+  }
+
+  return (
+    <>
+      <p className="module-note">
+        Every time the budget changes, the previous version is saved here automatically. Tap <strong>Restore</strong>{' '}
+        to roll back — your current version is snapshotted first, so a restore can be undone.
+      </p>
+      {msg && <p className="module-note form-ok" role="status">{msg}</p>}
+      {state.versions.length === 0 ? (
+        <p className="module-note">No saved versions yet. They&apos;ll appear here the next time the budget changes.</p>
+      ) : (
+        <ul className="history-list">
+          {state.versions.map((v) => {
+            const s = summarizeBudget(v.budget);
+            const open = openId === v.id;
+            return (
+              <li key={v.id} className="history-row">
+                <div className="history-main">
+                  <div className="history-info">
+                    <span className="history-when">{fmtWhen(v.saved_at)}</span>
+                    <span className="history-summary">
+                      {s.categoryCount} envelopes · {s.accountCount} accounts · ${s.monthlyFixed.toLocaleString()}/mo fixed
+                    </span>
+                  </div>
+                  <div className="history-actions">
+                    <button type="button" className="link-btn" onClick={() => setOpenId(open ? null : v.id)}>
+                      {open ? 'Hide' : 'Preview'}
+                    </button>
+                    <button type="button" className="secondary-btn" onClick={() => restore(v)}>
+                      Restore
+                    </button>
+                  </div>
+                </div>
+                {open && (
+                  <div className="history-preview">
+                    {s.names.length ? s.names.join(' · ') : 'No envelopes in this version.'}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </>
   );
 }
