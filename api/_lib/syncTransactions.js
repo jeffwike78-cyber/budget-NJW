@@ -248,7 +248,27 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
   }
   const item = claimed[0];
 
+  // Soft time budget: the serverless function is capped at 60s. The account and
+  // transaction writes below are what matter and finish first; the optional
+  // Gmail receipt lookups at the end can be slow (and are currently slow to fail
+  // when a Gmail token is expired), so we skip them once we're near the limit
+  // rather than let them push the whole request into a 504.
+  const startedAt = Date.now();
+  const RECEIPT_LOOKUP_DEADLINE_MS = 40000;
+
   try {
+    // Populate this bank's accounts FIRST, before the (slow) transaction pull.
+    // Account list + balances don't depend on transactions, so doing this up
+    // front means the accounts land in the budget even if the transaction sync
+    // later fails, or the serverless function hits its time limit partway
+    // through. This is what makes a reconnected card/account show up reliably.
+    // It only adds/updates accounts — it never removes any.
+    try {
+      await syncBalance(supabaseAdmin, plaid, item);
+    } catch (err) {
+      console.error('Failed to sync balance:', err?.response?.data ?? err?.message ?? err);
+    }
+
     let cursor = item.sync_cursor;
     const added = [];
     const modified = [];
@@ -327,16 +347,14 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
       console.error('Receipt match phase failed:', err?.message || err);
     }
 
-    try {
-      await syncBalance(supabaseAdmin, plaid, item);
-    } catch (err) {
-      console.error('Failed to sync balance:', err?.response?.data ?? err?.message ?? err);
-    }
-
-    try {
-      await autoLookupReceipts(supabaseAdmin, needsReviewPlaidIds, categories);
-    } catch (err) {
-      console.error('Auto receipt lookup phase failed:', err?.message || err);
+    if (Date.now() - startedAt < RECEIPT_LOOKUP_DEADLINE_MS) {
+      try {
+        await autoLookupReceipts(supabaseAdmin, needsReviewPlaidIds, categories);
+      } catch (err) {
+        console.error('Auto receipt lookup phase failed:', err?.message || err);
+      }
+    } else {
+      console.warn('Skipping receipt lookups: near function time limit');
     }
 
     // Clear any prior sync error now that this bank synced cleanly.
