@@ -278,77 +278,103 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
     const categories = (budget.categories || []).filter((c) => c.id !== 'needs-review');
 
     let cursor = item.sync_cursor;
-    let hasMore = true;
     const addedNew = [];
     const needsReviewPlaidIds = [];
     let syncedCount = 0;
     let removedCount = 0;
 
-    // Process each page of changes as it arrives and save the cursor right
-    // after, so partial progress is durable: if the function later times out,
-    // the next sync resumes from here instead of re-pulling the whole history
-    // (which was causing repeated 60s timeouts and a "last synced" that never
-    // advanced). Writes are batched — one upsert/delete per page, not per row.
-    try {
-      while (hasMore) {
-        const resp = await plaid.transactionsSync({ access_token: item.access_token, cursor: cursor || undefined });
-        const pageChanged = [...resp.data.added, ...resp.data.modified].filter(withinCutoff);
-        const { assignments, businessSet } = await assignCategories(supabaseAdmin, pageChanged, categories);
+    // Turn a Plaid transaction into a DB row. `forInsert` controls the boolean
+    // flags: a brand-new row always carries them so a batched upsert has uniform
+    // columns (Postgres rejects a mixed batch — some rows with the column, some
+    // without — by writing NULL into the NOT-NULL `business`/`excluded`
+    // columns). A MODIFIED row omits a false flag instead, so a re-sync can't
+    // clear a `business`/`excluded` flag the user set by hand.
+    const buildRow = (txn, assignments, businessSet, forInsert) => {
+      // A transfer or card payoff isn't spending: leave it uncategorized and
+      // Ignored so it never hits an envelope or the Needs Review queue.
+      const isXfer = isTransferOrCardPayment(txn);
+      const categoryId = isXfer ? null : assignments[txn.transaction_id] || 'needs-review';
+      if (!isXfer && categoryId === 'needs-review') needsReviewPlaidIds.push(txn.transaction_id);
+      const business = businessSet.has(txn.transaction_id);
+      const row = {
+        plaid_transaction_id: txn.transaction_id,
+        date: txn.date,
+        description: txn.merchant_name || txn.name,
+        amount: txn.amount, // Plaid: positive = money out, matches this app's convention
+        category_id: categoryId,
+        // Route each transaction to its own account (a bank can have several).
+        account_id: txn.account_id ? budgetAccountId(txn.account_id) : item.account_id,
+        source: 'plaid',
+      };
+      if (forInsert || business) row.business = business;
+      if (forInsert || isXfer) row.excluded = isXfer;
+      return row;
+    };
 
-        const rows = [];
-        for (const txn of pageChanged) {
-          // A transfer or card payoff isn't spending: leave it uncategorized and
-          // Ignored so it never hits an envelope or the Needs Review queue.
-          const isXfer = isTransferOrCardPayment(txn);
-          const categoryId = isXfer ? null : assignments[txn.transaction_id] || 'needs-review';
-          if (!isXfer && categoryId === 'needs-review') needsReviewPlaidIds.push(txn.transaction_id);
-          const row = {
-            plaid_transaction_id: txn.transaction_id,
-            date: txn.date,
-            description: txn.merchant_name || txn.name,
-            amount: txn.amount, // Plaid: positive = money out, matches this app's convention
-            category_id: categoryId,
-            // Route each transaction to its own account (a bank can have several).
-            account_id: txn.account_id ? budgetAccountId(txn.account_id) : item.account_id,
-            source: 'plaid',
-          };
-          // Only set business when detected — never write false, so a re-sync of a
-          // modified transaction can't clear a flag the user set by hand.
-          if (businessSet.has(txn.transaction_id)) row.business = true;
-          if (isXfer) row.excluded = true;
-          rows.push(row);
+    // Process each page as it arrives and save the cursor right after, so
+    // partial progress is durable: if the function later times out, the next
+    // sync resumes from here instead of re-pulling the whole history (which was
+    // causing repeated 60s timeouts and a "last synced" that never advanced).
+    let hasMore = true;
+    let mutationRetries = 0;
+    while (hasMore) {
+      let resp;
+      try {
+        resp = await plaid.transactionsSync({ access_token: item.access_token, cursor: cursor || undefined });
+      } catch (txErr) {
+        // Plaid can report that the underlying data changed mid-pagination
+        // (common while a freshly linked account is still backfilling). Its
+        // guidance is to restart from the last persisted cursor — which we have,
+        // since we save it after every page — so just retry rather than failing.
+        if (txErr?.response?.data?.error_code === 'TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION' && mutationRetries < 5) {
+          mutationRetries += 1;
+          continue;
         }
-        if (rows.length > 0) {
-          const { error } = await supabaseAdmin
-            .from('budget_transactions')
-            .upsert(rows, { onConflict: 'plaid_transaction_id' });
-          if (error) console.error('Failed to upsert transactions:', error);
-        }
-
-        const removeIds = resp.data.removed.map((t) => t.transaction_id);
-        if (removeIds.length > 0) {
-          const { error } = await supabaseAdmin
-            .from('budget_transactions')
-            .delete()
-            .in('plaid_transaction_id', removeIds);
-          if (error) console.error('Failed to delete removed transactions:', error);
-        }
-
-        hasMore = resp.data.has_more;
-        cursor = resp.data.next_cursor;
-        await supabaseAdmin.from('plaid_items').update({ sync_cursor: cursor }).eq('id', itemRowId);
-
-        addedNew.push(...resp.data.added.filter(withinCutoff));
-        syncedCount += pageChanged.length;
-        removedCount += removeIds.length;
+        // Other transaction failures (e.g. a stale login → NO_ACCOUNTS): the
+        // account list is usually still readable, so record it (the accounts are
+        // already populated above) then let the failure flag the item.
+        await recordAccountLabels(supabaseAdmin, plaid, item);
+        throw txErr;
       }
-    } catch (txErr) {
-      // The transactions product failed (e.g. a stale login → NO_ACCOUNTS), but
-      // the account list is usually still readable — record it so the user can
-      // see which account this connection is before reconnecting it. Then let
-      // the failure propagate so the caller flags the item.
-      await recordAccountLabels(supabaseAdmin, plaid, item);
-      throw txErr;
+
+      const pageAdded = resp.data.added.filter(withinCutoff);
+      const pageModified = resp.data.modified.filter(withinCutoff);
+      const { assignments, businessSet } = await assignCategories(supabaseAdmin, [...pageAdded, ...pageModified], categories);
+
+      // New rows share the same columns → one batched upsert per page.
+      const insertRows = pageAdded.map((t) => buildRow(t, assignments, businessSet, true));
+      if (insertRows.length > 0) {
+        const { error } = await supabaseAdmin
+          .from('budget_transactions')
+          .upsert(insertRows, { onConflict: 'plaid_transaction_id' });
+        if (error) console.error('Failed to upsert transactions:', error);
+      }
+
+      // Modified rows upsert individually so an omitted false flag can't clear a
+      // flag the user set on the existing row.
+      for (const t of pageModified) {
+        const { error } = await supabaseAdmin
+          .from('budget_transactions')
+          .upsert(buildRow(t, assignments, businessSet, false), { onConflict: 'plaid_transaction_id' });
+        if (error) console.error('Failed to upsert transaction:', error);
+      }
+
+      const removeIds = resp.data.removed.map((t) => t.transaction_id);
+      if (removeIds.length > 0) {
+        const { error } = await supabaseAdmin
+          .from('budget_transactions')
+          .delete()
+          .in('plaid_transaction_id', removeIds);
+        if (error) console.error('Failed to delete removed transactions:', error);
+      }
+
+      hasMore = resp.data.has_more;
+      cursor = resp.data.next_cursor;
+      await supabaseAdmin.from('plaid_items').update({ sync_cursor: cursor }).eq('id', itemRowId);
+
+      addedNew.push(...pageAdded);
+      syncedCount += pageAdded.length + pageModified.length;
+      removedCount += removeIds.length;
     }
 
     try {
