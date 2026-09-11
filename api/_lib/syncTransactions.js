@@ -278,6 +278,15 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
     const withinCutoff = (t) => !cutoff || t.date >= cutoff;
     const categories = (budget.categories || []).filter((c) => c.id !== 'needs-review');
 
+    // Accounts the user flagged "balance only" (e.g. savings): keep refreshing
+    // their balance (done in syncBalance above) but don't import their
+    // transactions. Drop any that were imported before the flag was set.
+    const balanceOnlyIds = new Set((budget.accounts || []).filter((a) => a.balanceOnly).map((a) => a.id));
+    const inScope = (t) => !balanceOnlyIds.has(t.account_id ? budgetAccountId(t.account_id) : item.account_id);
+    if (balanceOnlyIds.size > 0) {
+      await supabaseAdmin.from('budget_transactions').delete().eq('source', 'plaid').in('account_id', [...balanceOnlyIds]);
+    }
+
     const startCursor = item.sync_cursor;
     let cursor = startCursor;
     const addedNew = [];
@@ -342,8 +351,8 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
         throw txErr;
       }
 
-      const pageAdded = resp.data.added.filter(withinCutoff);
-      const pageModified = resp.data.modified.filter(withinCutoff);
+      const pageAdded = resp.data.added.filter(withinCutoff).filter(inScope);
+      const pageModified = resp.data.modified.filter(withinCutoff).filter(inScope);
       const { assignments, businessSet } = await assignCategories(supabaseAdmin, [...pageAdded, ...pageModified], categories);
 
       // New rows share the same columns → one batched upsert per page.
