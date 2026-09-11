@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import BarChart from '../components/BarChart';
 import { PlusIcon, BudgetIcon, AccountsIcon, ArrowUpRightIcon } from '../components/icons';
 import { todayStr, todayLabel } from '../lib/storage';
@@ -32,7 +32,7 @@ function lastNMonths(n) {
   return out;
 }
 
-export default function Overview({ budgetState, setBudgetState, transactions, setView, onQuickScan }) {
+export default function Overview({ budgetState, transactions, setView, onQuickScan }) {
   const [showSchedule, setShowSchedule] = useState(false);
   const today = todayStr();
   const month = monthKey(today);
@@ -85,25 +85,16 @@ export default function Overview({ budgetState, setBudgetState, transactions, se
   const monthlyExpenses = totalBudgeted > 0 ? totalBudgeted : prevFin.spending || thisFin.spending || 0;
   const runwayMonths = monthlyExpenses > 0 ? emergencyCash / monthlyExpenses : null;
 
-  // Net-worth trend: snapshots recorded as the app is used (see effect below).
+  // Net-worth trend: show whatever monthly snapshots have been recorded, plus
+  // this month's live value. We deliberately do NOT auto-save a snapshot from
+  // this page — writing the whole shared budget from a screen that only displays
+  // it risks a stale tab clobbering everyone's data. Snapshots are recorded
+  // safely elsewhere (piggybacked on real budget saves).
   const nwHistory = budgetState.netWorthHistory || {};
   const nwKeys = Object.keys({ ...nwHistory, [month]: totalBalance }).sort();
   const nwSeries = nwKeys.map((k) => (k === month ? Math.round(totalBalance) : Math.round(nwHistory[k])));
   const nwFirst = nwSeries[0];
   const nwChange = nwSeries.length > 1 ? nwSeries[nwSeries.length - 1] - nwFirst : null;
-
-  // Record/refresh this month's net-worth snapshot when it changes (once), so
-  // the trend accumulates without a manual step. Guarded to avoid a write loop.
-  useEffect(() => {
-    if (!setBudgetState) return;
-    const rounded = Math.round(totalBalance);
-    if (nwHistory[month] === rounded) return;
-    setBudgetState((prev) => ({
-      ...prev,
-      netWorthHistory: { ...(prev.netWorthHistory || {}), [month]: rounded },
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month, totalBalance]);
 
   const chartMonths = lastNMonths(6);
   const chartData = chartMonths.map((key) => {
