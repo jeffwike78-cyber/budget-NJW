@@ -1,6 +1,6 @@
 import { getPlaidClient } from '../_lib/plaidClient.js';
 import { getSupabaseAdmin } from '../_lib/supabaseAdmin.js';
-import { removeAccounts, removePlaidStatus } from '../_lib/appState.js';
+import { removeAccountsByItem, removePlaidStatus } from '../_lib/appState.js';
 import { parseBody, plaidErrorMessage } from '../_lib/http.js';
 
 export const config = { maxDuration: 30 };
@@ -41,8 +41,11 @@ export default async function handler(req, res) {
     }
 
     const ids = [...accountIds];
-    await admin.from('budget_transactions').delete().eq('source', 'plaid').in('account_id', ids);
-    await removeAccounts(admin, ids);
+    // Remove the bank's account tiles by item tag (works even when the login is
+    // dead and accountsGet above returned nothing) plus the ids we could gather.
+    const removedIds = await removeAccountsByItem(admin, itemId, ids);
+    const txIds = [...new Set([...ids, ...removedIds])];
+    await admin.from('budget_transactions').delete().eq('source', 'plaid').in('account_id', txIds);
     await admin.from('plaid_items').delete().eq('id', itemId);
     await removePlaidStatus(admin, itemId);
 

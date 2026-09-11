@@ -191,6 +191,7 @@ async function syncBalance(supabaseAdmin, plaid, item) {
     name: `${item.institution_name || 'Bank'} · ${a.name || a.official_name || a.subtype || 'Account'}${a.mask ? ` ••${a.mask}` : ''}`,
     type: mapAccountType(a),
     balance: accountBalance(a),
+    plaidItemId: item.id,
   }));
   await upsertPlaidAccounts(supabaseAdmin, list);
   try {

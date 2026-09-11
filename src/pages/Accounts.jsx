@@ -14,6 +14,20 @@ const TYPE_LABEL = {
   liability: 'loan / liability',
 };
 
+// Errors that clear up on their own (the bank is briefly unreachable, or Plaid
+// is still settling a freshly linked account's data). These should NOT tell the
+// user to reconnect — reconnecting doesn't help and can create duplicate
+// accounts. A plain "still importing, will retry" note is shown instead.
+const TRANSIENT_ERROR_CODES = new Set([
+  'TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION',
+  'INSTITUTION_NOT_RESPONDING',
+  'INSTITUTION_NOT_AVAILABLE',
+  'INSTITUTION_DOWN',
+  'INTERNAL_SERVER_ERROR',
+  'RATE_LIMIT_EXCEEDED',
+  'PRODUCT_NOT_READY',
+]);
+
 function money(n) {
   const v = Number(n || 0);
   return `${v < 0 ? '-' : ''}$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -189,7 +203,13 @@ export default function Accounts({ budgetState, setBudgetState }) {
                     </span>
                   )}
                   <span className="bank-synced">Last synced {timeAgo(b.lastSyncedAt)}</span>
-                  {b.lastError && (
+                  {b.lastError && TRANSIENT_ERROR_CODES.has(b.lastErrorCode) && (
+                    <span className="bank-synced">
+                      ⏳ Still importing — the bank’s data is settling. This retries on its own;
+                      you can also tap <strong>Sync now</strong> again in a little while.
+                    </span>
+                  )}
+                  {b.lastError && !TRANSIENT_ERROR_CODES.has(b.lastErrorCode) && (
                     <span className="bank-error">
                       ⚠ {b.lastError} Tap <strong>Reconnect</strong> to fix it — your imported
                       transactions are kept.
@@ -197,7 +217,7 @@ export default function Accounts({ budgetState, setBudgetState }) {
                   )}
                 </div>
                 <div className="bank-row-actions">
-                  {b.lastError && (
+                  {b.lastError && !TRANSIENT_ERROR_CODES.has(b.lastErrorCode) && (
                     <button
                       type="button"
                       className="primary-btn"
