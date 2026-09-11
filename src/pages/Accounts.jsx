@@ -26,6 +26,7 @@ const TRANSIENT_ERROR_CODES = new Set([
   'INTERNAL_SERVER_ERROR',
   'RATE_LIMIT_EXCEEDED',
   'PRODUCT_NOT_READY',
+  'PLAID_GATEWAY_TIMEOUT',
 ]);
 
 function money(n) {

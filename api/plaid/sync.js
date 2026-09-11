@@ -37,7 +37,13 @@ export default async function handler(req, res) {
         results[row.id] = await syncItem(admin, plaid, row.id);
       } catch (itemErr) {
         const message = plaidErrorMessage(itemErr, 'This bank could not be synced.');
-        const code = itemErr?.response?.data?.error_code || null;
+        // A Plaid/institution gateway timeout (HTTP 504/503, or a socket
+        // timeout) has no Plaid error_code, but it's transient — surface it with
+        // a sentinel code so the UI shows a calm "still importing" note instead
+        // of telling the user to reconnect.
+        const status = itemErr?.response?.status;
+        const isTimeout = status === 504 || status === 503 || /timeout|ETIMEDOUT|ECONNABORTED/i.test(itemErr?.message || '');
+        const code = itemErr?.response?.data?.error_code || (isTimeout ? 'PLAID_GATEWAY_TIMEOUT' : null);
         console.error(`sync failed for item ${row.id}:`, itemErr?.response?.data ?? itemErr?.message ?? itemErr);
         errors[row.id] = message;
         try {
