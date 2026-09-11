@@ -248,21 +248,99 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
   }
   const item = claimed[0];
 
-  try {
-    let cursor = item.sync_cursor;
-    const added = [];
-    const modified = [];
-    const removed = [];
-    let hasMore = true;
+  // Soft time budget: the serverless function is capped at 60s. The account and
+  // transaction writes below are what matter and finish first; the optional
+  // Gmail receipt lookups at the end can be slow (and are currently slow to fail
+  // when a Gmail token is expired), so we skip them once we're near the limit
+  // rather than let them push the whole request into a 504.
+  const startedAt = Date.now();
+  const RECEIPT_LOOKUP_DEADLINE_MS = 40000;
 
+  try {
+    // Populate this bank's accounts FIRST, before the (slow) transaction pull.
+    // Account list + balances don't depend on transactions, so doing this up
+    // front means the accounts land in the budget even if the transaction sync
+    // later fails, or the serverless function hits its time limit partway
+    // through. This is what makes a reconnected card/account show up reliably.
+    // It only adds/updates accounts — it never removes any.
+    try {
+      await syncBalance(supabaseAdmin, plaid, item);
+    } catch (err) {
+      console.error('Failed to sync balance:', err?.response?.data ?? err?.message ?? err);
+    }
+
+    const budget = await loadBudget(supabaseAdmin);
+    // Clean slate: don't import history from before the ledger starts. Plaid's
+    // sync has no date filter, so we drop older transactions here (the cursor
+    // still advances past them, they're just never written).
+    const cutoff = importCutoff(budget);
+    const withinCutoff = (t) => !cutoff || t.date >= cutoff;
+    const categories = (budget.categories || []).filter((c) => c.id !== 'needs-review');
+
+    let cursor = item.sync_cursor;
+    let hasMore = true;
+    const addedNew = [];
+    const needsReviewPlaidIds = [];
+    let syncedCount = 0;
+    let removedCount = 0;
+
+    // Process each page of changes as it arrives and save the cursor right
+    // after, so partial progress is durable: if the function later times out,
+    // the next sync resumes from here instead of re-pulling the whole history
+    // (which was causing repeated 60s timeouts and a "last synced" that never
+    // advanced). Writes are batched — one upsert/delete per page, not per row.
     try {
       while (hasMore) {
         const resp = await plaid.transactionsSync({ access_token: item.access_token, cursor: cursor || undefined });
-        added.push(...resp.data.added);
-        modified.push(...resp.data.modified);
-        removed.push(...resp.data.removed);
+        const pageChanged = [...resp.data.added, ...resp.data.modified].filter(withinCutoff);
+        const { assignments, businessSet } = await assignCategories(supabaseAdmin, pageChanged, categories);
+
+        const rows = [];
+        for (const txn of pageChanged) {
+          // A transfer or card payoff isn't spending: leave it uncategorized and
+          // Ignored so it never hits an envelope or the Needs Review queue.
+          const isXfer = isTransferOrCardPayment(txn);
+          const categoryId = isXfer ? null : assignments[txn.transaction_id] || 'needs-review';
+          if (!isXfer && categoryId === 'needs-review') needsReviewPlaidIds.push(txn.transaction_id);
+          const row = {
+            plaid_transaction_id: txn.transaction_id,
+            date: txn.date,
+            description: txn.merchant_name || txn.name,
+            amount: txn.amount, // Plaid: positive = money out, matches this app's convention
+            category_id: categoryId,
+            // Route each transaction to its own account (a bank can have several).
+            account_id: txn.account_id ? budgetAccountId(txn.account_id) : item.account_id,
+            source: 'plaid',
+          };
+          // Only set business when detected — never write false, so a re-sync of a
+          // modified transaction can't clear a flag the user set by hand.
+          if (businessSet.has(txn.transaction_id)) row.business = true;
+          if (isXfer) row.excluded = true;
+          rows.push(row);
+        }
+        if (rows.length > 0) {
+          const { error } = await supabaseAdmin
+            .from('budget_transactions')
+            .upsert(rows, { onConflict: 'plaid_transaction_id' });
+          if (error) console.error('Failed to upsert transactions:', error);
+        }
+
+        const removeIds = resp.data.removed.map((t) => t.transaction_id);
+        if (removeIds.length > 0) {
+          const { error } = await supabaseAdmin
+            .from('budget_transactions')
+            .delete()
+            .in('plaid_transaction_id', removeIds);
+          if (error) console.error('Failed to delete removed transactions:', error);
+        }
+
         hasMore = resp.data.has_more;
         cursor = resp.data.next_cursor;
+        await supabaseAdmin.from('plaid_items').update({ sync_cursor: cursor }).eq('id', itemRowId);
+
+        addedNew.push(...resp.data.added.filter(withinCutoff));
+        syncedCount += pageChanged.length;
+        removedCount += removeIds.length;
       }
     } catch (txErr) {
       // The transactions product failed (e.g. a stale login → NO_ACCOUNTS), but
@@ -273,70 +351,20 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
       throw txErr;
     }
 
-    const budget = await loadBudget(supabaseAdmin);
-    // Clean slate: don't import history from before the ledger starts. Plaid's
-    // sync has no date filter, so we drop older transactions here (the cursor
-    // still advances past them, they're just never written).
-    const cutoff = importCutoff(budget);
-    const withinCutoff = (t) => !cutoff || t.date >= cutoff;
-    const addedNew = added.filter(withinCutoff);
-    const changed = [...added, ...modified].filter(withinCutoff);
-    const categories = (budget.categories || []).filter((c) => c.id !== 'needs-review');
-    const { assignments, businessSet } = await assignCategories(supabaseAdmin, changed, categories);
-
-    const needsReviewPlaidIds = [];
-    for (const txn of changed) {
-      // A transfer or card payoff isn't spending: leave it uncategorized and
-      // Ignored so it never hits an envelope or the Needs Review queue.
-      const isXfer = isTransferOrCardPayment(txn);
-      const categoryId = isXfer ? null : assignments[txn.transaction_id] || 'needs-review';
-      if (!isXfer && categoryId === 'needs-review') needsReviewPlaidIds.push(txn.transaction_id);
-      const row = {
-        plaid_transaction_id: txn.transaction_id,
-        date: txn.date,
-        description: txn.merchant_name || txn.name,
-        amount: txn.amount, // Plaid: positive = money out, matches this app's convention
-        category_id: categoryId,
-        // Route each transaction to its own account (a bank can have several).
-        account_id: txn.account_id ? budgetAccountId(txn.account_id) : item.account_id,
-        source: 'plaid',
-      };
-      // Only set business when detected — never write false, so a re-sync of a
-      // modified transaction can't clear a flag the user set by hand.
-      if (businessSet.has(txn.transaction_id)) row.business = true;
-      if (isXfer) row.excluded = true;
-      const { error } = await supabaseAdmin
-        .from('budget_transactions')
-        .upsert(row, { onConflict: 'plaid_transaction_id' });
-      if (error) console.error('Failed to upsert transaction:', error);
-    }
-
-    for (const txn of removed) {
-      const { error } = await supabaseAdmin
-        .from('budget_transactions')
-        .delete()
-        .eq('plaid_transaction_id', txn.transaction_id);
-      if (error) console.error('Failed to delete removed transaction:', error);
-    }
-
-    await supabaseAdmin.from('plaid_items').update({ sync_cursor: cursor }).eq('id', itemRowId);
-
     try {
       await mergeReceiptMatches(supabaseAdmin, addedNew);
     } catch (err) {
       console.error('Receipt match phase failed:', err?.message || err);
     }
 
-    try {
-      await syncBalance(supabaseAdmin, plaid, item);
-    } catch (err) {
-      console.error('Failed to sync balance:', err?.response?.data ?? err?.message ?? err);
-    }
-
-    try {
-      await autoLookupReceipts(supabaseAdmin, needsReviewPlaidIds, categories);
-    } catch (err) {
-      console.error('Auto receipt lookup phase failed:', err?.message || err);
+    if (Date.now() - startedAt < RECEIPT_LOOKUP_DEADLINE_MS) {
+      try {
+        await autoLookupReceipts(supabaseAdmin, needsReviewPlaidIds, categories);
+      } catch (err) {
+        console.error('Auto receipt lookup phase failed:', err?.message || err);
+      }
+    } else {
+      console.warn('Skipping receipt lookups: near function time limit');
     }
 
     // Clear any prior sync error now that this bank synced cleanly.
@@ -347,7 +375,7 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
       lastErrorCode: null,
     });
 
-    return { synced: changed.length, removed: removed.length };
+    return { synced: syncedCount, removed: removedCount };
   } finally {
     await supabaseAdmin.from('plaid_items').update({ syncing: false }).eq('id', itemRowId);
   }

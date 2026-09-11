@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy Policy — Budget App</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        margin: 0;
+        font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        color: #1a1a1a;
+        background: #fafafa;
+      }
+      @media (prefers-color-scheme: dark) {
+        body { color: #e6e6e6; background: #141414; }
+        a { color: #7ab7ff; }
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 40px 20px 80px;
+      }
+      h1 { font-size: 1.7rem; margin-bottom: 0.2rem; }
+      h2 { font-size: 1.15rem; margin-top: 2rem; }
+      .updated { opacity: 0.7; font-size: 0.9rem; }
+      ul { padding-left: 1.2rem; }
+      li { margin: 0.3rem 0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Privacy Policy</h1>
+      <p class="updated">Last updated: September 11, 2026</p>
+
+      <p>
+        Budget App is a private, personal budgeting tool used by our household. It is not
+        offered to the public and does not sell, rent, or share personal data with anyone.
+        This page explains what data the app touches and why.
+      </p>
+
+      <h2>What data the app uses</h2>
+      <ul>
+        <li>
+          <strong>Bank &amp; card data (via Plaid):</strong> With your permission, the app
+          connects to your financial institutions through Plaid to import account balances
+          and transactions so they can be categorized into budget envelopes.
+        </li>
+        <li>
+          <strong>Email (via Google / Gmail):</strong> If you connect a Gmail account, the app
+          uses read-only access to search for purchase receipts that match a transaction, so it
+          can fill in what a charge was for. It reads only what is needed to find and summarize a
+          matching receipt. It never sends, deletes, or modifies email.
+        </li>
+        <li>
+          <strong>Budget data you enter:</strong> Envelopes, categories, notes, and manual
+          entries you create in the app.
+        </li>
+      </ul>
+
+      <h2>How data is stored</h2>
+      <p>
+        Data is stored in a private database (Supabase) accessible only to the signed-in members
+        of this household. Access tokens for connected services are stored securely on the server
+        and are never exposed to the browser.
+      </p>
+
+      <h2>How Google user data is used</h2>
+      <p>
+        The app's use of information received from Google APIs adheres to the
+        <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer">
+          Google API Services User Data Policy</a>, including the Limited Use requirements.
+        Gmail data is used solely to locate and summarize receipts matching your own transactions.
+        It is not used for advertising, not sold, and not shared with third parties, and it is not
+        used to train generalized AI models.
+      </p>
+
+      <h2>Revoking access</h2>
+      <p>
+        You can disconnect a bank or Gmail account at any time from the Accounts page in the app.
+        You can also revoke the app's access to your Google account at
+        <a href="https://myaccount.google.com/permissions" target="_blank" rel="noreferrer">
+          myaccount.google.com/permissions</a>.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Questions about this policy can be sent to
+        <a href="mailto:jeffwike78@gmail.com">jeffwike78@gmail.com</a>.
+      </p>
+    </main>
+  </body>
+</html>
