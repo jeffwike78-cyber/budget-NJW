@@ -287,8 +287,7 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
       await supabaseAdmin.from('budget_transactions').delete().eq('source', 'plaid').in('account_id', [...balanceOnlyIds]);
     }
 
-    const startCursor = item.sync_cursor;
-    let cursor = startCursor;
+    let cursor = item.sync_cursor;
     const addedNew = [];
     const needsReviewPlaidIds = [];
     let syncedCount = 0;
@@ -333,15 +332,16 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
         resp = await plaid.transactionsSync({ access_token: item.access_token, cursor: cursor || undefined });
       } catch (txErr) {
         // Plaid reports the underlying data changed mid-pagination (common while
-        // a freshly linked account is still backfilling). Its guidance is to
-        // restart the round from the cursor it began with — so roll the saved
-        // cursor back to that point (we may have advanced it saving intermediate
-        // pages) and stop. The next sync, or Plaid's webhook, starts the round
-        // over; rows already written this round are idempotent, so nothing is
-        // lost or double-counted. Retrying in a tight loop here doesn't help —
-        // the data is still settling — and burns the function's time budget.
+        // a freshly linked account is still backfilling). Saving the cursor per
+        // page can leave it wedged at a mid-point that Plaid then keeps
+        // rejecting, so restart pagination cleanly from the beginning (null
+        // cursor) — Plaid's own recommended recovery. The next sync (or Plaid's
+        // webhook) re-pulls from scratch; every row is upserted by
+        // plaid_transaction_id, so re-fetching is idempotent — nothing is lost
+        // or double-counted. A tight in-loop retry doesn't help while the data
+        // is still settling and just burns the function's time budget.
         if (txErr?.response?.data?.error_code === 'TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION') {
-          await supabaseAdmin.from('plaid_items').update({ sync_cursor: startCursor }).eq('id', itemRowId);
+          await supabaseAdmin.from('plaid_items').update({ sync_cursor: null }).eq('id', itemRowId);
           throw txErr;
         }
         // Other transaction failures (e.g. a stale login → NO_ACCOUNTS): the
