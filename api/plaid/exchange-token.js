@@ -1,7 +1,6 @@
 import { getPlaidClient } from '../_lib/plaidClient.js';
 import { getSupabaseAdmin } from '../_lib/supabaseAdmin.js';
 import { setPlaidStatus } from '../_lib/appState.js';
-import { syncItem } from '../_lib/syncTransactions.js';
 import { parseBody, plaidErrorMessage } from '../_lib/http.js';
 
 export const config = { maxDuration: 60 };
@@ -49,15 +48,13 @@ export default async function handler(req, res) {
 
     await setPlaidStatus(admin, item_id, { institutionName, linked: true });
 
-    // Pull the first batch right away rather than waiting for the webhook.
-    let result = {};
-    try {
-      result = await syncItem(admin, plaid, item_id);
-    } catch (e) {
-      console.error('initial sync failed:', e?.response?.data ?? e?.message ?? e);
-    }
-
-    res.status(200).json({ ok: true, itemId: item_id, institutionName, ...result });
+    // Don't block the link on the first transaction pull. A slow-responding
+    // institution can make that pull hang past the function's time limit and
+    // fail the whole reconnect (a "Gateway Timeout"), even though the item was
+    // created fine. Plaid fires a webhook the moment data is ready (see
+    // webhook.js), which syncs the item in the background; the user can also tap
+    // "Sync now". So return as soon as the connection is stored.
+    res.status(200).json({ ok: true, itemId: item_id, institutionName });
   } catch (err) {
     console.error('exchange-token failed:', err?.response?.data ?? err?.message ?? err);
     res.status(500).json({ error: plaidErrorMessage(err, 'Failed to link the account.') });
