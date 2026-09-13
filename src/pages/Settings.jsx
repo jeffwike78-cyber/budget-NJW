@@ -17,6 +17,20 @@ export default function Settings({ budgetState, setBudgetState, setView }) {
     setBudgetState((prev) => ({ ...prev, settings: { ...(prev.settings || {}), ...patch } }));
   }
 
+  // Download the whole budget as a JSON file — an off-app backup the user keeps.
+  function exportBackup() {
+    const stamp = new Date().toISOString().slice(0, 10);
+    const blob = new Blob([JSON.stringify(budgetState, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `budget-backup-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   function cancelReset() {
     setConfirmReset(false);
     setResetText('');
@@ -134,6 +148,20 @@ export default function Settings({ budgetState, setBudgetState, setView }) {
         <PasskeyManager />
         <button type="button" className="secondary-btn" onClick={() => supabase.auth.signOut()}>
           Sign out
+        </button>
+      </section>
+
+      <section className="card">
+        <div className="card-header">
+          <h2>Back up your budget</h2>
+        </div>
+        <p className="module-note">
+          Download a copy of your entire budget setup — envelopes, sinking funds, income, accounts,
+          and settings — as a JSON file. Keep it somewhere safe (it&apos;s an off-app backup you can
+          restore from if anything ever goes wrong).
+        </p>
+        <button type="button" className="primary-btn" onClick={exportBackup}>
+          ⬇ Export a backup
         </button>
       </section>
 
