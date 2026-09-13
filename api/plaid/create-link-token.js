@@ -46,7 +46,14 @@ export default async function handler(req, res) {
       language: 'en',
       ...(accessToken
         ? { access_token: accessToken, update: { account_selection_enabled: true } }
-        : { products: ['transactions'] }),
+        : {
+            products: ['transactions'],
+            // Only backfill a recent window. Pulling the full multi-year history
+            // makes the initial sync paginate for a long time, which is when
+            // Plaid's "data changed mid-pagination" errors strike and wedge the
+            // sync. The ledger only imports from its start month anyway.
+            transactions: { days_requested: 90 },
+          }),
       ...(webhook ? { webhook } : {}),
       ...(redirectUri ? { redirect_uri: redirectUri } : {}),
     });

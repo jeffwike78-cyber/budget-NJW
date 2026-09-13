@@ -26,6 +26,7 @@ const TRANSIENT_ERROR_CODES = new Set([
   'INTERNAL_SERVER_ERROR',
   'RATE_LIMIT_EXCEEDED',
   'PRODUCT_NOT_READY',
+  'PLAID_GATEWAY_TIMEOUT',
 ]);
 
 function money(n) {
@@ -461,18 +462,30 @@ export default function Accounts({ budgetState, setBudgetState }) {
                   onChange={(e) => updateAccount(a.id, { balance: e.target.value })}
                 />
               </span>
-              {(a.type === 'checking' || a.type === 'savings') ? (
-                <label className="account-cash-toggle" title="Count this account toward Cash on Hand on the Envelopes page">
-                  <input
-                    type="checkbox"
-                    checked={includeInCashOnHand(a)}
-                    onChange={(e) => updateAccount(a.id, { includeInCash: e.target.checked })}
-                  />
-                  Cash
-                </label>
-              ) : (
-                <span className="account-cash-toggle account-cash-na" aria-hidden="true" />
-              )}
+              <span className="account-toggles" style={{ display: 'inline-flex', gap: '12px', alignItems: 'center' }}>
+                {(a.type === 'checking' || a.type === 'savings') ? (
+                  <label className="account-cash-toggle" title="Count this account toward Cash on Hand on the Envelopes page">
+                    <input
+                      type="checkbox"
+                      checked={includeInCashOnHand(a)}
+                      onChange={(e) => updateAccount(a.id, { includeInCash: e.target.checked })}
+                    />
+                    Cash
+                  </label>
+                ) : (
+                  <span className="account-cash-toggle account-cash-na" aria-hidden="true" />
+                )}
+                {['checking', 'savings', 'credit', 'investing'].includes(a.type) && (
+                  <label className="account-cash-toggle" title="Keep this account's balance updated, but don't import its individual transactions (e.g. savings)">
+                    <input
+                      type="checkbox"
+                      checked={!!a.balanceOnly}
+                      onChange={(e) => updateAccount(a.id, { balanceOnly: e.target.checked })}
+                    />
+                    No txns
+                  </label>
+                )}
+              </span>
               <button type="button" className="link-btn danger" onClick={() => deleteAccount(a.id)}>
                 Remove
               </button>

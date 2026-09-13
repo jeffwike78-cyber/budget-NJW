@@ -278,6 +278,15 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
     const withinCutoff = (t) => !cutoff || t.date >= cutoff;
     const categories = (budget.categories || []).filter((c) => c.id !== 'needs-review');
 
+    // Accounts the user flagged "balance only" (e.g. savings): keep refreshing
+    // their balance (done in syncBalance above) but don't import their
+    // transactions. Drop any that were imported before the flag was set.
+    const balanceOnlyIds = new Set((budget.accounts || []).filter((a) => a.balanceOnly).map((a) => a.id));
+    const inScope = (t) => !balanceOnlyIds.has(t.account_id ? budgetAccountId(t.account_id) : item.account_id);
+    if (balanceOnlyIds.size > 0) {
+      await supabaseAdmin.from('budget_transactions').delete().eq('source', 'plaid').in('account_id', [...balanceOnlyIds]);
+    }
+
     let cursor = item.sync_cursor;
     const addedNew = [];
     const needsReviewPlaidIds = [];
@@ -317,19 +326,23 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
     // sync resumes from here instead of re-pulling the whole history (which was
     // causing repeated 60s timeouts and a "last synced" that never advanced).
     let hasMore = true;
-    let mutationRetries = 0;
     while (hasMore) {
       let resp;
       try {
         resp = await plaid.transactionsSync({ access_token: item.access_token, cursor: cursor || undefined });
       } catch (txErr) {
-        // Plaid can report that the underlying data changed mid-pagination
-        // (common while a freshly linked account is still backfilling). Its
-        // guidance is to restart from the last persisted cursor — which we have,
-        // since we save it after every page — so just retry rather than failing.
-        if (txErr?.response?.data?.error_code === 'TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION' && mutationRetries < 5) {
-          mutationRetries += 1;
-          continue;
+        // Plaid reports the underlying data changed mid-pagination (common while
+        // a freshly linked account is still backfilling). Saving the cursor per
+        // page can leave it wedged at a mid-point that Plaid then keeps
+        // rejecting, so restart pagination cleanly from the beginning (null
+        // cursor) — Plaid's own recommended recovery. The next sync (or Plaid's
+        // webhook) re-pulls from scratch; every row is upserted by
+        // plaid_transaction_id, so re-fetching is idempotent — nothing is lost
+        // or double-counted. A tight in-loop retry doesn't help while the data
+        // is still settling and just burns the function's time budget.
+        if (txErr?.response?.data?.error_code === 'TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION') {
+          await supabaseAdmin.from('plaid_items').update({ sync_cursor: null }).eq('id', itemRowId);
+          throw txErr;
         }
         // Other transaction failures (e.g. a stale login → NO_ACCOUNTS): the
         // account list is usually still readable, so record it (the accounts are
@@ -338,8 +351,8 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
         throw txErr;
       }
 
-      const pageAdded = resp.data.added.filter(withinCutoff);
-      const pageModified = resp.data.modified.filter(withinCutoff);
+      const pageAdded = resp.data.added.filter(withinCutoff).filter(inScope);
+      const pageModified = resp.data.modified.filter(withinCutoff).filter(inScope);
       const { assignments, businessSet } = await assignCategories(supabaseAdmin, [...pageAdded, ...pageModified], categories);
 
       // New rows share the same columns → one batched upsert per page.
