@@ -3,6 +3,8 @@ import { getSupabaseAdmin } from '../_lib/supabaseAdmin.js';
 import { syncItem } from '../_lib/syncTransactions.js';
 import { parseBody } from '../_lib/http.js';
 
+export const config = { maxDuration: 60 };
+
 // Plaid calls this URL directly (not the browser) when new transactions are
 // ready. It is exempt from the site password in middleware.ts — Plaid has no
 // password to send, and this endpoint only re-pulls from Plaid using tokens
