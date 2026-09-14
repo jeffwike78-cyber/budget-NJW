@@ -107,7 +107,7 @@ function App() {
             />
           )}
           {view === 'sinking' && (
-            <SinkingFunds budgetState={budgetState} setBudgetState={setBudgetState} transactions={transactions} />
+            <SinkingFunds budgetState={budgetState} setBudgetState={setBudgetState} transactions={transactions} {...txActions} />
           )}
           {view === 'reports' && (
             <TaxReport

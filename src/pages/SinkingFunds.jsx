@@ -3,6 +3,7 @@ import { todayStr } from '../lib/storage';
 import { netSpentByCategory } from '../lib/spending';
 import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, envelopeBalances, adjustmentMaps, isCarryover, signedBalance, includeInCashOnHand } from '../lib/budgetMath';
 import { computeSinkingEnvelope, advanceDueDate, dueLabel } from '../lib/sinkingFunds';
+import TxList from '../components/TxList';
 
 const STATUS_LABEL = {
   funded: 'Fully funded',
@@ -35,18 +36,21 @@ function monthKey(dateStr = todayStr()) {
 // real carryover (opening balance + monthly set-aside funded each month −
 // anything spent from the envelope). Editing a fund here updates the same
 // envelope, so the two stay in sync.
-export default function SinkingFunds({ budgetState, setBudgetState, transactions }) {
+export default function SinkingFunds({ budgetState, setBudgetState, transactions, recategorize, splitTransaction, setExcluded, setTaxCategory }) {
   const [showBills, setShowBills] = useState(false);
   const [showMove, setShowMove] = useState(false);
   const [move, setMove] = useState({ from: '', to: '', amount: '', note: '' });
   const [moveMsg, setMoveMsg] = useState(null);
+  // Which envelope cards have their transaction list expanded.
+  const [expandedTx, setExpandedTx] = useState(() => new Set());
   const month = monthKey();
   const income = monthlyIncomeTotal(budgetState);
   const budgetable = (budgetState.categories || []).filter((c) => c.id !== 'needs-review');
   const baseBudgets = computeCategoryBudgets(budgetable, income);
   const effectiveBudgets = effectiveBudgetsForMonth(budgetable, baseBudgets, month);
   const allTimeSpent = netSpentByCategory(transactions);
-  const monthSpent = netSpentByCategory(transactions.filter((t) => monthKey(t.date) === month));
+  const monthTx = transactions.filter((t) => monthKey(t.date) === month);
+  const monthSpent = netSpentByCategory(monthTx);
   const { all: adjustAll, month: adjustMonth } = adjustmentMaps(budgetState.adjustments, month);
   const balances = envelopeBalances(budgetable, baseBudgets, allTimeSpent, monthSpent, budgetState.settings?.startMonth, month, adjustAll, adjustMonth);
 
@@ -148,6 +152,58 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
       ...prev,
       categories: prev.categories.map((c) => (c.id === id ? { ...c, ...patch } : c)),
     }));
+  }
+
+  function toggleTx(id) {
+    setExpandedTx((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  // Recategorizing from the drill-down also teaches the AI (merchantMemory), so
+  // future transactions from the same merchant file themselves — same behavior
+  // as the Budget page's inline list.
+  async function handleRecategorize(txId, categoryId) {
+    const tx = transactions.find((t) => t.id === txId);
+    await recategorize(txId, categoryId);
+    if (tx) {
+      const key = tx.description.trim().toLowerCase();
+      setBudgetState((prev) => ({ ...prev, merchantMemory: { ...prev.merchantMemory, [key]: categoryId } }));
+    }
+  }
+
+  const txListProps = {
+    categories: budgetState.categories,
+    incomeCategories: budgetState.incomeCategories,
+    onRecategorize: handleRecategorize,
+    onSplit: splitTransaction,
+    onToggleExcluded: setExcluded,
+    onSetTaxCategory: setTaxCategory,
+    taxLabels: budgetState.taxLabels,
+  };
+
+  // The expandable "this month's transactions" drill-down for one envelope,
+  // reused by both spending and sinking cards. Editing a category inline here
+  // updates the transaction in place (and teaches the AI).
+  function renderEnvelopeTx(envId) {
+    const tx = monthTx.filter((t) => t.categoryId === envId);
+    const open = expandedTx.has(envId);
+    return (
+      <div className="sf-tx-drill">
+        <button type="button" className="category-expand-toggle" onClick={() => toggleTx(envId)}>
+          {open ? 'Hide' : 'Show'} transactions{tx.length ? ` (${tx.length})` : ''} {open ? '▴' : '▾'}
+        </button>
+        {open &&
+          (tx.length > 0 ? (
+            <TxList transactions={tx} {...txListProps} />
+          ) : (
+            <p className="module-note">No transactions in this envelope this month.</p>
+          ))}
+      </div>
+    );
   }
 
   function markPaid(f) {
@@ -377,6 +433,7 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
                   <div className="bar-track">
                     <div className={`bar-fill${over ? ' over' : ''}`} style={{ width: `${pct}%` }} />
                   </div>
+                  {renderEnvelopeTx(e.envelope.id)}
                 </div>
               );
             })}
@@ -510,6 +567,7 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
                 onMoveDown={() => moveSinking(f.envelope.id, 1)}
                 isFirst={i === 0}
                 isLast={i === computedSorted.length - 1}
+                renderTx={renderEnvelopeTx}
               />
             ))}
           </div>
@@ -533,7 +591,7 @@ function Reorder({ onUp, onDown, first, last }) {
   );
 }
 
-function FundCard({ f, onUpdate, onMarkPaid, onMoveUp, onMoveDown, isFirst, isLast }) {
+function FundCard({ f, onUpdate, onMarkPaid, onMoveUp, onMoveDown, isFirst, isLast, renderTx }) {
   const [expanded, setExpanded] = useState(false);
   const env = f.envelope;
   const hasTarget = Number(env.targetAmount || 0) > 0;
@@ -632,6 +690,8 @@ function FundCard({ f, onUpdate, onMarkPaid, onMoveUp, onMoveDown, isFirst, isLa
           <p className="module-note">Delete a fund by removing its envelope on the Budget page.</p>
         </div>
       )}
+
+      {renderTx && renderTx(env.id)}
     </div>
   );
 }
