@@ -26,6 +26,36 @@
   flex-direction: column;
 }
 
+.conflict-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  background: color-mix(in srgb, var(--bad) 14%, var(--bg));
+  border-bottom: 1px solid var(--bad);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.conflict-banner button {
+  flex-shrink: 0;
+  appearance: none;
+  border: 1px solid var(--bad);
+  background: transparent;
+  color: var(--bad);
+  font: 600 13px/1 inherit;
+  padding: 7px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.conflict-banner button:hover {
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+}
+
 .top-bar {
   display: flex;
   align-items: center;

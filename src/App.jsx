@@ -25,7 +25,7 @@ function App() {
   // Transactions page to run OCR and prefill the add form.
   const [pendingScanFile, setPendingScanFile] = useState(null);
   const { session, loading: authLoading, recovery, clearRecovery } = useAuth();
-  const [budgetState, setBudgetState, budgetLoading] = useBudgetState();
+  const [budgetState, setBudgetState, budgetLoading, budgetConflict, clearBudgetConflict] = useBudgetState();
   const { transactions, addTransaction, addSplitTransaction, splitTransaction, deleteTransaction, recategorize, setExcluded, setBusiness, setTaxCategory } =
     useBudgetTransactions();
 
@@ -57,6 +57,17 @@ function App() {
 
   return (
     <div className="app-shell">
+      {budgetConflict && (
+        <div className="conflict-banner" role="alert">
+          <span>
+            Your budget was updated on another device, so your last change wasn’t saved. The current
+            version is now loaded — please re-enter that change.
+          </span>
+          <button type="button" onClick={clearBudgetConflict} aria-label="Dismiss">
+            Dismiss
+          </button>
+        </div>
+      )}
       <TopBar appName={budgetState.settings?.appName} setView={setView} />
       <div className="app-body">
         <Sidebar view={view} setView={setView} totalBalance={totalBalance} accounts={budgetState.accounts} />
