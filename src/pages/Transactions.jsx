@@ -17,11 +17,12 @@ function accountIdForLast4(accounts, last4) {
   return match ? match.id : null;
 }
 
-export default function Transactions({ budgetState, setBudgetState, transactions, addTransaction, addSplitTransaction, recategorize, setNeedsReview, setExcluded, setTaxCategory, splitTransaction, deleteTransaction, pendingScanFile, onScanConsumed }) {
+export default function Transactions({ budgetState, setBudgetState, transactions, addTransaction, addSplitTransaction, recategorize, confirmReviewed, setNeedsReview, setExcluded, setTaxCategory, splitTransaction, deleteTransaction, pendingScanFile, onScanConsumed }) {
   // Needs Review is for unclear spending, not unclear deposits — money coming
   // in (amount < 0, the reverse of "positive = expense") never belongs here,
-  // even if it somehow got flagged that way.
-  const needsReview = transactions.filter((t) => t.categoryId === 'needs-review' && Number(t.amount) > 0);
+  // even if it somehow got flagged that way. Ignoring one moves it out of here
+  // (into Hidden), so drop excluded rows too.
+  const needsReview = transactions.filter((t) => t.categoryId === 'needs-review' && Number(t.amount) > 0 && !t.excluded);
   const needsReviewIds = new Set(needsReview.map((t) => t.id));
   // Active = everything not ignored and not waiting on review. Split it into what
   // the AI placed (untouched) vs. what a human entered or confirmed:
@@ -228,7 +229,9 @@ export default function Transactions({ budgetState, setBudgetState, transactions
   async function handleRecategorize(txId, categoryId) {
     const tx = transactions.find((t) => t.id === txId);
     await recategorize(txId, categoryId);
-    if (tx) {
+    // Only teach the merchant→envelope memory from a real envelope pick; setting
+    // a vendor back to Uncategorized (null) shouldn't wipe out what we learned.
+    if (tx && categoryId) {
       setBudgetState((prev) => ({ ...prev, merchantMemory: { ...prev.merchantMemory, [normalize(tx.description)]: categoryId } }));
     }
   }
@@ -454,14 +457,16 @@ export default function Transactions({ budgetState, setBudgetState, transactions
         {showAi && (
           <>
             <p className="module-note">
-              Auto-categorized by the AI and not yet checked. Change a category (or tap <strong>Needs review</strong>)
-              and it moves to <strong>User Reviewed</strong> — and the AI learns your choice.
+              Auto-categorized by the AI and not yet checked. Tap <strong>✓ Correct</strong> to confirm the AI got it
+              right, change a category, or tap <strong>Needs review</strong> — any of these moves it to
+              <strong> User Reviewed</strong>, and the AI learns your choice.
             </p>
             <TxList
               transactions={aiShown}
               categories={budgetState.categories}
               incomeCategories={budgetState.incomeCategories}
               onRecategorize={handleRecategorize}
+              onConfirmReviewed={confirmReviewed}
               onSplit={splitTransaction}
               onDelete={deleteTransaction}
               onToggleExcluded={setExcluded}

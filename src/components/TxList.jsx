@@ -3,7 +3,7 @@ import { findReceipt } from '../lib/findReceipt';
 import { uploadReceipt, getReceiptUrl } from '../lib/receiptsClient';
 import { TAX_CATEGORIES, taxLabel } from '../lib/tax';
 
-function TxRow({ t, categories, incomeCategories = [], onRecategorize, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, taxLabels, showReceiptLookup }) {
+function TxRow({ t, categories, incomeCategories = [], onRecategorize, onConfirmReviewed, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, taxLabels, showReceiptLookup }) {
   // Money coming in (negative amount = deposit) gets income labels; money going
   // out gets the budget envelopes.
   const isIncome = Number(t.amount) < 0;
@@ -106,10 +106,12 @@ function TxRow({ t, categories, incomeCategories = [], onRecategorize, onSplit, 
   const canSplit = onSplit && t.source !== 'split' && !t.excluded;
 
   // Editing an ignored transaction's category brings it back in automatically —
-  // no separate "Include" click needed.
+  // no separate "Include" click needed. Choosing "Uncategorized" (value '') sets
+  // the category to null and does NOT un-ignore, so it's a safe no-envelope state.
   function changeCategory(value) {
-    onRecategorize(t.id, value);
-    if (t.excluded) onToggleExcluded(t.id, false);
+    const next = value || null;
+    onRecategorize(t.id, next);
+    if (next && t.excluded) onToggleExcluded(t.id, false);
   }
   async function removeTx() {
     if (!onDelete) return;
@@ -135,11 +137,7 @@ function TxRow({ t, categories, incomeCategories = [], onRecategorize, onSplit, 
         {t.amount < 0 ? '+' : '-'}${Math.abs(Number(t.amount)).toFixed(2)}
       </span>
       <select value={t.categoryId || ''} onChange={(e) => changeCategory(e.target.value)}>
-        {!options.some((c) => c.id === t.categoryId) && (
-          <option value="" disabled>
-            {isIncome ? 'Uncategorized (income)' : 'Uncategorized'}
-          </option>
-        )}
+        <option value="">{isIncome ? 'Uncategorized (income)' : 'Uncategorized'}</option>
         {options.map((c) => (
           <option key={c.id} value={c.id}>
             {c.name}
@@ -185,6 +183,16 @@ function TxRow({ t, categories, incomeCategories = [], onRecategorize, onSplit, 
             onClick={() => (showSplit ? setShowSplit(false) : openSplit())}
           >
             ✂ Split
+          </button>
+        )}
+        {onConfirmReviewed && (
+          <button
+            type="button"
+            className="tx-tag-btn tx-confirm-btn"
+            title="The AI got this right — confirm it and move it to User Reviewed"
+            onClick={() => onConfirmReviewed(t.id)}
+          >
+            ✓ Correct
           </button>
         )}
         {onSendToReview && t.categoryId !== 'needs-review' && Number(t.amount) > 0 && (
@@ -279,6 +287,7 @@ export default function TxList({
   categories,
   incomeCategories = [],
   onRecategorize,
+  onConfirmReviewed,
   onSplit,
   onDelete,
   onToggleExcluded,
@@ -293,7 +302,7 @@ export default function TxList({
   const active = transactions.filter((t) => !t.excluded);
   const ignored = transactions.filter((t) => t.excluded);
 
-  const rowProps = { categories, incomeCategories, onRecategorize, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, taxLabels, showReceiptLookup };
+  const rowProps = { categories, incomeCategories, onRecategorize, onConfirmReviewed, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, taxLabels, showReceiptLookup };
 
   if (transactions.length === 0) {
     return <p className="module-note">{emptyLabel}</p>;

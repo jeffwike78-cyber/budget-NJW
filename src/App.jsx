@@ -26,7 +26,7 @@ function App() {
   const [pendingScanFile, setPendingScanFile] = useState(null);
   const { session, loading: authLoading, recovery, clearRecovery } = useAuth();
   const [budgetState, setBudgetState, budgetLoading, budgetConflict, clearBudgetConflict] = useBudgetState();
-  const { transactions, addTransaction, addSplitTransaction, splitTransaction, deleteTransaction, recategorize, setNeedsReview, setExcluded, setBusiness, setTaxCategory } =
+  const { transactions, addTransaction, addSplitTransaction, splitTransaction, deleteTransaction, recategorize, confirmReviewed, setNeedsReview, setExcluded, setBusiness, setTaxCategory } =
     useBudgetTransactions();
 
   // Auth gate: everyone signs in to the same shared family budget. A reset-link
@@ -53,7 +53,7 @@ function App() {
   // Net worth: credit-card balances count against the total, not toward it.
   const totalBalance = budgetState.accounts.reduce((sum, a) => sum + signedBalance(a), 0);
 
-  const txActions = { recategorize, setNeedsReview, setExcluded, setBusiness, setTaxCategory, splitTransaction, deleteTransaction };
+  const txActions = { recategorize, confirmReviewed, setNeedsReview, setExcluded, setBusiness, setTaxCategory, splitTransaction, deleteTransaction };
 
   return (
     <div className="app-shell">
