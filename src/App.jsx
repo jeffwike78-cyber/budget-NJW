@@ -10,6 +10,7 @@ const Transactions = lazy(() => import('./pages/Transactions'));
 const Budget = lazy(() => import('./pages/Budget'));
 const SinkingFunds = lazy(() => import('./pages/SinkingFunds'));
 const Accounts = lazy(() => import('./pages/Accounts'));
+const Summary = lazy(() => import('./pages/Summary'));
 const Analysis = lazy(() => import('./pages/Analysis'));
 const TaxReport = lazy(() => import('./pages/TaxReport'));
 const Settings = lazy(() => import('./pages/Settings'));
@@ -120,6 +121,9 @@ function App() {
           )}
           {view === 'accounts' && (
             <Accounts budgetState={budgetState} setBudgetState={setBudgetState} />
+          )}
+          {view === 'summary' && (
+            <Summary budgetState={budgetState} transactions={transactions} />
           )}
           {view === 'analysis' && (
             <Analysis budgetState={budgetState} setBudgetState={setBudgetState} transactions={transactions} />
