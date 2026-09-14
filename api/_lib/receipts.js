@@ -12,21 +12,32 @@ export async function lookupReceiptForTx(admin, tx, categories, { apiKey, model 
   const usable = (accounts || []).filter((a) => a.refresh_token);
   if (usable.length === 0) return { found: false, reason: 'no-accounts' };
 
-  const query = `${merchantSearchTerm(tx.description)} ${dateWindow(tx.date, 7)}`.trim();
+  // Amazon (and a few others) charge PER SHIPMENT, not per order: one order can
+  // post as several bank charges days apart, and no single email total equals a
+  // given charge. For those we cast a wider net — an order-confirmation email
+  // predates the shipment charge by days, item lists are long, and there may be
+  // several shipment notices to line up — then have the AI match this charge to
+  // the specific line item(s) it paid for. See the prompt below.
+  const splitShipment = isSplitShipmentMerchant(tx.description);
+  const daysBefore = splitShipment ? 14 : 7;
+  const daysAfter = splitShipment ? 3 : 7;
+  const perInbox = splitShipment ? 8 : 4;
+  const bodyLimit = splitShipment ? 6000 : 2000;
+  const query = `${merchantSearchTerm(tx.description)} ${dateWindow(tx.date, daysBefore, daysAfter)}`.trim();
 
   const candidates = [];
   for (const acct of usable) {
     try {
       const accessToken = await refreshAccessToken(acct.refresh_token);
-      const msgs = await gmailSearch(accessToken, query, 4);
-      for (const m of msgs.slice(0, 4)) {
+      const msgs = await gmailSearch(accessToken, query, perInbox);
+      for (const m of msgs.slice(0, perInbox)) {
         const parsed = parseMessage(await gmailGetMessage(accessToken, m.id));
         candidates.push({
           account: acct.email,
           from: parsed.from,
           subject: parsed.subject,
           date: parsed.date,
-          body: parsed.body.slice(0, 2000),
+          body: parsed.body.slice(0, bodyLimit),
         });
       }
     } catch (err) {
@@ -45,8 +56,18 @@ export async function lookupReceiptForTx(admin, tx, categories, { apiKey, model 
     )
     .join('\n\n');
 
+  const splitNote = splitShipment
+    ? `
+
+IMPORTANT — this is an Amazon-style merchant that CHARGES PER SHIPMENT, not per order. A single order often posts as SEVERAL separate bank charges (one per shipment), so the order total will usually be LARGER than this one charge. Do NOT require an email total to equal the amount. Instead:
+- Prefer a shipment/dispatch email ("your package has shipped", "shipped", "out for delivery") whose shipment total matches the amount.
+- Otherwise use the order-confirmation email: read its itemized list (item names with individual prices), and find the single item or SUBSET of items whose prices — plus a proportional share of tax and shipping — sum to within about $2 of the amount. That subset is what this charge paid for.
+- Only claim found=true when the item names and prices are actually present in an email and their sum is genuinely close to the amount. If several different subsets could match, or the items/prices aren't shown, say found=false rather than guessing.
+- In "detail", name the SPECIFIC item(s) this charge covers (not the whole order), e.g. "Amazon: USB-C cable + phone case (1 of 3 shipments, $${Number(tx.amount).toFixed(2)})".`
+    : '';
+
   const system = `You match a bank transaction to its email receipt and explain what it was for.
-Given the transaction and some candidate emails, find the one that is the receipt / order confirmation for this exact charge (its total should match the amount, and its date should be near the transaction date). If none match, say found=false.
+Given the transaction and some candidate emails, find the one that is the receipt / order confirmation for this exact charge (its total should match the amount, and its date should be near the transaction date). If none match, say found=false.${splitNote}
 Respond with ONLY JSON, no prose or code fences:
 {"found": boolean, "detail": string, "categoryId": string or null, "business": boolean, "emailSubject": string or null}
 - "detail": a short human summary of what was purchased, e.g. "Apple: iCloud+ 2TB storage (monthly)" or "Amazon: HDMI cable + phone case".
@@ -107,16 +128,27 @@ export function merchantSearchTerm(desc) {
   return cleanMerchant(s);
 }
 
-// Gmail date filter for a +/- N day window around the transaction date.
-export function dateWindow(dateStr, days) {
+// Merchants that bill per shipment rather than per order, so one order can post
+// as several bank charges and no single email total matches a given charge.
+// These get a wider email search and the subset-of-items matching in the prompt.
+const SPLIT_SHIPMENT_MERCHANTS = [/amazon|amzn/i];
+export function isSplitShipmentMerchant(desc) {
+  const s = String(desc || '');
+  return SPLIT_SHIPMENT_MERCHANTS.some((re) => re.test(s));
+}
+
+// Gmail date filter for a window around the transaction date. Symmetric by
+// default; pass a separate `after` to look further back than forward (a
+// shipment charge posts days AFTER the order-confirmation email).
+export function dateWindow(dateStr, before, after = before) {
   const d = new Date(`${dateStr}T00:00:00`);
   if (Number.isNaN(d.getTime())) return '';
   const fmt = (dt) => `${dt.getFullYear()}/${dt.getMonth() + 1}/${dt.getDate()}`;
-  const after = new Date(d);
-  after.setDate(after.getDate() - days);
-  const before = new Date(d);
-  before.setDate(before.getDate() + days);
-  return `after:${fmt(after)} before:${fmt(before)}`;
+  const afterDate = new Date(d);
+  afterDate.setDate(afterDate.getDate() - before);
+  const beforeDate = new Date(d);
+  beforeDate.setDate(beforeDate.getDate() + after);
+  return `after:${fmt(afterDate)} before:${fmt(beforeDate)}`;
 }
 
 export function parseJsonObject(text) {
