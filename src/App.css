@@ -84,6 +84,13 @@
   cursor: pointer;
 }
 
+/* Per-envelope transaction drill-down on the Envelopes page */
+.sf-tx-drill {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line, #e2e2e2);
+}
+
 .budget-print-legend {
   color: #555;
   font-style: italic;
