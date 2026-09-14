@@ -285,6 +285,18 @@ export function useBudgetTransactions() {
     }
   }
 
+  // Confirm the AI got it right: mark the row user_reviewed=true WITHOUT changing
+  // its category, so it leaves "AI Reviewed" and lands in "User Reviewed". If the
+  // migration column isn't there yet (42703) this is a harmless no-op.
+  async function confirmReviewed(id) {
+    try {
+      const { error } = await supabase.from('budget_transactions').update({ user_reviewed: true }).eq('id', id);
+      if (error && error.code !== '42703') console.error('Failed to confirm transaction:', error);
+    } catch (err) {
+      console.error('Failed to confirm transaction:', err);
+    }
+  }
+
   // Send a transaction back to "Needs Review" (e.g. a charge from a spouse or a
   // generic label the user isn't sure how to classify).
   async function setNeedsReview(id) {
@@ -317,5 +329,5 @@ export function useBudgetTransactions() {
   const setBusiness = (id, value) => setFlag(id, 'business', value);
   const setTaxCategory = (id, value) => setFlag(id, 'tax_category', value || null);
 
-  return { transactions, loading, addTransaction, addSplitTransaction, splitTransaction, deleteTransaction, recategorize, setNeedsReview, setExcluded, setBusiness, setTaxCategory };
+  return { transactions, loading, addTransaction, addSplitTransaction, splitTransaction, deleteTransaction, recategorize, confirmReviewed, setNeedsReview, setExcluded, setBusiness, setTaxCategory };
 }

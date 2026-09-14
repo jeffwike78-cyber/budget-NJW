@@ -1352,6 +1352,7 @@ textarea {
 .cc-field select, .cc-field input { width: 100%; }
 .cc-reminder { border-left: 4px solid var(--accent); }
 .cc-reminder-soon { border-left-color: var(--bad); }
+.cc-reminder-paid { border-left-color: var(--good); }
 .cc-reminder-row { display: flex; align-items: center; gap: 12px; }
 .cc-reminder-icon { font-size: 22px; }
 .cc-reminder-text { display: flex; flex-direction: column; gap: 2px; flex: 1; }
@@ -1465,6 +1466,8 @@ textarea {
 .tx-tag-btn:hover { border-color: var(--accent-border); }
 .tx-tag-btn.active { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent); }
 .tx-tag-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.tx-confirm-btn { color: var(--good); }
+.tx-confirm-btn:hover { border-color: var(--good); }
 .tx-biz-pill { background: var(--warn-bg); color: var(--warn); margin-left: 6px; }
 .tx-tax-pill { background: var(--accent-bg); color: var(--accent); margin-left: 6px; }
 .tx-row-business { opacity: 0.7; }

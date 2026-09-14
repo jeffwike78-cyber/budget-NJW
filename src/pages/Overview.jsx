@@ -55,7 +55,7 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
   const incomeAhead = actualIncome - expectedIncome;
 
   const totalBalance = budgetState.accounts.reduce((sum, a) => sum + signedBalance(a), 0);
-  const card = creditCardStatus(budgetState.settings, budgetState.accounts);
+  const card = creditCardStatus(budgetState.settings, budgetState.accounts, transactions);
 
   // --- "Think rich" money-health metrics ---
   // Emergency-fund cash = every checking + savings account (liquid money you
@@ -141,20 +141,37 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
       <h1 className="page-title">Welcome!</h1>
 
       {card.configured && (
-        <section className={`card cc-reminder ${card.dueSoon ? 'cc-reminder-soon' : ''}`}>
+        <section className={`card cc-reminder ${card.paid ? 'cc-reminder-paid' : card.dueSoon ? 'cc-reminder-soon' : ''}`}>
           <div className="cc-reminder-row">
-            <span className="cc-reminder-icon" aria-hidden="true">💳</span>
-            <div className="cc-reminder-text">
-              <span className="cc-reminder-title">
-                {card.accountName} payment due {formatDueDate(card.dueDate)}
-                {card.daysUntilDue === 0 ? ' — today' : ` — in ${card.daysUntilDue} day${card.daysUntilDue === 1 ? '' : 's'}`}
-              </span>
-              <span className="cc-reminder-sub">
-                {card.balance != null && <>Balance to pay: <strong>{usd(card.balance)}</strong>. </>}
-                {card.statementDate != null && <>Statement closes {formatDueDate(card.statementDate)} (in {card.daysUntilStatement} day{card.daysUntilStatement === 1 ? '' : 's'}).</>}
-              </span>
-            </div>
-            {card.dueSoon && <span className="pill pill-warn">Due soon</span>}
+            <span className="cc-reminder-icon" aria-hidden="true">{card.paid ? '✅' : '💳'}</span>
+            {card.paid ? (
+              <div className="cc-reminder-text">
+                <span className="cc-reminder-title">
+                  {card.accountName} payment made — {usd(card.paid.amount)} on {formatDueDate(card.paid.date)}
+                </span>
+                <span className="cc-reminder-sub">
+                  Autopay cleared this statement, so nothing’s due {formatDueDate(card.dueDate)}.{' '}
+                  {card.balance != null && <>Current running balance: <strong>{usd(card.balance)}</strong>. </>}
+                  {card.statementDate != null && <>Next statement closes {formatDueDate(card.statementDate)} (in {card.daysUntilStatement} day{card.daysUntilStatement === 1 ? '' : 's'}).</>}
+                </span>
+              </div>
+            ) : (
+              <div className="cc-reminder-text">
+                <span className="cc-reminder-title">
+                  {card.accountName} payment due {formatDueDate(card.dueDate)}
+                  {card.daysUntilDue === 0 ? ' — today' : ` — in ${card.daysUntilDue} day${card.daysUntilDue === 1 ? '' : 's'}`}
+                </span>
+                <span className="cc-reminder-sub">
+                  {card.balance != null && <>Balance to pay: <strong>{usd(card.balance)}</strong>. </>}
+                  {card.statementDate != null && <>Statement closes {formatDueDate(card.statementDate)} (in {card.daysUntilStatement} day{card.daysUntilStatement === 1 ? '' : 's'}).</>}
+                </span>
+              </div>
+            )}
+            {card.paid ? (
+              <span className="pill pill-good">Paid</span>
+            ) : (
+              card.dueSoon && <span className="pill pill-warn">Due soon</span>
+            )}
           </div>
         </section>
       )}
