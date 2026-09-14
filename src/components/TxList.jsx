@@ -3,7 +3,7 @@ import { findReceipt } from '../lib/findReceipt';
 import { uploadReceipt, getReceiptUrl } from '../lib/receiptsClient';
 import { TAX_CATEGORIES, taxLabel } from '../lib/tax';
 
-function TxRow({ t, categories, incomeCategories = [], onRecategorize, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, taxLabels, showReceiptLookup }) {
+function TxRow({ t, categories, incomeCategories = [], onRecategorize, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, taxLabels, showReceiptLookup }) {
   // Money coming in (negative amount = deposit) gets income labels; money going
   // out gets the budget envelopes.
   const isIncome = Number(t.amount) < 0;
@@ -187,6 +187,16 @@ function TxRow({ t, categories, incomeCategories = [], onRecategorize, onSplit, 
             ✂ Split
           </button>
         )}
+        {onSendToReview && t.categoryId !== 'needs-review' && Number(t.amount) > 0 && (
+          <button
+            type="button"
+            className="tx-tag-btn"
+            title="Not sure how to classify this? Send it back to Needs Review."
+            onClick={() => onSendToReview(t.id)}
+          >
+            ↩ Needs review
+          </button>
+        )}
         <button
           type="button"
           className="tx-tag-btn"
@@ -273,6 +283,7 @@ export default function TxList({
   onDelete,
   onToggleExcluded,
   onSetTaxCategory,
+  onSendToReview,
   taxLabels,
   showReceiptLookup = false,
   emptyLabel = 'Nothing here yet.',
@@ -282,7 +293,7 @@ export default function TxList({
   const active = transactions.filter((t) => !t.excluded);
   const ignored = transactions.filter((t) => t.excluded);
 
-  const rowProps = { categories, incomeCategories, onRecategorize, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, taxLabels, showReceiptLookup };
+  const rowProps = { categories, incomeCategories, onRecategorize, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, taxLabels, showReceiptLookup };
 
   if (transactions.length === 0) {
     return <p className="module-note">{emptyLabel}</p>;

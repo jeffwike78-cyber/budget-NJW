@@ -43,6 +43,7 @@ function rowToTx(row) {
     business: row.business,
     taxCategory: row.tax_category,
     receiptPath: row.receipt_path,
+    userReviewed: !!row.user_reviewed,
   };
 }
 
@@ -221,12 +222,39 @@ export function useBudgetTransactions() {
     }
   }
 
-  async function recategorize(id, categoryId) {
+  // Recategorize a transaction. By default this is a USER action, so it marks
+  // the row user_reviewed=true (moving it to "User Reviewed" and out of "AI
+  // Reviewed"). The AI auto-categorize path passes { userReviewed: false } so
+  // its picks stay in "AI Reviewed" until a human confirms/corrects them.
+  async function recategorize(id, categoryId, { userReviewed = true } = {}) {
     try {
-      const { error } = await supabase.from('budget_transactions').update({ category_id: categoryId }).eq('id', id);
-      if (error) console.error('Failed to recategorize transaction:', error);
+      const { error } = await supabase
+        .from('budget_transactions')
+        .update({ category_id: categoryId, user_reviewed: userReviewed })
+        .eq('id', id);
+      if (error) {
+        // 42703 = column doesn't exist yet (the user_reviewed migration hasn't
+        // been run). Fall back to just the category so recategorizing still works.
+        if (error.code === '42703') {
+          const { error: e2 } = await supabase.from('budget_transactions').update({ category_id: categoryId }).eq('id', id);
+          if (e2) console.error('Failed to recategorize transaction:', e2);
+        } else {
+          console.error('Failed to recategorize transaction:', error);
+        }
+      }
     } catch (err) {
       console.error('Failed to recategorize transaction:', err);
+    }
+  }
+
+  // Send a transaction back to "Needs Review" (e.g. a charge from a spouse or a
+  // generic label the user isn't sure how to classify).
+  async function setNeedsReview(id) {
+    try {
+      const { error } = await supabase.from('budget_transactions').update({ category_id: 'needs-review' }).eq('id', id);
+      if (error) console.error('Failed to send transaction to Needs Review:', error);
+    } catch (err) {
+      console.error('Failed to send transaction to Needs Review:', err);
     }
   }
 
@@ -251,5 +279,5 @@ export function useBudgetTransactions() {
   const setBusiness = (id, value) => setFlag(id, 'business', value);
   const setTaxCategory = (id, value) => setFlag(id, 'tax_category', value || null);
 
-  return { transactions, loading, addTransaction, addSplitTransaction, splitTransaction, deleteTransaction, recategorize, setExcluded, setBusiness, setTaxCategory };
+  return { transactions, loading, addTransaction, addSplitTransaction, splitTransaction, deleteTransaction, recategorize, setNeedsReview, setExcluded, setBusiness, setTaxCategory };
 }
