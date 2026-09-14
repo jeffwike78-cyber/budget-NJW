@@ -301,6 +301,14 @@
   padding: 28px 20px 88px;
 }
 
+/* Cap and center the content column so every card is the same width and things
+   line up consistently instead of stretching edge-to-edge on a wide monitor.
+   Below this width the column is simply full-width (phone/tablet). */
+.app-main > * {
+  max-width: 1040px;
+  margin-inline: auto;
+}
+
 @media (min-width: 900px) {
   .app-main {
     padding: 32px 32px 64px;

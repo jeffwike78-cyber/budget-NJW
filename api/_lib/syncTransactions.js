@@ -383,10 +383,17 @@ export async function findDbDuplicates(supabaseAdmin, { dryRun = false, excludeI
     .from('budget_transactions')
     .select('id, account_id, plaid_transaction_id, date, amount, description, created_at')
     .eq('source', 'plaid');
+  // Group by amount + merchant only (NOT date): a pending charge and its posted
+  // copy frequently land on different dates a day or two apart, so keying on an
+  // exact date misses them. Within each amount+merchant group, cluster rows
+  // whose dates are close together (<= DUP_WINDOW_DAYS) and treat each cluster
+  // as one purchase — so a genuine recurring identical charge weeks apart stays
+  // separate, while a pending/posted pair a couple days apart is caught.
+  const DUP_WINDOW_DAYS = 4;
   const groups = new Map();
   for (const r of rows || []) {
     if (excludeIds.has(r.id)) continue;
-    const key = `${r.date}|${Number(r.amount).toFixed(2)}|${String(r.description || '').trim().toLowerCase()}`;
+    const key = `${Number(r.amount).toFixed(2)}|${String(r.description || '').trim().toLowerCase()}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(r);
   }
@@ -395,16 +402,32 @@ export async function findDbDuplicates(supabaseAdmin, { dryRun = false, excludeI
   let multiAccount = false;
   for (const list of groups.values()) {
     if (list.length < 2) continue;
-    if (new Set(list.map((r) => r.account_id)).size > 1) multiAccount = true;
-    // Keep the newest (last imported = the posted copy); remove the rest.
-    list.sort((a, b) => {
-      const ta = a.created_at || '';
-      const tb = b.created_at || '';
-      if (ta !== tb) return ta > tb ? -1 : 1;
-      return String(a.id) > String(b.id) ? -1 : 1;
-    });
-    for (const r of list.slice(1)) {
-      removable.push({ id: r.id, date: r.date, description: r.description, amount: Number(r.amount), accountId: r.account_id });
+    // Cluster by date proximity: walk date-ascending, starting a new cluster
+    // whenever the gap from the previous row exceeds the window.
+    const byDate = [...list].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    let cluster = [byDate[0]];
+    const clusters = [cluster];
+    for (let i = 1; i < byDate.length; i++) {
+      if (daysApart(byDate[i].date, byDate[i - 1].date) <= DUP_WINDOW_DAYS) {
+        cluster.push(byDate[i]);
+      } else {
+        cluster = [byDate[i]];
+        clusters.push(cluster);
+      }
+    }
+    for (const c of clusters) {
+      if (c.length < 2) continue;
+      if (new Set(c.map((r) => r.account_id)).size > 1) multiAccount = true;
+      // Keep the newest (last imported = the posted copy); remove the rest.
+      c.sort((a, b) => {
+        const ta = a.created_at || '';
+        const tb = b.created_at || '';
+        if (ta !== tb) return ta > tb ? -1 : 1;
+        return String(a.id) > String(b.id) ? -1 : 1;
+      });
+      for (const r of c.slice(1)) {
+        removable.push({ id: r.id, date: r.date, description: r.description, amount: Number(r.amount), accountId: r.account_id });
+      }
     }
   }
 
