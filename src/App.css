@@ -1334,6 +1334,18 @@ textarea {
 .networth-value.good { color: var(--good); }
 .networth-value.bad { color: var(--bad); }
 .networth-op { font-size: 18px; color: var(--text); font-weight: 700; }
+.networth-breakdown { list-style: none; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px solid var(--border, #ddd); display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.networth-breakdown li { display: flex; justify-content: space-between; }
+.networth-breakdown .good { color: var(--good); }
+.networth-breakdown .bad { color: var(--bad); }
+
+/* Property & other-asset editors on the Accounts page */
+.asset-editor { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 12px; }
+.asset-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding: 10px; border: 1px solid var(--border, #ddd); border-radius: 10px; }
+.asset-row > input[type="text"] { flex: 1 1 160px; min-width: 0; }
+.asset-field { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--text); }
+.asset-field input { width: 120px; }
+.asset-equity { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-h); align-self: center; }
 
 /* "Think rich" money-health tiles */
 .mh-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
