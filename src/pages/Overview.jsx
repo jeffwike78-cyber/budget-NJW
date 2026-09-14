@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import BarChart from '../components/BarChart';
-import { PlusIcon, BudgetIcon, AccountsIcon, ArrowUpRightIcon } from '../components/icons';
 import { todayStr, todayLabel } from '../lib/storage';
 import { isPayrollDeposit } from '../lib/income';
 import { netSpentByCategory } from '../lib/spending';
@@ -32,7 +31,7 @@ function lastNMonths(n) {
   return out;
 }
 
-export default function Overview({ budgetState, transactions, setView, onQuickScan }) {
+export default function Overview({ budgetState, transactions, onQuickScan }) {
   const [showSchedule, setShowSchedule] = useState(false);
   const today = todayStr();
   const month = monthKey(today);
@@ -424,40 +423,6 @@ export default function Overview({ budgetState, transactions, setView, onQuickSc
           <BarChart data={chartData} aLabel="Income" bLabel="Expenses" />
         </section>
 
-        <section className="card">
-          <div className="card-header">
-            <h2>Quick access</h2>
-          </div>
-          <ul className="quick-access-list">
-            <li>
-              <button type="button" className="quick-access-item" onClick={() => setView('transactions')}>
-                <span className="quick-access-icon">
-                  <PlusIcon size={16} />
-                </span>
-                Add transaction
-                <ArrowUpRightIcon size={14} />
-              </button>
-            </li>
-            <li>
-              <button type="button" className="quick-access-item" onClick={() => setView('budget')}>
-                <span className="quick-access-icon">
-                  <BudgetIcon size={16} />
-                </span>
-                Set category budgets
-                <ArrowUpRightIcon size={14} />
-              </button>
-            </li>
-            <li>
-              <button type="button" className="quick-access-item" onClick={() => setView('accounts')}>
-                <span className="quick-access-icon">
-                  <AccountsIcon size={16} />
-                </span>
-                Manage accounts
-                <ArrowUpRightIcon size={14} />
-              </button>
-            </li>
-          </ul>
-        </section>
       </div>
 
       {onQuickScan && (
