@@ -17,20 +17,29 @@ function accountIdForLast4(accounts, last4) {
   return match ? match.id : null;
 }
 
-export default function Transactions({ budgetState, setBudgetState, transactions, addTransaction, addSplitTransaction, recategorize, setExcluded, setTaxCategory, splitTransaction, deleteTransaction, pendingScanFile, onScanConsumed }) {
+export default function Transactions({ budgetState, setBudgetState, transactions, addTransaction, addSplitTransaction, recategorize, setNeedsReview, setExcluded, setTaxCategory, splitTransaction, deleteTransaction, pendingScanFile, onScanConsumed }) {
   // Needs Review is for unclear spending, not unclear deposits — money coming
   // in (amount < 0, the reverse of "positive = expense") never belongs here,
   // even if it somehow got flagged that way.
   const needsReview = transactions.filter((t) => t.categoryId === 'needs-review' && Number(t.amount) > 0);
   const needsReviewIds = new Set(needsReview.map((t) => t.id));
-  // Reviewed = everything active that isn't waiting on review; Hidden = ignored.
-  const reviewed = transactions.filter((t) => !t.excluded && !needsReviewIds.has(t.id));
+  // Active = everything not ignored and not waiting on review. Split it into what
+  // the AI placed (untouched) vs. what a human entered or confirmed:
+  //   User Reviewed = the user typed it in (manual/split) or corrected the AI's
+  //   pick (user_reviewed flag). AI Reviewed = auto-categorized, not yet touched.
+  const isUserReviewed = (t) => t.userReviewed || t.source === 'manual' || t.source === 'split' || t.source === 'receipt';
+  const active = transactions.filter((t) => !t.excluded && !needsReviewIds.has(t.id));
+  const aiReviewed = active.filter((t) => !isUserReviewed(t));
+  const userReviewed = active.filter(isUserReviewed);
   const hidden = transactions.filter((t) => t.excluded);
   const REVIEWED_CAP = 60;
-  const [showReviewed, setShowReviewed] = useState(false);
+  const [showAi, setShowAi] = useState(false);
+  const [showUser, setShowUser] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
-  const [showAllReviewed, setShowAllReviewed] = useState(false);
-  const reviewedShown = showAllReviewed ? reviewed : reviewed.slice(0, REVIEWED_CAP);
+  const [showAllAi, setShowAllAi] = useState(false);
+  const [showAllUser, setShowAllUser] = useState(false);
+  const aiShown = showAllAi ? aiReviewed : aiReviewed.slice(0, REVIEWED_CAP);
+  const userShown = showAllUser ? userReviewed : userReviewed.slice(0, REVIEWED_CAP);
   const [form, setForm] = useState({
     description: '', // vendor / where it was spent (shown in the list)
     note: '', // what was purchased (from the receipt)
@@ -243,7 +252,8 @@ export default function Transactions({ budgetState, setBudgetState, transactions
           if (!tx) return;
           if (!r.categoryId || r.categoryId === 'needs-review' || !validIds.has(r.categoryId)) return;
           if (typeof r.confidence === 'number' && r.confidence < 0.45) return;
-          await recategorize(tx.id, r.categoryId);
+          // AI-placed → stays in "AI Reviewed" until a human confirms/corrects it.
+          await recategorize(tx.id, r.categoryId, { userReviewed: false });
           memoryUpdates[normalize(tx.description)] = r.categoryId;
           applied += 1;
         })
@@ -437,14 +447,18 @@ export default function Transactions({ budgetState, setBudgetState, transactions
       </section>
 
       <section className="card">
-        <button type="button" className="tx-section-toggle" onClick={() => setShowReviewed((s) => !s)} aria-expanded={showReviewed}>
-          <span>Reviewed</span>
-          <span className="tx-section-count">{reviewed.length} {showReviewed ? '▴' : '▾'}</span>
+        <button type="button" className="tx-section-toggle" onClick={() => setShowAi((s) => !s)} aria-expanded={showAi}>
+          <span>AI Reviewed</span>
+          <span className="tx-section-count">{aiReviewed.length} {showAi ? '▴' : '▾'}</span>
         </button>
-        {showReviewed && (
+        {showAi && (
           <>
+            <p className="module-note">
+              Auto-categorized by the AI and not yet checked. Change a category (or tap <strong>Needs review</strong>)
+              and it moves to <strong>User Reviewed</strong> — and the AI learns your choice.
+            </p>
             <TxList
-              transactions={reviewedShown}
+              transactions={aiShown}
               categories={budgetState.categories}
               incomeCategories={budgetState.incomeCategories}
               onRecategorize={handleRecategorize}
@@ -452,14 +466,46 @@ export default function Transactions({ budgetState, setBudgetState, transactions
               onDelete={deleteTransaction}
               onToggleExcluded={setExcluded}
               onSetTaxCategory={setTaxCategory}
+              onSendToReview={setNeedsReview}
               taxLabels={budgetState.taxLabels}
               showReceiptLookup
               flat
-              emptyLabel="No reviewed transactions yet."
+              emptyLabel="Nothing here — every AI-sorted transaction has been checked."
             />
-            {reviewed.length > REVIEWED_CAP && (
-              <button type="button" className="category-expand-toggle" onClick={() => setShowAllReviewed((s) => !s)}>
-                {showAllReviewed ? 'Show recent only' : `Show all ${reviewed.length}`}
+            {aiReviewed.length > REVIEWED_CAP && (
+              <button type="button" className="category-expand-toggle" onClick={() => setShowAllAi((s) => !s)}>
+                {showAllAi ? 'Show recent only' : `Show all ${aiReviewed.length}`}
+              </button>
+            )}
+          </>
+        )}
+      </section>
+
+      <section className="card">
+        <button type="button" className="tx-section-toggle" onClick={() => setShowUser((s) => !s)} aria-expanded={showUser}>
+          <span>User Reviewed</span>
+          <span className="tx-section-count">{userReviewed.length} {showUser ? '▴' : '▾'}</span>
+        </button>
+        {showUser && (
+          <>
+            <TxList
+              transactions={userShown}
+              categories={budgetState.categories}
+              incomeCategories={budgetState.incomeCategories}
+              onRecategorize={handleRecategorize}
+              onSplit={splitTransaction}
+              onDelete={deleteTransaction}
+              onToggleExcluded={setExcluded}
+              onSetTaxCategory={setTaxCategory}
+              onSendToReview={setNeedsReview}
+              taxLabels={budgetState.taxLabels}
+              showReceiptLookup
+              flat
+              emptyLabel="Nothing here yet — transactions you enter or correct land here."
+            />
+            {userReviewed.length > REVIEWED_CAP && (
+              <button type="button" className="category-expand-toggle" onClick={() => setShowAllUser((s) => !s)}>
+                {showAllUser ? 'Show recent only' : `Show all ${userReviewed.length}`}
               </button>
             )}
           </>
