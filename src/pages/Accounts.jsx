@@ -55,6 +55,7 @@ export default function Accounts({ budgetState, setBudgetState }) {
   const [auditBusy, setAuditBusy] = useState(false);
   const [auditMsg, setAuditMsg] = useState(null);
   const [auditFound, setAuditFound] = useState(null); // null = not run; [] = clean
+  const [auditSelected, setAuditSelected] = useState(new Set()); // ids checked for removal
 
   const { start: startPlaid, busy: plaidBusy, error: plaidError } = usePlaidConnect({
     onLinked: (data) => {
@@ -88,43 +89,71 @@ export default function Accounts({ budgetState, setBudgetState }) {
       setEmailMsg(err.message);
     }
   }
-  // Audit imported transactions against the banks' live feed. dryRun first to
-  // preview; then the confirm button re-runs it for real to delete.
-  async function runAudit(dryRun) {
+  // Preview the audit: list the duplicate candidates and pre-check them all, so
+  // the user can uncheck any legitimate ones before removing.
+  async function previewAudit() {
     setAuditBusy(true);
     setAuditMsg(null);
     try {
       const res = await fetch('/api/plaid/reconcile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dryRun }),
+        body: JSON.stringify({ dryRun: true }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Audit failed.');
+      const found = data.removed || [];
+      setAuditFound(found);
+      setAuditSelected(new Set(found.map((t) => t.id)));
       const dupWarning = data.multiAccount
         ? ' Heads up: some duplicates span two accounts, which usually means the same bank is connected twice — after removing these, check the connected banks below and disconnect the redundant one so it doesn’t come back.'
         : '';
-      if (dryRun) {
-        setAuditFound(data.removed || []);
-        setAuditMsg(
-          data.count === 0
-            ? 'No duplicates found — every imported transaction still matches your bank. ✓'
-            : `Found ${data.count} duplicate transaction${data.count === 1 ? '' : 's'} (a charge imported twice — e.g. a pending charge that later posted). Review them below, then remove.${dupWarning}`
-        );
-      } else {
-        setAuditFound([]);
-        setAuditMsg(
-          data.count === 0
-            ? 'Nothing to remove — you’re all clean. ✓'
-            : `Removed ${data.count} duplicate transaction${data.count === 1 ? '' : 's'}. ✓`
-        );
-      }
+      setAuditMsg(
+        data.count === 0
+          ? 'No duplicates found — every imported transaction still matches your bank. ✓'
+          : `Found ${data.count} duplicate${data.count === 1 ? '' : 's'} (a charge imported twice — e.g. a pending charge that later posted). Uncheck any that are legitimate, then remove the rest.${dupWarning}`
+      );
       if (data.error) setAuditMsg((m) => `${m || ''} (${data.error})`.trim());
     } catch (err) {
       setAuditMsg(err.message);
     } finally {
       setAuditBusy(false);
     }
+  }
+
+  // Remove only the checked rows.
+  async function removeSelected() {
+    const ids = [...auditSelected];
+    if (ids.length === 0) return;
+    setAuditBusy(true);
+    setAuditMsg(null);
+    try {
+      const res = await fetch('/api/plaid/reconcile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun: false, ids }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Remove failed.');
+      // Drop the removed rows from the list; anything left was unchecked (kept).
+      const removedSet = new Set(ids);
+      setAuditFound((prev) => (prev || []).filter((t) => !removedSet.has(t.id)));
+      setAuditSelected(new Set());
+      setAuditMsg(`Removed ${data.count} duplicate${data.count === 1 ? '' : 's'}. ✓`);
+    } catch (err) {
+      setAuditMsg(err.message);
+    } finally {
+      setAuditBusy(false);
+    }
+  }
+
+  function toggleAuditRow(id) {
+    setAuditSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   const accounts = budgetState.accounts || [];
@@ -363,33 +392,55 @@ export default function Accounts({ budgetState, setBudgetState }) {
           are never touched.
         </p>
         <div className="ai-actions">
-          <button type="button" className="secondary-btn" onClick={() => runAudit(true)} disabled={auditBusy}>
+          <button type="button" className="secondary-btn" onClick={previewAudit} disabled={auditBusy}>
             {auditBusy ? 'Auditing…' : '🔍 Audit for duplicates'}
           </button>
           {Array.isArray(auditFound) && auditFound.length > 0 && (
             <button
               type="button"
               className="primary-btn"
-              onClick={() => runAudit(false)}
-              disabled={auditBusy}
+              onClick={removeSelected}
+              disabled={auditBusy || auditSelected.size === 0}
             >
-              Remove {auditFound.length} duplicate{auditFound.length === 1 ? '' : 's'}
+              Remove {auditSelected.size} selected
             </button>
           )}
           {auditMsg && <span className="module-note ai-status">{auditMsg}</span>}
         </div>
         {Array.isArray(auditFound) && auditFound.length > 0 && (
-          <ul className="audit-list">
-            {auditFound.map((t) => (
-              <li key={t.id} className="audit-row">
-                <span className="audit-date">{(t.date || '').slice(5)}</span>
-                <span className="audit-desc">{t.description}</span>
-                <span className={`audit-amount ${Number(t.amount) < 0 ? 'good' : ''}`}>
-                  {Number(t.amount) < 0 ? '+' : '-'}${Math.abs(Number(t.amount)).toFixed(2)}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <>
+            <div className="audit-select-all">
+              <button
+                type="button"
+                className="link-btn"
+                onClick={() => setAuditSelected(new Set(auditFound.map((t) => t.id)))}
+              >
+                Select all
+              </button>
+              <span aria-hidden="true">·</span>
+              <button type="button" className="link-btn" onClick={() => setAuditSelected(new Set())}>
+                Select none
+              </button>
+            </div>
+            <ul className="audit-list">
+              {auditFound.map((t) => (
+                <li key={t.id} className="audit-row">
+                  <label className="audit-check">
+                    <input
+                      type="checkbox"
+                      checked={auditSelected.has(t.id)}
+                      onChange={() => toggleAuditRow(t.id)}
+                    />
+                  </label>
+                  <span className="audit-date">{(t.date || '').slice(5)}</span>
+                  <span className="audit-desc">{t.description}</span>
+                  <span className={`audit-amount ${Number(t.amount) < 0 ? 'good' : ''}`}>
+                    {Number(t.amount) < 0 ? '+' : '-'}${Math.abs(Number(t.amount)).toFixed(2)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </section>
 

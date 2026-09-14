@@ -1541,8 +1541,11 @@ textarea {
 .payoff-card.payoff-bad { border-left: 4px solid var(--bad); }
 
 /* Transaction audit list */
-.audit-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.audit-row { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; font-size: 14px; }
+.audit-select-all { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; font-size: 13px; color: var(--text); }
+.audit-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.audit-row { display: grid; grid-template-columns: 22px 48px 1fr auto; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; font-size: 14px; }
+.audit-check { display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.audit-check input { width: 16px; height: 16px; cursor: pointer; }
 .audit-row:nth-child(odd) { background: var(--surface-2, rgba(127,127,127,0.06)); }
 .audit-date { color: var(--text); font-variant-numeric: tabular-nums; }
 .audit-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

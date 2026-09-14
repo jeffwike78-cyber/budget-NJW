@@ -20,9 +20,30 @@ export default async function handler(req, res) {
     const body = parseBody(req);
     const dryRun = body.dryRun !== false; // default to a safe preview
     const itemId = body.itemId || body.item_id || null;
+    const ids = Array.isArray(body.ids) ? body.ids.filter(Boolean) : null;
+
+    const admin = getSupabaseAdmin();
+
+    // Targeted removal: the audit previewed the candidates and the user chose
+    // which to delete. Delete exactly those (imported rows only, for safety) —
+    // no re-scan, so their unchecked/legitimate ones are left alone.
+    if (!dryRun && ids && ids.length > 0) {
+      let count = 0;
+      for (let i = 0; i < ids.length; i += 100) {
+        const { data, error } = await admin
+          .from('budget_transactions')
+          .delete()
+          .eq('source', 'plaid')
+          .in('id', ids.slice(i, i + 100))
+          .select('id');
+        if (error) throw error;
+        count += (data || []).length;
+      }
+      res.status(200).json({ ok: true, dryRun: false, count });
+      return;
+    }
 
     const plaid = getPlaidClient();
-    const admin = getSupabaseAdmin();
 
     let query = admin.from('plaid_items').select('id');
     if (itemId) query = query.eq('id', itemId);
