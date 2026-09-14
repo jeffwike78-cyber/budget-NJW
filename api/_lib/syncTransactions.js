@@ -231,6 +231,84 @@ async function autoLookupReceipts(supabaseAdmin, needsReviewPlaidIds, categories
   }
 }
 
+// The budget account ids that belong to one Plaid item. Accounts are tagged
+// with plaidItemId when synced; fall back to the item's legacy combined account
+// id for connections linked before that tagging existed.
+function itemAccountIds(budget, item) {
+  const ids = (budget.accounts || []).filter((a) => a.plaidItemId === item.id).map((a) => a.id);
+  if (ids.length === 0 && item.account_id) ids.push(item.account_id);
+  return ids;
+}
+
+// The same import scope the sync applies: skip pre-cutoff history and
+// balance-only accounts.
+function buildScope(budget, item) {
+  const cutoff = importCutoff(budget);
+  const withinCutoff = (t) => !cutoff || t.date >= cutoff;
+  const balanceOnlyIds = new Set((budget.accounts || []).filter((a) => a.balanceOnly).map((a) => a.id));
+  const inScope = (t) => !balanceOnlyIds.has(t.account_id ? budgetAccountId(t.account_id) : item.account_id);
+  return { withinCutoff, inScope };
+}
+
+// Pull an item's COMPLETE current transaction set from Plaid (a fresh null-cursor
+// walk) without disturbing the stored incremental cursor. Returns the set of
+// transaction ids Plaid still recognizes and the earliest date it covered.
+async function collectCurrentTxIds(plaid, item, withinCutoff, inScope) {
+  const seenIds = new Set();
+  let minDate = null;
+  let cursor = null;
+  let hasMore = true;
+  let guard = 0;
+  while (hasMore && guard++ < 100) {
+    const resp = await plaid.transactionsSync({ access_token: item.access_token, cursor: cursor || undefined });
+    for (const t of [...resp.data.added, ...resp.data.modified]) {
+      if (!withinCutoff(t) || !inScope(t)) continue;
+      seenIds.add(t.transaction_id);
+      if (!minDate || t.date < minDate) minDate = t.date;
+    }
+    hasMore = resp.data.has_more;
+    cursor = resp.data.next_cursor;
+  }
+  return { seenIds, minDate };
+}
+
+// Delete stored plaid rows Plaid no longer knows about (orphans). Scoped to the
+// given accounts and to date >= minDate (the range Plaid actually covered), so
+// history older than Plaid's window and other banks' rows are never touched.
+// With dryRun it reports what it WOULD remove without deleting. Never touches
+// manual / receipt / split rows.
+async function deleteOrphans(supabaseAdmin, accountIds, seenIds, minDate, { dryRun = false } = {}) {
+  if (!accountIds.length || seenIds.size === 0 || !minDate) return [];
+  const { data: rows } = await supabaseAdmin
+    .from('budget_transactions')
+    .select('id, plaid_transaction_id, date, description, amount, account_id')
+    .eq('source', 'plaid')
+    .in('account_id', accountIds)
+    .gte('date', minDate);
+  const orphans = (rows || []).filter((r) => r.plaid_transaction_id && !seenIds.has(r.plaid_transaction_id));
+  if (!dryRun && orphans.length > 0) {
+    const ids = orphans.map((o) => o.id);
+    for (let i = 0; i < ids.length; i += 100) {
+      const { error } = await supabaseAdmin.from('budget_transactions').delete().in('id', ids.slice(i, i + 100));
+      if (error) console.error('Failed to delete orphan transactions:', error);
+    }
+  }
+  return orphans.map((o) => ({ id: o.id, date: o.date, description: o.description, amount: Number(o.amount), accountId: o.account_id }));
+}
+
+// Audit one bank against Plaid's live feed (which mirrors what the bank shows)
+// and remove imported rows the bank no longer has — the duplicate phantoms left
+// by past pending→posted transitions. dryRun returns the list without deleting.
+export async function reconcileItem(supabaseAdmin, plaid, itemRowId, { dryRun = false } = {}) {
+  const { data: item } = await supabaseAdmin.from('plaid_items').select('*').eq('id', itemRowId).maybeSingle();
+  if (!item) return { removed: [], seen: 0, reason: 'no-item' };
+  const budget = await loadBudget(supabaseAdmin);
+  const { withinCutoff, inScope } = buildScope(budget, item);
+  const { seenIds, minDate } = await collectCurrentTxIds(plaid, item, withinCutoff, inScope);
+  const removed = await deleteOrphans(supabaseAdmin, itemAccountIds(budget, item), seenIds, minDate, { dryRun });
+  return { removed, seen: seenIds.size };
+}
+
 // Pulls whatever changed since the stored cursor (everything, on first run),
 // auto-categorizes, upserts added/modified, deletes removed, saves the cursor.
 // A per-item lock (with a 2-minute stale timeout) stops overlapping webhook
@@ -288,6 +366,14 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
     }
 
     let cursor = item.sync_cursor;
+    // A sync that starts from a null cursor is a full refresh: Plaid returns the
+    // account's complete current set, so once it finishes we can reconcile — any
+    // stored plaid row Plaid didn't mention is an orphan (a pending charge that
+    // posted under a new id after an earlier cursor reset, whose 'removed' event
+    // we never got). Track everything Plaid returns so we can sweep those.
+    const startedFromNull = !item.sync_cursor;
+    const seenIds = new Set();
+    let minSeenDate = null;
     const addedNew = [];
     const needsReviewPlaidIds = [];
     let syncedCount = 0;
@@ -353,6 +439,10 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
 
       const pageAdded = resp.data.added.filter(withinCutoff).filter(inScope);
       const pageModified = resp.data.modified.filter(withinCutoff).filter(inScope);
+      for (const t of [...pageAdded, ...pageModified]) {
+        seenIds.add(t.transaction_id);
+        if (!minSeenDate || t.date < minSeenDate) minSeenDate = t.date;
+      }
       const { assignments, businessSet } = await assignCategories(supabaseAdmin, [...pageAdded, ...pageModified], categories);
 
       // New rows share the same columns → one batched upsert per page.
@@ -389,6 +479,23 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
       addedNew.push(...pageAdded);
       syncedCount += pageAdded.length + pageModified.length;
       removedCount += removeIds.length;
+    }
+
+    // Self-heal: a full refresh (started from a null cursor and ran to the end)
+    // gives Plaid's complete current set for this bank, so sweep any orphaned
+    // plaid rows it didn't mention — the phantoms left behind by a past cursor
+    // reset. Scoped to this bank's accounts and to the date range Plaid actually
+    // covered, so older history and other banks are never touched.
+    if (startedFromNull && seenIds.size > 0) {
+      try {
+        const swept = await deleteOrphans(supabaseAdmin, itemAccountIds(budget, item), seenIds, minSeenDate);
+        if (swept.length > 0) {
+          removedCount += swept.length;
+          console.log(`Reconcile removed ${swept.length} orphaned transaction(s) for item ${itemRowId}.`);
+        }
+      } catch (err) {
+        console.error('Orphan reconcile phase failed:', err?.message || err);
+      }
     }
 
     try {

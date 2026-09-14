@@ -51,6 +51,10 @@ export default function Accounts({ budgetState, setBudgetState }) {
   const [syncMsg, setSyncMsg] = useState(null);
   const { accounts: emailAccounts, reload: reloadEmail, connect: connectGmail, disconnect: disconnectGmail } = useGmailAccounts();
   const [emailMsg, setEmailMsg] = useState(null);
+  // Transaction audit (find/remove imported rows the bank no longer has).
+  const [auditBusy, setAuditBusy] = useState(false);
+  const [auditMsg, setAuditMsg] = useState(null);
+  const [auditFound, setAuditFound] = useState(null); // null = not run; [] = clean
 
   const { start: startPlaid, busy: plaidBusy, error: plaidError } = usePlaidConnect({
     onLinked: (data) => {
@@ -84,6 +88,42 @@ export default function Accounts({ budgetState, setBudgetState }) {
       setEmailMsg(err.message);
     }
   }
+  // Audit imported transactions against the banks' live feed. dryRun first to
+  // preview; then the confirm button re-runs it for real to delete.
+  async function runAudit(dryRun) {
+    setAuditBusy(true);
+    setAuditMsg(null);
+    try {
+      const res = await fetch('/api/plaid/reconcile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Audit failed.');
+      if (dryRun) {
+        setAuditFound(data.removed || []);
+        setAuditMsg(
+          data.count === 0
+            ? 'No duplicates found — every imported transaction still matches your bank. ✓'
+            : `Found ${data.count} transaction${data.count === 1 ? '' : 's'} your bank no longer has (likely old pending charges that already posted). Review them below, then remove.`
+        );
+      } else {
+        setAuditFound([]);
+        setAuditMsg(
+          data.count === 0
+            ? 'Nothing to remove — you’re all clean. ✓'
+            : `Removed ${data.count} duplicate transaction${data.count === 1 ? '' : 's'}. ✓`
+        );
+      }
+      if (data.error) setAuditMsg((m) => `${m || ''} (${data.error})`.trim());
+    } catch (err) {
+      setAuditMsg(err.message);
+    } finally {
+      setAuditBusy(false);
+    }
+  }
+
   const accounts = budgetState.accounts || [];
   // Net worth: assets minus liabilities. Liabilities (credit + manual loans)
   // are stored as positive amounts owed and count against the total.
@@ -304,6 +344,50 @@ export default function Accounts({ budgetState, setBudgetState }) {
             />
           </label>
         </div>
+      </section>
+
+      <section className="card">
+        <div className="card-header">
+          <h2>Transaction audit</h2>
+          {Array.isArray(auditFound) && auditFound.length > 0 && (
+            <span className="pill pill-warn">{auditFound.length} to remove</span>
+          )}
+        </div>
+        <p className="module-note">
+          Checks every imported transaction against your bank’s live feed and finds any the bank no longer
+          has — usually an old “pending” charge that already posted under a new entry, leaving a duplicate.
+          Nothing is deleted until you review the list and confirm. Your manual entries, receipts, and splits
+          are never touched.
+        </p>
+        <div className="ai-actions">
+          <button type="button" className="secondary-btn" onClick={() => runAudit(true)} disabled={auditBusy}>
+            {auditBusy ? 'Auditing…' : '🔍 Audit for duplicates'}
+          </button>
+          {Array.isArray(auditFound) && auditFound.length > 0 && (
+            <button
+              type="button"
+              className="primary-btn"
+              onClick={() => runAudit(false)}
+              disabled={auditBusy}
+            >
+              Remove {auditFound.length} duplicate{auditFound.length === 1 ? '' : 's'}
+            </button>
+          )}
+          {auditMsg && <span className="module-note ai-status">{auditMsg}</span>}
+        </div>
+        {Array.isArray(auditFound) && auditFound.length > 0 && (
+          <ul className="audit-list">
+            {auditFound.map((t) => (
+              <li key={t.id} className="audit-row">
+                <span className="audit-date">{(t.date || '').slice(5)}</span>
+                <span className="audit-desc">{t.description}</span>
+                <span className={`audit-amount ${Number(t.amount) < 0 ? 'good' : ''}`}>
+                  {Number(t.amount) < 0 ? '+' : '-'}${Math.abs(Number(t.amount)).toFixed(2)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="card">
