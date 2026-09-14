@@ -353,6 +353,9 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                         value={c.name}
                         onChange={(e) => updateCategory(c.id, 'name', e.target.value)}
                       />
+                      {c.autopay && (
+                        <span className="autopay-badge" title="On autopay">⟳ Auto</span>
+                      )}
                       <div className="category-type-control">
                         <select
                           className="category-kind-select"
@@ -457,6 +460,14 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                             </select>
                           </>
                         )}
+                        <label className="autopay-toggle" title="Mark this bill/expense as set up on autopay">
+                          <input
+                            type="checkbox"
+                            checked={!!c.autopay}
+                            onChange={(e) => updateCategory(c.id, 'autopay', e.target.checked)}
+                          />
+                          Autopay
+                        </label>
                         <button
                           type="button"
                           className="reorder-btn"
@@ -573,6 +584,7 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
           <span>
             <strong>{leftToBudget < 0 ? 'Over by:' : 'Left to budget:'}</strong> ${Math.abs(leftToBudget).toFixed(0)}
           </span>
+          {budgetableCategories.some((c) => c.autopay) && <span className="budget-print-legend">⟳ = autopay</span>}
         </div>
 
         <div className="budget-print-flow">
@@ -599,7 +611,7 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                 <tbody>
                   {rows.map((c) => (
                     <tr key={c.id}>
-                      <td>{c.name}</td>
+                      <td>{c.name}{c.autopay ? ' ⟳' : ''}</td>
                       <td className="num">${(effectiveBudgets[c.id] || 0).toFixed(0)}</td>
                     </tr>
                   ))}
