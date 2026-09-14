@@ -163,30 +163,68 @@ export function useBudgetTransactions() {
     }
   }
 
+  // Find an existing, still-counted bank (Plaid) transaction that looks like the
+  // same purchase as a receipt total — same amount (small tolerance) within a
+  // week — so a receipt uploaded AFTER the charge already posted can merge with
+  // it instead of adding a duplicate row.
+  async function findMatchingBankCharge(total, dateStr, { tol = 0.75, withinDays = 7 } = {}) {
+    const target = Math.abs(Number(total));
+    if (!(target > 0)) return null;
+    const { data, error } = await supabase
+      .from('budget_transactions')
+      .select('id, amount, date')
+      .eq('source', 'plaid')
+      .eq('excluded', false);
+    if (error || !data) return null;
+    let best = null;
+    let bestScore = Infinity;
+    for (const r of data) {
+      const da = Math.abs(Math.abs(Number(r.amount)) - target);
+      if (da > tol) continue;
+      const dd = Math.abs((new Date(`${r.date}T00:00:00`) - new Date(`${dateStr}T00:00:00`)) / 86400000);
+      if (dd > withinDays) continue;
+      const score = da * 10 + dd;
+      if (score < bestScore) {
+        bestScore = score;
+        best = r;
+      }
+    }
+    return best;
+  }
+
   // Add a transaction that's split across several envelopes in one step (used by
   // the receipt-scan / add form). Each part becomes its own counted row sharing
-  // the vendor/date/account. For a scanned receipt we also drop a single
-  // full-total, excluded "anchor" row (source='receipt') so that when the real
-  // bank charge posts it reconciles against the total and gets excluded instead
-  // of double-counting the split — see mergeReceiptMatches in syncTransactions.
+  // the vendor/date/account. For a scanned receipt: if the bank already imported
+  // the charge, exclude that bank row so it doesn't double-count with the split;
+  // otherwise drop a single full-total, excluded "anchor" row (source='receipt')
+  // so the charge reconciles when it posts — see mergeReceiptMatches in
+  // syncTransactions.
   async function addSplitTransaction(base, parts) {
     try {
       const isReceipt = !!base.receiptPath;
       const total = parts.reduce((s, p) => s + Number(p.amount), 0);
       if (isReceipt) {
-        const anchor = {
-          date: base.date,
-          description: base.description,
-          amount: total,
-          category_id: null,
-          account_id: base.accountId,
-          source: 'receipt',
-          excluded: true,
-          receipt_path: base.receiptPath,
-        };
-        if (base.note) anchor.note = base.note;
-        const { error: anchorErr } = await supabase.from('budget_transactions').insert(anchor);
-        if (anchorErr) return { message: describeError(anchorErr) };
+        // Bank charge already here (split-uploaded after the sync)? Hide it.
+        const match = await findMatchingBankCharge(total, base.date);
+        if (match) {
+          const { error: exErr } = await supabase.from('budget_transactions').update({ excluded: true }).eq('id', match.id);
+          if (exErr) return { message: describeError(exErr) };
+        } else {
+          // No charge yet — leave an anchor for the sync to reconcile against.
+          const anchor = {
+            date: base.date,
+            description: base.description,
+            amount: total,
+            category_id: null,
+            account_id: base.accountId,
+            source: 'receipt',
+            excluded: true,
+            receipt_path: base.receiptPath,
+          };
+          if (base.note) anchor.note = base.note;
+          const { error: anchorErr } = await supabase.from('budget_transactions').insert(anchor);
+          if (anchorErr) return { message: describeError(anchorErr) };
+        }
       }
       const rows = parts.map((p, i) => {
         const row = {
