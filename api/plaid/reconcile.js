@@ -1,6 +1,6 @@
 import { getPlaidClient } from '../_lib/plaidClient.js';
 import { getSupabaseAdmin } from '../_lib/supabaseAdmin.js';
-import { reconcileItem } from '../_lib/syncTransactions.js';
+import { reconcileItem, findDbDuplicates } from '../_lib/syncTransactions.js';
 import { parseBody, plaidErrorMessage } from '../_lib/http.js';
 
 export const config = { maxDuration: 60 };
@@ -31,6 +31,8 @@ export default async function handler(req, res) {
 
     const removed = [];
     const errors = {};
+    // Pass 1 — reconcile each bank against Plaid's live feed (orphans + pendings
+    // Plaid has replaced). This is the durable path; it also prevents recurrence.
     for (const row of rows || []) {
       try {
         const result = await reconcileItem(admin, plaid, row.id, { dryRun });
@@ -39,6 +41,20 @@ export default async function handler(req, res) {
         console.error(`reconcile failed for item ${row.id}:`, itemErr?.response?.data ?? itemErr?.message ?? itemErr);
         errors[row.id] = plaidErrorMessage(itemErr, 'This bank could not be audited.');
       }
+    }
+
+    // Pass 2 — direct database catch-all: any remaining rows that are exact
+    // duplicates of each other (same date, amount, merchant), keeping one. This
+    // catches duplicates Plaid's feed can't explain (e.g. an institution that
+    // doesn't link pending→posted, or a bank connected twice).
+    const alreadyRemoved = new Set(removed.map((r) => r.id));
+    let multiAccount = false;
+    try {
+      const db = await findDbDuplicates(admin, { dryRun, excludeIds: alreadyRemoved });
+      removed.push(...db.removable);
+      multiAccount = db.multiAccount;
+    } catch (dbErr) {
+      console.error('DB duplicate scan failed:', dbErr?.message || dbErr);
     }
 
     // Newest first — easiest to eyeball against the bank's recent activity.
@@ -50,6 +66,7 @@ export default async function handler(req, res) {
       dryRun,
       count: removed.length,
       removed,
+      multiAccount,
       errors,
       error: failed.length ? `Couldn’t audit ${failed.length} of your banks: ${[...new Set(failed)].join(' ')}` : undefined,
     });

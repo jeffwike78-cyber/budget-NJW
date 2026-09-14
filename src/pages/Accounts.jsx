@@ -101,12 +101,15 @@ export default function Accounts({ budgetState, setBudgetState }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Audit failed.');
+      const dupWarning = data.multiAccount
+        ? ' Heads up: some duplicates span two accounts, which usually means the same bank is connected twice — after removing these, check the connected banks below and disconnect the redundant one so it doesn’t come back.'
+        : '';
       if (dryRun) {
         setAuditFound(data.removed || []);
         setAuditMsg(
           data.count === 0
             ? 'No duplicates found — every imported transaction still matches your bank. ✓'
-            : `Found ${data.count} transaction${data.count === 1 ? '' : 's'} your bank no longer has (likely old pending charges that already posted). Review them below, then remove.`
+            : `Found ${data.count} duplicate transaction${data.count === 1 ? '' : 's'} (a charge imported twice — e.g. a pending charge that later posted). Review them below, then remove.${dupWarning}`
         );
       } else {
         setAuditFound([]);

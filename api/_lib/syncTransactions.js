@@ -251,25 +251,68 @@ function buildScope(budget, item) {
 }
 
 // Pull an item's COMPLETE current transaction set from Plaid (a fresh null-cursor
-// walk) without disturbing the stored incremental cursor. Returns the set of
-// transaction ids Plaid still recognizes and the earliest date it covered.
+// walk) without disturbing the stored incremental cursor. Returns the ids Plaid
+// still recognizes, the ids of pending charges it has since replaced (via
+// pending_transaction_id — these are duplicates the bank no longer shows), and
+// the earliest date it covered.
 async function collectCurrentTxIds(plaid, item, withinCutoff, inScope) {
   const seenIds = new Set();
+  const supersededIds = new Set();
+  const pendingTxns = []; // {id, key, date}
+  const postedTxns = []; // {key, date}
   let minDate = null;
   let cursor = null;
   let hasMore = true;
   let guard = 0;
+  const keyOf = (t) =>
+    `${t.account_id}|${Number(t.amount).toFixed(2)}|${String(t.merchant_name || t.name || '').trim().toLowerCase()}`;
   while (hasMore && guard++ < 100) {
     const resp = await plaid.transactionsSync({ access_token: item.access_token, cursor: cursor || undefined });
     for (const t of [...resp.data.added, ...resp.data.modified]) {
       if (!withinCutoff(t) || !inScope(t)) continue;
       seenIds.add(t.transaction_id);
+      if (t.pending_transaction_id) supersededIds.add(t.pending_transaction_id); // Plaid's explicit link
+      if (t.pending) pendingTxns.push({ id: t.transaction_id, key: keyOf(t), date: t.date });
+      else postedTxns.push({ key: keyOf(t), date: t.date });
       if (!minDate || t.date < minDate) minDate = t.date;
     }
     hasMore = resp.data.has_more;
     cursor = resp.data.next_cursor;
   }
-  return { seenIds, minDate };
+
+  // Backstop for institutions that don't populate pending_transaction_id: a
+  // still-pending charge that has a matching POSTED charge (same account, amount,
+  // and merchant within a few days) is the same purchase — the pending copy is a
+  // duplicate. Date-bounded so a recurring identical charge in a later month
+  // isn't wrongly matched to an earlier month's posting.
+  const heuristicSupersededIds = new Set();
+  for (const p of pendingTxns) {
+    if (supersededIds.has(p.id)) continue;
+    const match = postedTxns.some((q) => q.key === p.key && Math.abs(daysApart(p.date, q.date)) <= 5);
+    if (match) heuristicSupersededIds.add(p.id);
+  }
+
+  return { seenIds, supersededIds, heuristicSupersededIds, minDate };
+}
+
+// Delete specific plaid rows by their Plaid transaction ids, scoped to the given
+// accounts. Returns how many rows were removed. Used to clear superseded pending
+// charges. Never touches non-plaid rows (the id filter already limits to them).
+async function deleteByPlaidIds(supabaseAdmin, accountIds, plaidIds) {
+  if (!accountIds.length || !plaidIds.length) return 0;
+  let removed = 0;
+  for (let i = 0; i < plaidIds.length; i += 100) {
+    const chunk = plaidIds.slice(i, i + 100);
+    const { data, error } = await supabaseAdmin
+      .from('budget_transactions')
+      .delete()
+      .in('account_id', accountIds)
+      .in('plaid_transaction_id', chunk)
+      .select('id');
+    if (error) console.error('Failed to delete superseded transactions:', error);
+    else removed += (data || []).length;
+  }
+  return removed;
 }
 
 // Delete stored plaid rows Plaid no longer knows about (orphans). Scoped to the
@@ -277,15 +320,21 @@ async function collectCurrentTxIds(plaid, item, withinCutoff, inScope) {
 // history older than Plaid's window and other banks' rows are never touched.
 // With dryRun it reports what it WOULD remove without deleting. Never touches
 // manual / receipt / split rows.
-async function deleteOrphans(supabaseAdmin, accountIds, seenIds, minDate, { dryRun = false } = {}) {
+async function deleteOrphans(supabaseAdmin, accountIds, seenIds, minDate, { dryRun = false, supersededIds } = {}) {
   if (!accountIds.length || seenIds.size === 0 || !minDate) return [];
+  const superseded = supersededIds || new Set();
   const { data: rows } = await supabaseAdmin
     .from('budget_transactions')
     .select('id, plaid_transaction_id, date, description, amount, account_id')
     .eq('source', 'plaid')
     .in('account_id', accountIds)
     .gte('date', minDate);
-  const orphans = (rows || []).filter((r) => r.plaid_transaction_id && !seenIds.has(r.plaid_transaction_id));
+  // A row is removable if the bank no longer lists it at all (orphan) OR Plaid
+  // has replaced it with a posted charge (superseded pending). Both are dupes
+  // the bank no longer shows.
+  const orphans = (rows || []).filter(
+    (r) => r.plaid_transaction_id && (!seenIds.has(r.plaid_transaction_id) || superseded.has(r.plaid_transaction_id))
+  );
   if (!dryRun && orphans.length > 0) {
     const ids = orphans.map((o) => o.id);
     for (let i = 0; i < ids.length; i += 100) {
@@ -304,9 +353,69 @@ export async function reconcileItem(supabaseAdmin, plaid, itemRowId, { dryRun = 
   if (!item) return { removed: [], seen: 0, reason: 'no-item' };
   const budget = await loadBudget(supabaseAdmin);
   const { withinCutoff, inScope } = buildScope(budget, item);
-  const { seenIds, minDate } = await collectCurrentTxIds(plaid, item, withinCutoff, inScope);
-  const removed = await deleteOrphans(supabaseAdmin, itemAccountIds(budget, item), seenIds, minDate, { dryRun });
+  const { seenIds, supersededIds, heuristicSupersededIds, minDate } = await collectCurrentTxIds(plaid, item, withinCutoff, inScope);
+  // The manual audit is preview-first (the user confirms before anything is
+  // deleted), so it also applies the same-purchase heuristic; the automatic
+  // sync sweep stays limited to Plaid's explicit link.
+  const allSuperseded = new Set([...supersededIds, ...heuristicSupersededIds]);
+  const removed = await deleteOrphans(supabaseAdmin, itemAccountIds(budget, item), seenIds, minDate, {
+    dryRun,
+    supersededIds: allSuperseded,
+  });
   return { removed, seen: seenIds.size };
+}
+
+// Direct database catch-all: find imported rows that are exact duplicates of
+// each other — same date, amount, and merchant — and keep only one per group.
+// This catches duplicates however they arose (a lost pending→posted removal, an
+// institution that doesn't link the two, or the same account synced twice),
+// independent of what Plaid currently reports. Deterministic keeper: the NEWEST
+// imported row (or, tie, the largest id) — when a pending charge and its posted
+// copy both linger, the posted one was imported later, so keeping the newest
+// keeps the canonical charge and drops the pending (never the reverse, which
+// could delete the charge that survives). Returns the rows to remove; with
+// dryRun it only lists them. `excludeIds` skips rows another pass already
+// removed. Also flags when a group spans more than one account (the sign of a
+// duplicate bank connection, which the user should disconnect to stop it
+// recurring).
+export async function findDbDuplicates(supabaseAdmin, { dryRun = false, excludeIds = new Set() } = {}) {
+  const { data: rows } = await supabaseAdmin
+    .from('budget_transactions')
+    .select('id, account_id, plaid_transaction_id, date, amount, description, created_at')
+    .eq('source', 'plaid');
+  const groups = new Map();
+  for (const r of rows || []) {
+    if (excludeIds.has(r.id)) continue;
+    const key = `${r.date}|${Number(r.amount).toFixed(2)}|${String(r.description || '').trim().toLowerCase()}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(r);
+  }
+
+  const removable = [];
+  let multiAccount = false;
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    if (new Set(list.map((r) => r.account_id)).size > 1) multiAccount = true;
+    // Keep the newest (last imported = the posted copy); remove the rest.
+    list.sort((a, b) => {
+      const ta = a.created_at || '';
+      const tb = b.created_at || '';
+      if (ta !== tb) return ta > tb ? -1 : 1;
+      return String(a.id) > String(b.id) ? -1 : 1;
+    });
+    for (const r of list.slice(1)) {
+      removable.push({ id: r.id, date: r.date, description: r.description, amount: Number(r.amount), accountId: r.account_id });
+    }
+  }
+
+  if (!dryRun && removable.length > 0) {
+    const ids = removable.map((r) => r.id);
+    for (let i = 0; i < ids.length; i += 100) {
+      const { error } = await supabaseAdmin.from('budget_transactions').delete().in('id', ids.slice(i, i + 100));
+      if (error) console.error('Failed to delete duplicate transactions:', error);
+    }
+  }
+  return { removable, multiAccount };
 }
 
 // Pulls whatever changed since the stored cursor (everything, on first run),
@@ -373,6 +482,13 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
     // we never got). Track everything Plaid returns so we can sweep those.
     const startedFromNull = !item.sync_cursor;
     const seenIds = new Set();
+    // When a pending charge posts, Plaid gives the posted transaction a NEW id
+    // and points its `pending_transaction_id` back at the pending one it
+    // replaced. That pending row in our DB is now a duplicate the bank no longer
+    // shows. Collecting these lets us delete them even when Plaid still lists the
+    // pending in the feed and our earlier `removed` event was lost to a cursor
+    // reset — the exact cause of the visible "Yummy Bowl / Casa Brava" dupes.
+    const supersededIds = new Set();
     let minSeenDate = null;
     const addedNew = [];
     const needsReviewPlaidIds = [];
@@ -441,6 +557,7 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
       const pageModified = resp.data.modified.filter(withinCutoff).filter(inScope);
       for (const t of [...pageAdded, ...pageModified]) {
         seenIds.add(t.transaction_id);
+        if (t.pending_transaction_id) supersededIds.add(t.pending_transaction_id);
         if (!minSeenDate || t.date < minSeenDate) minSeenDate = t.date;
       }
       const { assignments, businessSet } = await assignCategories(supabaseAdmin, [...pageAdded, ...pageModified], categories);
@@ -481,14 +598,30 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
       removedCount += removeIds.length;
     }
 
+    // Sweep superseded pending rows (a pending charge that has since posted under
+    // a new id — Plaid told us via pending_transaction_id). Runs every sync, so
+    // these duplicates clear even without a full refresh.
+    const acctIds = itemAccountIds(budget, item);
+    if (supersededIds.size > 0 && acctIds.length > 0) {
+      try {
+        const swept = await deleteByPlaidIds(supabaseAdmin, acctIds, [...supersededIds]);
+        if (swept > 0) {
+          removedCount += swept;
+          console.log(`Removed ${swept} superseded pending transaction(s) for item ${itemRowId}.`);
+        }
+      } catch (err) {
+        console.error('Superseded-pending sweep failed:', err?.message || err);
+      }
+    }
+
     // Self-heal: a full refresh (started from a null cursor and ran to the end)
-    // gives Plaid's complete current set for this bank, so sweep any orphaned
-    // plaid rows it didn't mention — the phantoms left behind by a past cursor
-    // reset. Scoped to this bank's accounts and to the date range Plaid actually
-    // covered, so older history and other banks are never touched.
+    // gives Plaid's complete current set for this bank, so also sweep any
+    // orphaned plaid rows it didn't mention at all — phantoms left by a past
+    // cursor reset. Scoped to this bank's accounts and to the date range Plaid
+    // actually covered, so older history and other banks are never touched.
     if (startedFromNull && seenIds.size > 0) {
       try {
-        const swept = await deleteOrphans(supabaseAdmin, itemAccountIds(budget, item), seenIds, minSeenDate);
+        const swept = await deleteOrphans(supabaseAdmin, acctIds, seenIds, minSeenDate);
         if (swept.length > 0) {
           removedCount += swept.length;
           console.log(`Reconcile removed ${swept.length} orphaned transaction(s) for item ${itemRowId}.`);
