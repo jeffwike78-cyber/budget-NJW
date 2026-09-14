@@ -12,7 +12,7 @@ export async function lookupReceiptForTx(admin, tx, categories, { apiKey, model 
   const usable = (accounts || []).filter((a) => a.refresh_token);
   if (usable.length === 0) return { found: false, reason: 'no-accounts' };
 
-  const query = `${cleanMerchant(tx.description)} ${dateWindow(tx.date, 7)}`.trim();
+  const query = `${merchantSearchTerm(tx.description)} ${dateWindow(tx.date, 7)}`.trim();
 
   const candidates = [];
   for (const acct of usable) {
@@ -82,6 +82,29 @@ export function cleanMerchant(desc) {
     .filter((w) => w.length > 1)
     .slice(0, 3)
     .join(' ');
+}
+
+// Big retailers show up on statements under codes that don't appear in their
+// receipt emails — Amazon especially ("AMZN Mktp US*2A3B4", "Amazon.com*BC7"),
+// so a keyword search on the raw descriptor finds nothing. Map those known
+// merchants to the brand name their emails actually use; fall back to the
+// generic keyword cleaner for everything else.
+const KNOWN_MERCHANTS = [
+  [/amazon|amzn/i, 'Amazon'],
+  [/wal-?mart|wm supercenter/i, 'Walmart'],
+  [/\btarget\b/i, 'Target'],
+  [/costco/i, 'Costco'],
+  [/kroger/i, 'Kroger'],
+  [/paypal/i, 'PayPal'],
+  [/instacart/i, 'Instacart'],
+  [/doordash/i, 'DoorDash'],
+];
+export function merchantSearchTerm(desc) {
+  const s = String(desc || '');
+  for (const [re, term] of KNOWN_MERCHANTS) {
+    if (re.test(s)) return term;
+  }
+  return cleanMerchant(s);
 }
 
 // Gmail date filter for a +/- N day window around the transaction date.
