@@ -3,6 +3,7 @@ import { usePlaidConnect } from '../lib/usePlaidConnect';
 import { useConnectedBanks } from '../lib/useConnectedBanks';
 import { useGmailAccounts } from '../lib/useGmailAccounts';
 import { signedBalance, includeInCashOnHand, isLiability, LIABILITY_TYPES } from '../lib/budgetMath';
+import { computeNetWorth, propertyEquity } from '../lib/netWorth';
 
 const ACCOUNT_TYPES = ['checking', 'savings', 'investing', 'asset', 'credit', 'liability'];
 const TYPE_LABEL = {
@@ -157,11 +158,38 @@ export default function Accounts({ budgetState, setBudgetState }) {
   }
 
   const accounts = budgetState.accounts || [];
-  // Net worth: assets minus liabilities. Liabilities (credit + manual loans)
-  // are stored as positive amounts owed and count against the total.
-  const total = accounts.reduce((sum, a) => sum + signedBalance(a), 0);
-  const assetsTotal = accounts.filter((a) => !isLiability(a)).reduce((s, a) => s + signedBalance(a), 0);
-  const liabilitiesTotal = accounts.filter(isLiability).reduce((s, a) => s + Math.abs(signedBalance(a)), 0);
+  // Full net worth: accounts (Plaid + manual) plus properties and other assets,
+  // minus liabilities and property liens.
+  const nw = computeNetWorth(budgetState);
+  const total = nw.total;
+  const assetsTotal = nw.assets;
+  const liabilitiesTotal = nw.liabilities;
+  const accountsTotal = accounts.reduce((sum, a) => sum + signedBalance(a), 0);
+  const properties = budgetState.netWorth?.properties || [];
+  const otherAssets = budgetState.netWorth?.otherAssets || [];
+
+  // Mutate the netWorth sub-object without touching envelopes/schedule.
+  function updateNetWorth(patch) {
+    setBudgetState((prev) => ({ ...prev, netWorth: { ...(prev.netWorth || {}), ...patch } }));
+  }
+  function addProperty() {
+    updateNetWorth({ properties: [...properties, { id: `prop-${Date.now()}`, name: '', address: '', value: '', lien: '' }] });
+  }
+  function updateProperty(id, patch) {
+    updateNetWorth({ properties: properties.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
+  }
+  function removeProperty(id) {
+    updateNetWorth({ properties: properties.filter((p) => p.id !== id) });
+  }
+  function addOtherAsset() {
+    updateNetWorth({ otherAssets: [...otherAssets, { id: `asset-${Date.now()}`, name: '', value: '' }] });
+  }
+  function updateOtherAsset(id, patch) {
+    updateNetWorth({ otherAssets: otherAssets.map((a) => (a.id === id ? { ...a, ...patch } : a)) });
+  }
+  function removeOtherAsset(id) {
+    updateNetWorth({ otherAssets: otherAssets.filter((a) => a.id !== id) });
+  }
 
   // Everyday credit card cycle settings (see Overview reminder).
   const cc = budgetState.settings?.creditCard || { accountId: '', statementDay: '', dueDay: '' };
@@ -539,17 +567,79 @@ export default function Accounts({ budgetState, setBudgetState }) {
           </div>
         </div>
         <p className="module-note">
-          Add your home, vehicles, and other assets — plus loans/mortgages not linked through a bank — as accounts
-          below (types <strong>asset</strong> and <strong>loan / liability</strong>). Update those values now and
-          then; linked bank, card, and investment balances refresh automatically. This total feeds the Net worth
-          card and trend on the Overview.
+          Combines your linked &amp; manual account balances (checking, savings, investments, cards, loans) with the
+          properties and other assets below. Bank, card, and investment balances refresh automatically; property and
+          asset values you set here. This total feeds the Net worth card and trend on the Overview.
         </p>
+        {(properties.length > 0 || otherAssets.length > 0) && (
+          <ul className="networth-breakdown">
+            <li><span>Accounts (assets)</span><span className="good">{money(nw.acctAssets)}</span></li>
+            <li><span>Accounts (liabilities)</span><span className="bad">−{money(nw.acctLiabilities)}</span></li>
+            {properties.length > 0 && <li><span>Property equity</span><span>{money(nw.propertyEquity)}</span></li>}
+            {otherAssets.length > 0 && <li><span>Other assets</span><span>{money(nw.otherAssetsValue)}</span></li>}
+          </ul>
+        )}
+      </section>
+
+      <section className="card">
+        <div className="card-header">
+          <h2>Property &amp; real estate</h2>
+          {properties.length > 0 && <span className="pill">{money(nw.propertyEquity)} equity</span>}
+        </div>
+        <p className="module-note">
+          Add each property with your best estimate of its value (e.g. a Zillow &ldquo;Zestimate&rdquo;) and the
+          remaining mortgage / lien. Equity (value − lien) counts toward your net worth. Update the value whenever you
+          like.
+        </p>
+        <div className="asset-editor">
+          {properties.map((p) => (
+            <div className="asset-row property-row" key={p.id}>
+              <input type="text" placeholder="Name (e.g. Home, Rental #1)" value={p.name || ''} onChange={(e) => updateProperty(p.id, { name: e.target.value })} />
+              <input type="text" placeholder="Address" value={p.address || ''} onChange={(e) => updateProperty(p.id, { address: e.target.value })} />
+              <label className="asset-field">
+                <span>Value</span>
+                <input type="number" inputMode="decimal" placeholder="0" value={p.value ?? ''} onChange={(e) => updateProperty(p.id, { value: e.target.value })} />
+              </label>
+              <label className="asset-field">
+                <span>Mortgage / lien</span>
+                <input type="number" inputMode="decimal" placeholder="0" value={p.lien ?? ''} onChange={(e) => updateProperty(p.id, { lien: e.target.value })} />
+              </label>
+              <span className="asset-equity" title="Value minus lien">{money(propertyEquity(p))}</span>
+              <button type="button" className="link-btn danger" onClick={() => removeProperty(p.id)} aria-label="Remove property">✕</button>
+            </div>
+          ))}
+        </div>
+        <button type="button" className="secondary-btn" onClick={addProperty}>+ Add property</button>
+      </section>
+
+      <section className="card">
+        <div className="card-header">
+          <h2>Other assets</h2>
+          {otherAssets.length > 0 && <span className="pill">{money(nw.otherAssetsValue)}</span>}
+        </div>
+        <p className="module-note">
+          Vehicles, valuables, or anything else you own that isn&apos;t a linked account. Enter your best estimate;
+          update it whenever.
+        </p>
+        <div className="asset-editor">
+          {otherAssets.map((a) => (
+            <div className="asset-row" key={a.id}>
+              <input type="text" placeholder="Name (e.g. 2019 Truck)" value={a.name || ''} onChange={(e) => updateOtherAsset(a.id, { name: e.target.value })} />
+              <label className="asset-field">
+                <span>Value</span>
+                <input type="number" inputMode="decimal" placeholder="0" value={a.value ?? ''} onChange={(e) => updateOtherAsset(a.id, { value: e.target.value })} />
+              </label>
+              <button type="button" className="link-btn danger" onClick={() => removeOtherAsset(a.id)} aria-label="Remove asset">✕</button>
+            </div>
+          ))}
+        </div>
+        <button type="button" className="secondary-btn" onClick={addOtherAsset}>+ Add asset</button>
       </section>
 
       <section className="card">
         <div className="card-header">
           <h2>Your accounts</h2>
-          <span className="pill">{money(total)} total</span>
+          <span className="pill">{money(accountsTotal)} total</span>
         </div>
 
         <div className="accounts-editor">

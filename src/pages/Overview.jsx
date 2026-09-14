@@ -4,6 +4,7 @@ import { todayStr, todayLabel } from '../lib/storage';
 import { isPayrollDeposit } from '../lib/income';
 import { netSpentByCategory } from '../lib/spending';
 import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, signedBalance } from '../lib/budgetMath';
+import { computeNetWorth } from '../lib/netWorth';
 import { ageOfMoney, ageOfMoneyAdvice, ageOfMoneyStatus } from '../lib/ageOfMoney';
 import { projectCashflow } from '../lib/cashflow';
 import { creditCardStatus, formatDueDate } from '../lib/creditCard';
@@ -54,6 +55,9 @@ export default function Overview({ budgetState, transactions, onQuickScan }) {
   const incomeAhead = actualIncome - expectedIncome;
 
   const totalBalance = budgetState.accounts.reduce((sum, a) => sum + signedBalance(a), 0);
+  // Net worth includes properties and other assets tracked on the Accounts page,
+  // not just linked account balances.
+  const netWorthTotal = computeNetWorth(budgetState).total;
   const card = creditCardStatus(budgetState.settings, budgetState.accounts, transactions);
 
   // --- "Think rich" money-health metrics ---
@@ -90,8 +94,8 @@ export default function Overview({ budgetState, transactions, onQuickScan }) {
   // it risks a stale tab clobbering everyone's data. Snapshots are recorded
   // safely elsewhere (piggybacked on real budget saves).
   const nwHistory = budgetState.netWorthHistory || {};
-  const nwKeys = Object.keys({ ...nwHistory, [month]: totalBalance }).sort();
-  const nwSeries = nwKeys.map((k) => (k === month ? Math.round(totalBalance) : Math.round(nwHistory[k])));
+  const nwKeys = Object.keys({ ...nwHistory, [month]: netWorthTotal }).sort();
+  const nwSeries = nwKeys.map((k) => (k === month ? Math.round(netWorthTotal) : Math.round(nwHistory[k])));
   const nwFirst = nwSeries[0];
   const nwChange = nwSeries.length > 1 ? nwSeries[nwSeries.length - 1] - nwFirst : null;
 
@@ -215,7 +219,7 @@ export default function Overview({ budgetState, transactions, onQuickScan }) {
           </div>
           <div className="mh-tile">
             <span className="mh-label">Net worth</span>
-            <span className={`mh-value ${totalBalance < 0 ? 'bad' : ''}`}>{usd(totalBalance)}</span>
+            <span className={`mh-value ${netWorthTotal < 0 ? 'bad' : ''}`}>{usd(netWorthTotal)}</span>
             <span className="mh-sub">
               {nwChange == null
                 ? 'Trend builds as months pass'
