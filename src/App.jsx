@@ -115,6 +115,7 @@ function App() {
               budgetState={budgetState}
               setBudgetState={setBudgetState}
               transactions={transactions}
+              addTransaction={addTransaction}
               setView={setView}
               {...txActions}
             />

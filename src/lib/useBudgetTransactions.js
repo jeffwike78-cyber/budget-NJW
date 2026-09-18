@@ -97,7 +97,7 @@ export function useBudgetTransactions() {
     };
   }, [reload]);
 
-  async function addTransaction({ date, description, amount, categoryId, accountId, source = 'manual', note, receiptPath }) {
+  async function addTransaction({ date, description, amount, categoryId, accountId, source = 'manual', note, receiptPath, taxCategory }) {
     try {
       const row = {
         date,
@@ -109,6 +109,7 @@ export function useBudgetTransactions() {
       };
       if (note) row.note = note;
       if (receiptPath) row.receipt_path = receiptPath;
+      if (taxCategory) row.tax_category = taxCategory;
       // .select() returns the inserted row — but only if a read (RLS SELECT)
       // policy allows it. So this distinguishes: insert blocked (error), insert
       // ok + readable (data has the row), insert ok + NOT readable (empty, no
