@@ -529,7 +529,6 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
       // Ignored so it never hits an envelope or the Needs Review queue.
       const isXfer = isTransferOrCardPayment(txn);
       const categoryId = isXfer ? null : assignments[txn.transaction_id] || 'needs-review';
-      if (!isXfer && categoryId === 'needs-review') needsReviewPlaidIds.push(txn.transaction_id);
       const business = businessSet.has(txn.transaction_id);
       const row = {
         plaid_transaction_id: txn.transaction_id,
@@ -543,6 +542,10 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
       };
       if (forInsert || business) row.business = business;
       if (forInsert || isXfer) row.excluded = isXfer;
+      // Inserted rows all carry user_reviewed so a batched upsert has uniform
+      // columns (a NOT-NULL column missing from some rows would write NULL and
+      // fail the batch). A fresh AI-placed row is not user-reviewed.
+      if (forInsert) row.user_reviewed = false;
       return row;
     };
 
@@ -585,22 +588,75 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
       }
       const { assignments, businessSet } = await assignCategories(supabaseAdmin, [...pageAdded, ...pageModified], categories);
 
+      // A charge first imported while PENDING posts later under a NEW id, with
+      // pending_transaction_id pointing back at the pending row. Carry that
+      // pending row's category, review state, and flags onto the posted row so a
+      // transaction you already categorized/ignored is NOT re-reviewed from
+      // scratch — the exact "it came back in AI Reviewed" bug. Fetch predecessors
+      // once per page.
+      const predIds = [...new Set(pageAdded.map((t) => t.pending_transaction_id).filter(Boolean))];
+      const predMap = new Map();
+      if (predIds.length > 0) {
+        const { data: preds } = await supabaseAdmin
+          .from('budget_transactions')
+          .select('plaid_transaction_id, category_id, user_reviewed, excluded, business, note, tax_category, receipt_path')
+          .in('plaid_transaction_id', predIds);
+        for (const r of preds || []) predMap.set(r.plaid_transaction_id, r);
+      }
+
       // New rows share the same columns → one batched upsert per page.
-      const insertRows = pageAdded.map((t) => buildRow(t, assignments, businessSet, true));
+      const insertRows = pageAdded.map((t) => {
+        const row = buildRow(t, assignments, businessSet, true);
+        const pred = t.pending_transaction_id && predMap.get(t.pending_transaction_id);
+        if (pred) {
+          row.category_id = pred.category_id;
+          row.user_reviewed = !!pred.user_reviewed;
+          row.excluded = !!pred.excluded;
+          row.business = !!pred.business;
+          if (pred.note) row.note = pred.note;
+          if (pred.tax_category) row.tax_category = pred.tax_category;
+          if (pred.receipt_path) row.receipt_path = pred.receipt_path;
+        }
+        return row;
+      });
       if (insertRows.length > 0) {
         const { error } = await supabaseAdmin
           .from('budget_transactions')
           .upsert(insertRows, { onConflict: 'plaid_transaction_id' });
         if (error) console.error('Failed to upsert transactions:', error);
       }
+      // Chase email receipts only for rows still unclear and untouched — never
+      // for an inherited/reviewed one (that would re-open a settled charge).
+      for (const row of insertRows) {
+        if (row.category_id === 'needs-review' && !row.user_reviewed && !row.excluded) {
+          needsReviewPlaidIds.push(row.plaid_transaction_id);
+        }
+      }
 
-      // Modified rows upsert individually so an omitted false flag can't clear a
-      // flag the user set on the existing row.
+      // MODIFIED rows: only refresh the volatile fields (date, description,
+      // amount). Never re-categorize or clear a flag — once a transaction exists,
+      // its category and review state belong to the user, and AI categorization
+      // happens only on first import, never again. If somehow we've never seen
+      // the transaction, fall back to inserting it fresh so it isn't lost.
       for (const t of pageModified) {
-        const { error } = await supabaseAdmin
+        const volatile = { date: t.date, description: t.merchant_name || t.name, amount: t.amount };
+        const { data: updated, error } = await supabaseAdmin
           .from('budget_transactions')
-          .upsert(buildRow(t, assignments, businessSet, false), { onConflict: 'plaid_transaction_id' });
-        if (error) console.error('Failed to upsert transaction:', error);
+          .update(volatile)
+          .eq('plaid_transaction_id', t.transaction_id)
+          .select('id');
+        if (error) {
+          console.error('Failed to update modified transaction:', error);
+          continue;
+        }
+        if (!updated || updated.length === 0) {
+          const row = buildRow(t, assignments, businessSet, true);
+          const { error: insErr } = await supabaseAdmin
+            .from('budget_transactions')
+            .upsert(row, { onConflict: 'plaid_transaction_id' });
+          if (insErr) console.error('Failed to insert modified transaction:', insErr);
+          else if (row.category_id === 'needs-review' && !row.excluded) needsReviewPlaidIds.push(row.plaid_transaction_id);
+        }
       }
 
       const removeIds = resp.data.removed.map((t) => t.transaction_id);
