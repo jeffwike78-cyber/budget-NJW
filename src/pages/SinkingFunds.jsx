@@ -427,7 +427,7 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
                     </span>
                     <span className="sf-figure">
                       <span className="sf-figure-label">Remaining</span>
-                      <span className={`sf-figure-value${over ? ' over-budget' : ''}`}>{money(e.remaining)}</span>
+                      <span className={`sf-figure-value sf-balance ${e.remaining < 0 ? 'neg' : 'pos'}`}>{money(e.remaining)}</span>
                     </span>
                   </div>
                   <div className="bar-track">
@@ -611,7 +611,7 @@ function FundCard({ f, onUpdate, onMarkPaid, onMoveUp, onMoveDown, isFirst, isLa
       <div className="sf-card-figures">
         <span className="sf-figure">
           <span className="sf-figure-label">Balance</span>
-          <span className="sf-figure-value">{money(f.live)}</span>
+          <span className={`sf-figure-value sf-balance ${f.live < 0 ? 'neg' : 'pos'}`}>{money(f.live)}</span>
         </span>
         <span className="sf-figure">
           <span className="sf-figure-label">Target</span>

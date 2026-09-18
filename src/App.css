@@ -307,6 +307,7 @@
 .app-main > * {
   max-width: 1040px;
   margin-inline: auto;
+  min-width: 0; /* let cards shrink instead of a long string forcing overflow */
 }
 
 @media (min-width: 900px) {
@@ -485,7 +486,9 @@ textarea {
 
 .overview-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  /* minmax(0, …) lets columns shrink below their content so a long unbroken
+     string (e.g. a raw ACH descriptor) truncates instead of running off-screen. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 
@@ -494,7 +497,7 @@ textarea {
    a real desktop, where there's room. */
 @media (min-width: 1000px) {
   .overview-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
 
@@ -580,6 +583,7 @@ textarea {
 .recent-tx-amount {
   font-weight: 700;
   color: var(--text-h);
+  flex-shrink: 0; /* keep the amount intact; the description truncates instead */
 }
 
 .recent-tx-amount.good,
@@ -1224,6 +1228,10 @@ textarea {
 .sf-figure { display: flex; flex-direction: column; gap: 2px; }
 .sf-figure-label { font-size: 12px; color: var(--text); }
 .sf-figure-value { font-size: 17px; font-weight: 700; color: var(--text-h); }
+/* Make each fund's balance pop: bold, green when positive, red when negative. */
+.sf-figure-value.sf-balance { font-size: 19px; font-weight: 800; }
+.sf-figure-value.sf-balance.pos { color: var(--good); }
+.sf-figure-value.sf-balance.neg { color: var(--bad); }
 
 .sf-bar-funded { background: var(--good); }
 .sf-bar-on-track { background: var(--accent); }
