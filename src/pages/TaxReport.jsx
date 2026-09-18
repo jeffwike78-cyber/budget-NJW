@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { todayStr } from '../lib/storage';
 import { getReceiptUrl } from '../lib/receiptsClient';
+import { scanCharity } from '../lib/charityScan';
 import { TAX_CATEGORIES, DEFAULT_TAX_LABELS, taxLabel } from '../lib/tax';
 
 function money(n) {
@@ -9,10 +10,54 @@ function money(n) {
 
 // Year-end tax report, grouped by tax bucket (Charitable, Medical, Business 1,
 // Business 2) with totals and a CSV export to hand to a CPA.
-export default function TaxReport({ budgetState, setBudgetState, transactions, setTaxCategory, setView }) {
+export default function TaxReport({ budgetState, setBudgetState, transactions, addTransaction, setTaxCategory, setView }) {
   const years = yearsPresent(transactions);
   const [year, setYear] = useState(String(new Date(todayStr()).getFullYear()));
   const labels = { ...DEFAULT_TAX_LABELS, ...(budgetState.taxLabels || {}) };
+
+  // --- Charitable donation finder (scans connected email for the chosen year) ---
+  const [scanBusy, setScanBusy] = useState(false);
+  const [scanMsg, setScanMsg] = useState(null);
+  const [found, setFound] = useState(null); // null = not run; [] = none
+  const [applied, setApplied] = useState(new Set());
+  const donationKey = (d) => `${d.org}|${d.amount}|${d.date}`;
+
+  async function runCharityScan() {
+    setScanBusy(true);
+    setScanMsg(null);
+    try {
+      const data = await scanCharity(year);
+      setFound(data.found || []);
+      setApplied(new Set());
+      setScanMsg(
+        data.found?.length
+          ? `Found ${data.found.length} donation${data.found.length === 1 ? '' : 's'} in ${year} email. Review and record the ones that belong.`
+          : `No charitable receipts found in ${year} email.`
+      );
+    } catch (err) {
+      setScanMsg(err.message);
+    } finally {
+      setScanBusy(false);
+    }
+  }
+  async function tagMatched(d) {
+    if (!d.matchTxId) return;
+    await setTaxCategory(d.matchTxId, 'charitable');
+    setApplied((prev) => new Set(prev).add(donationKey(d)));
+  }
+  async function addUnmatched(d) {
+    await addTransaction({
+      date: d.date,
+      description: d.org,
+      amount: d.amount,
+      categoryId: null,
+      accountId: budgetState.accounts?.[0]?.id,
+      source: 'manual',
+      note: 'Charitable donation (from email receipt)',
+      taxCategory: 'charitable',
+    });
+    setApplied((prev) => new Set(prev).add(donationKey(d)));
+  }
 
   const inYear = transactions.filter((t) => !t.excluded && Number(t.amount) > 0 && t.date.startsWith(year));
   const byCategory = {};
@@ -109,6 +154,48 @@ export default function TaxReport({ budgetState, setBudgetState, transactions, s
             </label>
           ))}
         </div>
+      </section>
+
+      <section className="card no-print">
+        <div className="card-header">
+          <h2>Find charitable donations in email</h2>
+          {Array.isArray(found) && found.length > 0 && <span className="pill">{found.length} found</span>}
+        </div>
+        <p className="module-note">
+          Scours your connected inboxes for {year} donation receipts (church tithes, 501(c)(3) gift receipts,
+          &ldquo;tax-deductible&rdquo; acknowledgments). Ones that match a bank charge get tagged
+          <strong> Charitable</strong> with one tap; cash/check/stock gifts with no matching charge you add here.
+          Nothing is recorded until you tap.
+        </p>
+        <div className="ai-actions">
+          <button type="button" className="secondary-btn" onClick={runCharityScan} disabled={scanBusy}>
+            {scanBusy ? 'Scanning…' : `🔎 Scan ${year} email`}
+          </button>
+          {scanMsg && <span className="module-note ai-status">{scanMsg}</span>}
+        </div>
+        {Array.isArray(found) && found.length > 0 && (
+          <ul className="charity-list">
+            {found.map((d) => {
+              const done = applied.has(donationKey(d)) || d.alreadyTagged;
+              return (
+                <li key={donationKey(d)} className="charity-row">
+                  <span className="charity-date">{(d.date || '').slice(5)}</span>
+                  <span className="charity-org">{d.org}</span>
+                  <span className="charity-amt">{money(d.amount)}</span>
+                  <span className="charity-action">
+                    {done ? (
+                      <span className="charity-done">✓ Recorded</span>
+                    ) : d.matchTxId ? (
+                      <button type="button" className="link-btn" onClick={() => tagMatched(d)}>Tag as Charitable</button>
+                    ) : (
+                      <button type="button" className="link-btn" onClick={() => addUnmatched(d)}>Add donation</button>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
       {TAX_CATEGORIES.map((key) => {
