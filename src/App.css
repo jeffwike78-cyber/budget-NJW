@@ -1575,6 +1575,16 @@ textarea {
 .audit-check { display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .audit-check input { width: 16px; height: 16px; cursor: pointer; }
 
+/* Charitable donation finder (Tax Report) */
+.charity-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.charity-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 6px; font-size: 14px; }
+.charity-row:nth-child(odd) { background: var(--surface-2, rgba(127,127,127,0.06)); }
+.charity-date { color: var(--text); font-variant-numeric: tabular-nums; }
+.charity-org { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-h); font-weight: 600; }
+.charity-amt { font-variant-numeric: tabular-nums; font-weight: 700; }
+.charity-action { white-space: nowrap; }
+.charity-done { color: var(--good); font-weight: 600; font-size: 13px; }
+
 /* ---------- Summary (P&L) ---------- */
 .summary-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
 .summary-mode { display: inline-flex; border: 1px solid var(--border, #ddd); border-radius: 8px; overflow: hidden; }
