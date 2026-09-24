@@ -1575,6 +1575,12 @@ textarea {
 .audit-check { display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .audit-check input { width: 16px; height: 16px; cursor: pointer; }
 
+/* Voice / Siri settings */
+.voice-url-row { display: flex; gap: 8px; align-items: center; }
+.voice-url-row input { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.voice-steps { margin: 8px 0 12px; padding-left: 20px; color: var(--text); font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+.voice-steps code { font-size: 12px; background: var(--surface-2, rgba(127,127,127,0.12)); padding: 1px 4px; border-radius: 4px; }
+
 /* Charitable donation finder (Tax Report) */
 .charity-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .charity-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 6px; font-size: 14px; }
