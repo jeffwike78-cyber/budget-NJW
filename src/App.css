@@ -342,15 +342,22 @@
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0; /* allow items to shrink so all tabs fit — never run off-screen */
   font: inherit;
   font-size: 11px;
   font-weight: 600;
   color: var(--text);
   background: transparent;
   border: none;
-  padding: 6px 4px;
+  padding: 6px 2px;
   cursor: pointer;
+}
+.mobile-tab-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobile-tab-link.active {
@@ -973,6 +980,7 @@ textarea {
 .accounts-editor-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap; /* on narrow screens the toggles/remove wrap to a new line instead of overflowing */
   gap: 8px;
   padding: 12px 0;
   border-bottom: 1px solid var(--border);

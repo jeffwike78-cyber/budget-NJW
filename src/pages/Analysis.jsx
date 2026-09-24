@@ -10,7 +10,7 @@ function monthLabel(m) {
   return new Date(`${m}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 }
 
-export default function Analysis({ budgetState, setBudgetState, transactions }) {
+export default function Analysis({ budgetState, setBudgetState, transactions, embedded = false }) {
   const current = monthKey();
   // Months available to analyze: start month through the current month, newest
   // first. Default to the most recent completed month when there is one.
@@ -44,7 +44,7 @@ export default function Analysis({ budgetState, setBudgetState, transactions }) 
 
   return (
     <>
-      <h1 className="page-title">Analysis</h1>
+      {!embedded && <h1 className="page-title">Analysis</h1>}
       <p className="page-intro no-print">
         A monthly read on your money from AI — where spending is drifting, what&apos;s going well, and concrete
         ways to save more. It looks back over past months too, so the picture sharpens over time.
