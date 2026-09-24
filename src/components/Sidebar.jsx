@@ -1,14 +1,14 @@
-import { OverviewIcon, TransactionsIcon, BudgetIcon, SinkingFundsIcon, AccountsIcon, AnalysisIcon, ReportIcon } from './icons';
+import { OverviewIcon, TransactionsIcon, BudgetIcon, SinkingFundsIcon, AccountsIcon, ReportIcon } from './icons';
 import { signedBalance } from '../lib/budgetMath';
 
 // Tax Report isn't a daily tab — it's reached from Settings (used once a year).
+// Analysis (the AI narrative) now lives as a tab inside the Summary page.
 const NAV_ITEMS = [
   { key: 'overview', label: 'Overview', Icon: OverviewIcon },
   { key: 'transactions', label: 'Transactions', Icon: TransactionsIcon },
   { key: 'budget', label: 'Budget', Icon: BudgetIcon },
   { key: 'sinking', label: 'Envelopes', Icon: SinkingFundsIcon },
   { key: 'summary', label: 'Summary', Icon: ReportIcon },
-  { key: 'analysis', label: 'Analysis', Icon: AnalysisIcon },
   { key: 'accounts', label: 'Accounts', Icon: AccountsIcon },
 ];
 
@@ -78,7 +78,7 @@ export function MobileTabBar({ view, setView }) {
           onClick={() => setView(key)}
         >
           <Icon />
-          {label}
+          <span className="mobile-tab-label">{label}</span>
         </button>
       ))}
     </nav>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { todayStr } from '../lib/storage';
 import { netSpentByCategory } from '../lib/spending';
 import BarChart from '../components/BarChart';
+import Analysis from './Analysis';
 
 const usd = (n) => `$${Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 const usd2 = (n) => `$${Math.abs(Number(n || 0)).toFixed(2)}`;
@@ -27,8 +28,8 @@ function expensesOf(txns) {
   return Object.values(netSpentByCategory(txns)).reduce((a, b) => a + b, 0);
 }
 
-export default function Summary({ budgetState, transactions }) {
-  const [mode, setMode] = useState('month'); // 'month' | 'year'
+export default function Summary({ budgetState, setBudgetState, transactions }) {
+  const [mode, setMode] = useState('month'); // 'month' | 'year' | 'insights'
   const current = monthKey();
   const currentYear = current.slice(0, 4);
 
@@ -78,8 +79,11 @@ export default function Summary({ budgetState, transactions }) {
             <button type="button" role="tab" aria-selected={mode === 'year'} className={`summary-mode-btn${mode === 'year' ? ' active' : ''}`} onClick={() => setMode('year')}>
               Year
             </button>
+            <button type="button" role="tab" aria-selected={mode === 'insights'} className={`summary-mode-btn${mode === 'insights' ? ' active' : ''}`} onClick={() => setMode('insights')}>
+              Insights
+            </button>
           </div>
-          {mode === 'month' ? (
+          {mode === 'month' && (
             <label className="analysis-month">
               <span>Month</span>
               <select value={selMonth} onChange={(e) => { setSelMonth(e.target.value); setOpenCat(null); }}>
@@ -88,7 +92,8 @@ export default function Summary({ budgetState, transactions }) {
                 ))}
               </select>
             </label>
-          ) : (
+          )}
+          {mode === 'year' && (
             <label className="analysis-month">
               <span>Year</span>
               <select value={selYear} onChange={(e) => { setSelYear(e.target.value); setOpenCat(null); }}>
@@ -98,11 +103,19 @@ export default function Summary({ budgetState, transactions }) {
               </select>
             </label>
           )}
-          <button type="button" className="secondary-btn" onClick={() => window.print()}>🖨 Print / Save PDF</button>
+          {mode !== 'insights' && (
+            <button type="button" className="secondary-btn" onClick={() => window.print()}>🖨 Print / Save PDF</button>
+          )}
         </div>
       </section>
 
-      {mode === 'month' ? <MonthPnl /> : <YearReview />}
+      {mode === 'insights' ? (
+        <Analysis budgetState={budgetState} setBudgetState={setBudgetState} transactions={transactions} embedded />
+      ) : mode === 'month' ? (
+        <MonthPnl />
+      ) : (
+        <YearReview />
+      )}
     </>
   );
 
