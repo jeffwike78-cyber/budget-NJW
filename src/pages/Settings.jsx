@@ -12,9 +12,28 @@ export default function Settings({ budgetState, setBudgetState, setView }) {
   const { user } = useAuth();
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetText, setResetText] = useState('');
+  const [copied, setCopied] = useState(false);
 
   function updateSetting(patch) {
     setBudgetState((prev) => ({ ...prev, settings: { ...(prev.settings || {}), ...patch } }));
+  }
+
+  // --- Voice / Siri: a private token an Apple Shortcut sends to read balances ---
+  const voiceToken = settings.voiceToken || '';
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const voiceUrl = voiceToken ? `${origin}/api/envelope-balance?token=${voiceToken}&category=groceries` : '';
+  function generateVoiceToken() {
+    const rand =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, '')
+        : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    updateSetting({ voiceToken: rand });
+  }
+  function copyVoiceUrl() {
+    navigator.clipboard?.writeText(voiceUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
   }
 
   // Download the whole budget as a JSON file — an off-app backup the user keeps.
@@ -107,6 +126,58 @@ export default function Settings({ budgetState, setBudgetState, setView }) {
             </span>
           </label>
         </div>
+      </section>
+
+      <section className="card">
+        <div className="card-header">
+          <h2>Voice &amp; Siri</h2>
+        </div>
+        <p className="module-note">
+          Ask Siri how much is left in any envelope. Generate a private token, then set up a one-time Apple
+          Shortcut that calls your budget and speaks the answer. Anyone with this link can read your balances, so
+          keep it private — you can rotate it anytime.
+        </p>
+        {!voiceToken ? (
+          <button type="button" className="secondary-btn" onClick={generateVoiceToken}>
+            Generate voice token
+          </button>
+        ) : (
+          <>
+            <div className="settings-field">
+              <label htmlFor="voice-url">Your Shortcut URL (asks about “groceries”)</label>
+              <div className="voice-url-row">
+                <input id="voice-url" type="text" readOnly value={voiceUrl} onFocus={(e) => e.target.select()} />
+                <button type="button" className="secondary-btn" onClick={copyVoiceUrl}>
+                  {copied ? 'Copied ✓' : 'Copy'}
+                </button>
+              </div>
+              <p className="module-note">
+                Swap <code>category=groceries</code> for any envelope name.
+              </p>
+            </div>
+            <ol className="voice-steps">
+              <li>On your iPhone, open <strong>Shortcuts</strong> → tap <strong>+</strong> → <strong>Add Action</strong>.</li>
+              <li>Add <strong>Get Contents of URL</strong> and paste the URL above.</li>
+              <li>Add <strong>Speak Text</strong> underneath — it reads the reply aloud.</li>
+              <li>Name it e.g. <strong>“Grocery budget.”</strong> Then just say <strong>“Hey Siri, Grocery budget.”</strong></li>
+              <li>
+                Optional — to ask about <em>any</em> envelope by voice: add a <strong>Dictate Text</strong> action first,
+                then in the URL replace <code>groceries</code> with that dictated text.
+              </li>
+            </ol>
+            <button
+              type="button"
+              className="link-btn danger"
+              onClick={() => {
+                if (window.confirm('Rotate the token? Your existing Shortcut will stop working until you paste the new URL into it.')) {
+                  generateVoiceToken();
+                }
+              }}
+            >
+              Rotate token
+            </button>
+          </>
+        )}
       </section>
 
       <section className="card">
