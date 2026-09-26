@@ -18,6 +18,7 @@ import { useBudgetState } from './lib/useBudgetState';
 import { useBudgetTransactions } from './lib/useBudgetTransactions';
 import { useAuth } from './lib/useAuth';
 import { signedBalance } from './lib/budgetMath';
+import { useNetWorthSnapshot } from './lib/useNetWorthSnapshot';
 
 function App() {
   const [view, setView] = useState('overview');
@@ -28,6 +29,10 @@ function App() {
   const [budgetState, setBudgetState, budgetLoading, budgetConflict, clearBudgetConflict] = useBudgetState();
   const { transactions, addTransaction, addSplitTransaction, splitTransaction, deleteTransaction, recategorize, confirmReviewed, setNeedsReview, setExcluded, setBusiness, setTaxCategory } =
     useBudgetTransactions();
+
+  // Record this month's net worth so the Overview trend builds over time (only
+  // once a real budget is loaded — never write the empty default).
+  useNetWorthSnapshot(budgetState, setBudgetState, !!session && !budgetLoading);
 
   // Auth gate: everyone signs in to the same shared family budget. A reset-link
   // visit (recovery) always shows the "set a new password" screen first.
