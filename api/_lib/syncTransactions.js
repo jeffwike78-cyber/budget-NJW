@@ -525,10 +525,13 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
     // columns). A MODIFIED row omits a false flag instead, so a re-sync can't
     // clear a `business`/`excluded` flag the user set by hand.
     const buildRow = (txn, assignments, businessSet, forInsert) => {
-      // A transfer or card payoff isn't spending: leave it uncategorized and
-      // Ignored so it never hits an envelope or the Needs Review queue.
+      // NEVER auto-hide: only the user may Ignore a transaction. A transfer
+      // between the family's own accounts or a credit-card payoff isn't spending,
+      // but instead of hiding it automatically we send it to Needs Review so the
+      // user can Ignore it. Auto-categorization only ever lands a row in an
+      // envelope (AI Reviewed) or Needs Review — never in Hidden/Ignored.
       const isXfer = isTransferOrCardPayment(txn);
-      const categoryId = isXfer ? null : assignments[txn.transaction_id] || 'needs-review';
+      const categoryId = isXfer ? 'needs-review' : assignments[txn.transaction_id] || 'needs-review';
       const business = businessSet.has(txn.transaction_id);
       const row = {
         plaid_transaction_id: txn.transaction_id,
@@ -541,7 +544,7 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
         source: 'plaid',
       };
       if (forInsert || business) row.business = business;
-      if (forInsert || isXfer) row.excluded = isXfer;
+      if (forInsert) row.excluded = false; // never auto-hide; only the user ignores
       // Inserted rows all carry user_reviewed so a batched upsert has uniform
       // columns (a NOT-NULL column missing from some rows would write NULL and
       // fail the batch). A fresh AI-placed row is not user-reviewed.
