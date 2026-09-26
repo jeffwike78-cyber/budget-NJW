@@ -6,7 +6,7 @@ import { netSpentByCategory } from '../lib/spending';
 import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, signedBalance } from '../lib/budgetMath';
 import { computeNetWorth } from '../lib/netWorth';
 import { ageOfMoney, ageOfMoneyAdvice, ageOfMoneyStatus } from '../lib/ageOfMoney';
-import { projectCashflow } from '../lib/cashflow';
+import { projectCashflow, incomeEvents } from '../lib/cashflow';
 import { creditCardStatus, formatDueDate } from '../lib/creditCard';
 
 function shortDate(str) {
@@ -53,6 +53,19 @@ export default function Overview({ budgetState, transactions, onQuickScan }) {
     .filter((t) => Number(t.amount) < 0 && !t.excluded)
     .reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
   const incomeAhead = actualIncome - expectedIncome;
+
+  // To-date pace: how much income you'd expect to have received BY TODAY, based
+  // on each source's actual pay dates this month (falls back to a straight-line
+  // pro-rata of the monthly budget when no pay dates are set). Lets you see at a
+  // glance whether income is on track partway through the month.
+  const monthStart = `${month}-01`;
+  const incomeSources = budgetState.incomeSources || [];
+  const hasPayDates = incomeSources.some((s) => s.payDay || s.payDay2 || s.payDate);
+  const scheduledToDate = incomeEvents(incomeSources, monthStart, today).reduce((s, e) => s + Number(e.amount || 0), 0);
+  const daysInThisMonth = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
+  const dayOfMonth = Number(today.slice(8, 10));
+  const expectedToDate = hasPayDates ? scheduledToDate : expectedIncome * (dayOfMonth / daysInThisMonth);
+  const incomePace = actualIncome - expectedToDate;
 
   const totalBalance = budgetState.accounts.reduce((sum, a) => sum + signedBalance(a), 0);
   // Net worth includes properties and other assets tracked on the Accounts page,
@@ -347,14 +360,24 @@ export default function Overview({ budgetState, transactions, onQuickScan }) {
           </div>
           <div className="payoff-figures">
             <div className="payoff-figure">
-              <span className="payoff-label">Expected (budgeted)</span>
-              <span className="payoff-value">{usd(expectedIncome)}</span>
+              <span className="payoff-label">Expected by today</span>
+              <span className="payoff-value">{usd(expectedToDate)}</span>
             </div>
             <div className="payoff-figure">
               <span className="payoff-label">Received so far</span>
               <span className="payoff-value good">{usd(actualIncome)}</span>
             </div>
+            <div className="payoff-figure">
+              <span className="payoff-label">Budgeted (month)</span>
+              <span className="payoff-value">{usd(expectedIncome)}</span>
+            </div>
           </div>
+          <p className={`module-note ${incomePace >= 0 ? '' : 'form-error'}`}>
+            <strong>To date:</strong>{' '}
+            {incomePace >= 0
+              ? `on track — ${usd(actualIncome)} received vs ${usd(expectedToDate)} expected by today (${usd(incomePace)} ahead of pace).`
+              : `behind pace — ${usd(actualIncome)} received vs ${usd(expectedToDate)} expected by today (${usd(-incomePace)} short so far).`}
+          </p>
           <p className="module-note">
             {incomeAhead >= 0 ? (
               <>You&apos;ve received <strong>{usd(actualIncome)}</strong> so far — <strong>{usd(incomeAhead)}</strong>{' '}
