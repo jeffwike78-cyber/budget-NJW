@@ -147,13 +147,22 @@ async function mergeReceiptMatches(supabaseAdmin, added) {
     if (best.excluded) {
       // The receipt was split across envelopes at scan time: its child rows
       // already carry the real amounts and categories. Exclude the posted bank
-      // charge so the same money isn't counted twice, and leave the children be.
+      // charge so the same money isn't counted twice, and stamp the purchase
+      // total on it so the list shows "Split · Ignored" instead of a bare
+      // hidden charge.
       update.excluded = true;
+      update.split_total = Math.abs(Number(best.amount));
     } else if ((plaidRow.category_id === 'needs-review' || !plaidRow.category_id) && best.category_id && best.category_id !== 'needs-review') {
       update.category_id = best.category_id;
     }
     if (Object.keys(update).length > 0) {
-      await supabaseAdmin.from('budget_transactions').update(update).eq('id', plaidRow.id);
+      let { error: upErr } = await supabaseAdmin.from('budget_transactions').update(update).eq('id', plaidRow.id);
+      // Fall back if the split_total migration hasn't run yet, so the charge is
+      // still excluded (never double-counted) even without the label.
+      if (upErr && upErr.code === '42703' && 'split_total' in update) {
+        const { split_total, ...rest } = update; // eslint-disable-line no-unused-vars
+        await supabaseAdmin.from('budget_transactions').update(rest).eq('id', plaidRow.id);
+      }
     }
     await supabaseAdmin.from('budget_transactions').delete().eq('id', best.id);
   }
@@ -602,7 +611,7 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
       if (predIds.length > 0) {
         const { data: preds } = await supabaseAdmin
           .from('budget_transactions')
-          .select('plaid_transaction_id, category_id, user_reviewed, excluded, business, note, tax_category, receipt_path')
+          .select('plaid_transaction_id, category_id, user_reviewed, excluded, business, note, tax_category, receipt_path, split_total')
           .in('plaid_transaction_id', predIds);
         for (const r of preds || []) predMap.set(r.plaid_transaction_id, r);
       }
@@ -619,6 +628,9 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
           if (pred.note) row.note = pred.note;
           if (pred.tax_category) row.tax_category = pred.tax_category;
           if (pred.receipt_path) row.receipt_path = pred.receipt_path;
+          // A charge split while still pending keeps its "Split · Ignored" mark
+          // after it posts under a new id.
+          if (pred.split_total != null) row.split_total = pred.split_total;
         }
         return row;
       });

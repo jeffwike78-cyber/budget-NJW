@@ -44,7 +44,33 @@ function rowToTx(row) {
     taxCategory: row.tax_category,
     receiptPath: row.receipt_path,
     userReviewed: !!row.user_reviewed,
+    // The full purchase total a split came from (set on each split child and on
+    // the single ignored total the split came out of). Drives the "Split from
+    // $x.xx" / "Split · Ignored" labels in the transaction list.
+    splitTotal: row.split_total != null ? Number(row.split_total) : null,
   };
+}
+
+// Insert rows, retrying without the split_total column if that column's
+// migration hasn't been applied yet (Postgres 42703 = undefined column), so
+// splitting keeps working whether or not the migration has run.
+async function insertRowsResilient(rows) {
+  let { error } = await supabase.from('budget_transactions').insert(rows);
+  if (error && error.code === '42703') {
+    const stripped = rows.map(({ split_total, ...rest }) => rest); // eslint-disable-line no-unused-vars
+    ({ error } = await supabase.from('budget_transactions').insert(stripped));
+  }
+  return error;
+}
+
+// Update one row, retrying without split_total on the same 42703 fallback.
+async function updateRowResilient(id, patch) {
+  let { error } = await supabase.from('budget_transactions').update(patch).eq('id', id);
+  if (error && error.code === '42703' && 'split_total' in patch) {
+    const { split_total, ...rest } = patch; // eslint-disable-line no-unused-vars
+    ({ error } = await supabase.from('budget_transactions').update(rest).eq('id', id));
+  }
+  return error;
 }
 
 // Transactions live in their own table (not the app_state jsonb blob) so the
@@ -137,6 +163,9 @@ export function useBudgetTransactions() {
   // the first child so it stays viewable on a counted row.
   async function splitTransaction(parent, parts) {
     try {
+      // The original purchase total, stamped on every child (and on the parent
+      // we're about to ignore) so the list can label them.
+      const total = Math.abs(Number(parent.amount)) || parts.reduce((s, p) => s + Math.abs(Number(p.amount)), 0);
       const rows = parts.map((p) => {
         const row = {
           date: parent.date,
@@ -145,17 +174,17 @@ export function useBudgetTransactions() {
           category_id: p.categoryId || null,
           account_id: parent.accountId,
           source: 'split',
+          split_total: total,
         };
         if (p.note) row.note = p.note;
         return row;
       });
       if (parent.receiptPath && rows[0]) rows[0].receipt_path = parent.receiptPath;
-      const { error: insErr } = await supabase.from('budget_transactions').insert(rows);
+      const insErr = await insertRowsResilient(rows);
       if (insErr) return { message: describeError(insErr) };
-      const { error: exErr } = await supabase
-        .from('budget_transactions')
-        .update({ excluded: true })
-        .eq('id', parent.id);
+      // Ignore the original full charge AND mark it as the split source, so it
+      // reads "Split · Ignored" instead of a mystery hidden transaction.
+      const exErr = await updateRowResilient(parent.id, { excluded: true, split_total: total });
       if (exErr) return { message: describeError(exErr) };
       await reload();
       return null;
@@ -204,11 +233,13 @@ export function useBudgetTransactions() {
     try {
       const isReceipt = !!base.receiptPath;
       const total = parts.reduce((s, p) => s + Number(p.amount), 0);
+      const grossTotal = Math.abs(total); // the full purchase, for the split labels
       if (isReceipt) {
-        // Bank charge already here (split-uploaded after the sync)? Hide it.
+        // Bank charge already here (split-uploaded after the sync)? Hide it and
+        // mark it as the split source so it reads "Split · Ignored".
         const match = await findMatchingBankCharge(total, base.date);
         if (match) {
-          const { error: exErr } = await supabase.from('budget_transactions').update({ excluded: true }).eq('id', match.id);
+          const exErr = await updateRowResilient(match.id, { excluded: true, split_total: grossTotal });
           if (exErr) return { message: describeError(exErr) };
         } else {
           // No charge yet — leave an anchor for the sync to reconcile against.
@@ -221,9 +252,10 @@ export function useBudgetTransactions() {
             source: 'receipt',
             excluded: true,
             receipt_path: base.receiptPath,
+            split_total: grossTotal,
           };
           if (base.note) anchor.note = base.note;
-          const { error: anchorErr } = await supabase.from('budget_transactions').insert(anchor);
+          const anchorErr = await insertRowsResilient([anchor]);
           if (anchorErr) return { message: describeError(anchorErr) };
         }
       }
@@ -235,13 +267,14 @@ export function useBudgetTransactions() {
           category_id: p.categoryId || null,
           account_id: base.accountId,
           source: 'split',
+          split_total: grossTotal,
         };
         if (base.note) row.note = base.note;
         // Keep the photo viewable on a counted row (the anchor is hidden).
         if (isReceipt && i === 0) row.receipt_path = base.receiptPath;
         return row;
       });
-      const { error: insErr } = await supabase.from('budget_transactions').insert(rows);
+      const insErr = await insertRowsResilient(rows);
       if (insErr) return { message: describeError(insErr) };
       await reload();
       return null;

@@ -1508,6 +1508,23 @@ textarea {
 .tx-tax-pill { background: var(--accent-bg); color: var(--accent); margin-left: 6px; }
 .tx-row-business { opacity: 0.7; }
 
+/* Split-purchase labels: a colored tag so a split piece is never mistaken for a
+   standalone charge, and the ignored full total is clearly the source. */
+.tx-split-pill {
+  font-size: 10px;
+  padding: 2px 7px;
+  margin-left: 6px;
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+.tx-split-ignored-pill {
+  font-size: 10px;
+  padding: 2px 7px;
+  margin-left: 6px;
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
 /* ---------- Tax report ---------- */
 .tax-report-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .tax-report-controls { display: flex; align-items: center; gap: 12px; }

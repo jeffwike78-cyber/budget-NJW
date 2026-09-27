@@ -127,7 +127,19 @@ function TxRow({ t, categories, incomeCategories = [], onRecategorize, onConfirm
       <span className="tx-desc">
         {t.description}
         {t.source === 'plaid' && <span className="pill tx-source-pill">Synced</span>}
-        {t.source === 'receipt' && <span className="pill tx-receipt-pill">Receipt</span>}
+        {t.source === 'receipt' && !(t.splitTotal > 0) && <span className="pill tx-receipt-pill">Receipt</span>}
+        {/* A piece of a split purchase: show the full amount it came out of. */}
+        {t.source === 'split' && t.splitTotal > 0 && (
+          <span className="pill tx-split-pill" title="This is one part of a larger purchase that was split across envelopes">
+            Split from ${Number(t.splitTotal).toFixed(2)}
+          </span>
+        )}
+        {/* The single full charge a split came out of — ignored so it isn't double-counted. */}
+        {t.source !== 'split' && t.splitTotal > 0 && (
+          <span className="pill tx-split-ignored-pill" title="The full purchase that was split across envelopes — ignored so the split pieces are what count">
+            Split · Ignored
+          </span>
+        )}
         {isBiz && <span className="pill tx-biz-pill">Business</span>}
         {t.taxCategory && !isBiz && <span className="pill tx-tax-pill">{taxLabel(t.taxCategory, taxLabels)}</span>}
         {t.note && <span className="tx-note">{t.note}</span>}
