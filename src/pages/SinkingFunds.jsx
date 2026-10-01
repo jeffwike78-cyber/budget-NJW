@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { todayStr } from '../lib/storage';
-import { netSpentByCategory } from '../lib/spending';
+import { netSpentByCategory, spendingCategoryIds } from '../lib/spending';
 import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, envelopeBalances, adjustmentMaps, isCarryover, signedBalance, includeInCashOnHand } from '../lib/budgetMath';
 import { computeSinkingEnvelope, advanceDueDate, dueLabel } from '../lib/sinkingFunds';
 import TxList from '../components/TxList';
@@ -48,9 +48,10 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
   const budgetable = (budgetState.categories || []).filter((c) => c.id !== 'needs-review');
   const baseBudgets = computeCategoryBudgets(budgetable, income);
   const effectiveBudgets = effectiveBudgetsForMonth(budgetable, baseBudgets, month);
-  const allTimeSpent = netSpentByCategory(transactions);
+  const creditIds = spendingCategoryIds(budgetState);
+  const allTimeSpent = netSpentByCategory(transactions, creditIds);
   const monthTx = transactions.filter((t) => monthKey(t.date) === month);
-  const monthSpent = netSpentByCategory(monthTx);
+  const monthSpent = netSpentByCategory(monthTx, creditIds);
   const { all: adjustAll, month: adjustMonth } = adjustmentMaps(budgetState.adjustments, month);
   const balances = envelopeBalances(budgetable, baseBudgets, allTimeSpent, monthSpent, budgetState.settings?.startMonth, month, adjustAll, adjustMonth);
 

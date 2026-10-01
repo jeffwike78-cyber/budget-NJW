@@ -1,4 +1,4 @@
-import { netSpentByCategory } from './spending';
+import { netSpentByCategory, spendingCategoryIds, isEnvelopeCredit } from './spending';
 import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth } from './budgetMath';
 
 function monthKey(dateStr) {
@@ -10,21 +10,22 @@ function round(n) {
 
 // Deposits that landed in a month = income actually received (amount < 0, not
 // excluded — transfers/card payments are auto-excluded upstream).
-function actualIncomeForMonth(transactions, month) {
+function actualIncomeForMonth(transactions, month, creditIds) {
   return transactions
-    .filter((t) => monthKey(t.date) === month && Number(t.amount) < 0 && !t.excluded)
+    .filter((t) => monthKey(t.date) === month && Number(t.amount) < 0 && !t.excluded && !isEnvelopeCredit(t, creditIds))
     .reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
 }
 
 // One month's rolled-up figures for the AI payload.
 function monthAggregate(budgetState, transactions, month) {
   const cats = (budgetState.categories || []).filter((c) => c.id !== 'needs-review');
+  const creditIds = spendingCategoryIds(budgetState);
   const income = monthlyIncomeTotal(budgetState);
   const base = computeCategoryBudgets(cats, income);
   const eff = effectiveBudgetsForMonth(cats, base, month);
-  const spentMap = netSpentByCategory(transactions.filter((t) => monthKey(t.date) === month));
+  const spentMap = netSpentByCategory(transactions.filter((t) => monthKey(t.date) === month), creditIds);
   const spending = Object.values(spentMap).reduce((a, b) => a + b, 0);
-  const actualIncome = actualIncomeForMonth(transactions, month);
+  const actualIncome = actualIncomeForMonth(transactions, month, creditIds);
   const byCategory = cats
     .map((c) => ({ name: c.name, kind: c.kind, budget: round(eff[c.id] || 0), spent: round(spentMap[c.id] || 0) }))
     .filter((c) => c.budget > 0 || c.spent > 0)

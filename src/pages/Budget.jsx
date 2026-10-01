@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { todayStr } from '../lib/storage';
-import { netSpentByCategory } from '../lib/spending';
+import { netSpentByCategory, spendingCategoryIds } from '../lib/spending';
 import {
   monthlyIncome,
   monthlyIncomeTotal,
@@ -37,10 +37,11 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
   }
 
   const month = monthKey();
+  const creditIds = spendingCategoryIds(budgetState);
   const monthTx = transactions.filter((t) => monthKey(t.date) === month);
-  const spentByCategory = netSpentByCategory(monthTx);
+  const spentByCategory = netSpentByCategory(monthTx, creditIds);
   // All-time spend per envelope drives the rolling balance for carryover kinds.
-  const allTimeSpent = netSpentByCategory(transactions);
+  const allTimeSpent = netSpentByCategory(transactions, creditIds);
 
   // Income sources — migrate the legacy single income into one source the first
   // time, so nothing is lost for setups saved before multi-source income.

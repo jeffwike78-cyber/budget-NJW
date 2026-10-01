@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { todayStr } from '../lib/storage';
-import { netSpentByCategory } from '../lib/spending';
+import { netSpentByCategory, spendingCategoryIds } from '../lib/spending';
 import BarChart from '../components/BarChart';
 import Analysis from './Analysis';
 
@@ -19,13 +19,13 @@ function shortMonthLabel(m) {
 
 // Money that actually landed as income this period: deposits (negative in this
 // app's convention) that aren't excluded transfers/card payments or business.
-function incomeOf(txns) {
+function incomeOf(txns, creditIds) {
   return txns
-    .filter((t) => Number(t.amount) < 0 && !t.excluded && !t.business)
+    .filter((t) => Number(t.amount) < 0 && !t.excluded && !t.business && !(creditIds && creditIds.has(t.categoryId)))
     .reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
 }
-function expensesOf(txns) {
-  return Object.values(netSpentByCategory(txns)).reduce((a, b) => a + b, 0);
+function expensesOf(txns, creditIds) {
+  return Object.values(netSpentByCategory(txns, creditIds)).reduce((a, b) => a + b, 0);
 }
 
 export default function Summary({ budgetState, setBudgetState, transactions }) {
@@ -46,6 +46,9 @@ export default function Summary({ budgetState, setBudgetState, transactions }) {
   const [selYear, setSelYear] = useState(currentYear);
   const [openCat, setOpenCat] = useState(null);
 
+  // Refunds credited to a spending envelope net against it and aren't income.
+  const creditIds = spendingCategoryIds(budgetState);
+
   const catName = (id) => {
     if (!id || id === 'needs-review') return 'Needs review / uncategorized';
     const c = (budgetState.categories || []).find((x) => x.id === id);
@@ -54,7 +57,7 @@ export default function Summary({ budgetState, setBudgetState, transactions }) {
 
   // ---- Category breakdown for a set of transactions ----
   function categoryRows(txns) {
-    const totals = netSpentByCategory(txns);
+    const totals = netSpentByCategory(txns, creditIds);
     const total = Object.values(totals).reduce((a, b) => a + b, 0) || 1;
     return Object.entries(totals)
       .map(([id, amount]) => ({ id, name: catName(id), amount, pct: (amount / total) * 100 }))
@@ -122,8 +125,8 @@ export default function Summary({ budgetState, setBudgetState, transactions }) {
   // ---------- Month P&L ----------
   function MonthPnl() {
     const monthTx = transactions.filter((t) => (t.date || '').slice(0, 7) === selMonth);
-    const income = incomeOf(monthTx);
-    const expenses = expensesOf(monthTx);
+    const income = incomeOf(monthTx, creditIds);
+    const expenses = expensesOf(monthTx, creditIds);
     const net = income - expenses;
     const rows = categoryRows(monthTx);
 
@@ -199,7 +202,7 @@ export default function Summary({ budgetState, setBudgetState, transactions }) {
     const months = Array.from({ length: 12 }, (_, i) => `${selYear}-${String(i + 1).padStart(2, '0')}`);
     const perMonth = months.map((m) => {
       const tx = transactions.filter((t) => (t.date || '').slice(0, 7) === m);
-      return { m, income: incomeOf(tx), expense: expensesOf(tx) };
+      return { m, income: incomeOf(tx, creditIds), expense: expensesOf(tx, creditIds) };
     });
     const totalIncome = perMonth.reduce((s, x) => s + x.income, 0);
     const totalExpense = perMonth.reduce((s, x) => s + x.expense, 0);

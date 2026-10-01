@@ -7,6 +7,9 @@ function TxRow({ t, categories, incomeCategories = [], onRecategorize, onConfirm
   // Money coming in (negative amount = deposit) gets income labels; money going
   // out gets the budget envelopes.
   const isIncome = Number(t.amount) < 0;
+  // Spending envelopes a refund can be credited back to (everything budgetable
+  // minus the Needs-review bucket).
+  const spendingCats = categories.filter((c) => c.id !== 'needs-review');
   const options = isIncome && incomeCategories.length > 0 ? incomeCategories : categories;
   const [lookupBusy, setLookupBusy] = useState(false);
   const [lookupMsg, setLookupMsg] = useState(null);
@@ -148,14 +151,39 @@ function TxRow({ t, categories, incomeCategories = [], onRecategorize, onConfirm
       <span className={`tx-amount ${t.amount < 0 ? 'good' : ''}`}>
         {t.amount < 0 ? '+' : '-'}${Math.abs(Number(t.amount)).toFixed(2)}
       </span>
-      <select value={t.categoryId || ''} onChange={(e) => changeCategory(e.target.value)}>
-        <option value="">{isIncome ? 'Uncategorized (income)' : 'Uncategorized'}</option>
-        {options.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
-          </option>
-        ))}
-      </select>
+      {isIncome ? (
+        // A deposit can be real income OR a refund credited back to the envelope
+        // it came out of (e.g. a returned clothing purchase nets against
+        // Clothing instead of counting as generic income).
+        <select value={t.categoryId || ''} onChange={(e) => changeCategory(e.target.value)}>
+          <option value="">Uncategorized (income)</option>
+          {incomeCategories.length > 0 && (
+            <optgroup label="Income">
+              {incomeCategories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          <optgroup label="Credit back to envelope">
+            {spendingCats.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </optgroup>
+        </select>
+      ) : (
+        <select value={t.categoryId || ''} onChange={(e) => changeCategory(e.target.value)}>
+          <option value="">Uncategorized</option>
+          {options.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      )}
       <div className="tx-actions">
         {onSetTaxCategory && (
           <select
