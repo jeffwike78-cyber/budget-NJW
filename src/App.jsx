@@ -19,6 +19,7 @@ import { useBudgetTransactions } from './lib/useBudgetTransactions';
 import { useAuth } from './lib/useAuth';
 import { signedBalance } from './lib/budgetMath';
 import { useNetWorthSnapshot } from './lib/useNetWorthSnapshot';
+import { useBudgetSnapshot } from './lib/useBudgetSnapshot';
 
 function App() {
   const [view, setView] = useState('overview');
@@ -33,6 +34,9 @@ function App() {
   // Record this month's net worth so the Overview trend builds over time (only
   // once a real budget is loaded — never write the empty default).
   useNetWorthSnapshot(budgetState, setBudgetState, !!session && !budgetLoading);
+  // Freeze each month's budget plan so the Summary can compare a prior month's
+  // actuals against the plan that month actually had (not the current plan).
+  useBudgetSnapshot(budgetState, setBudgetState, !!session && !budgetLoading);
 
   // Auth gate: everyone signs in to the same shared family budget. A reset-link
   // visit (recovery) always shows the "set a new password" screen first.
