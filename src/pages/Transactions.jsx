@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { todayStr } from '../lib/storage';
 import { categorizeWithAI } from '../lib/aiCategorize';
 import { scanReceipt } from '../lib/receiptsClient';
+import { spendingCategoryIds } from '../lib/spending';
 import TxList from '../components/TxList';
 
 function normalize(desc) {
@@ -35,8 +36,11 @@ export default function Transactions({ budgetState, setBudgetState, transactions
   const hidden = transactions.filter((t) => t.excluded);
   // Income = money coming in (negative amount, the reverse of "positive =
   // expense"), gathered into one place so it can be reviewed without scrolling
-  // the whole transaction list. Excludes ignored rows.
-  const income = transactions.filter((t) => Number(t.amount) < 0 && !t.excluded);
+  // the whole transaction list. Excludes ignored rows AND refunds the user
+  // credited back to a spending envelope — those aren't income, they belong
+  // under their category (they still show in that category's own list).
+  const spendingIds = spendingCategoryIds(budgetState);
+  const income = transactions.filter((t) => Number(t.amount) < 0 && !t.excluded && !spendingIds.has(t.categoryId));
   const incomeTotal = income.reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
   const REVIEWED_CAP = 60;
   const [showAi, setShowAi] = useState(false);
@@ -456,39 +460,6 @@ export default function Transactions({ budgetState, setBudgetState, transactions
       </section>
 
       <section className="card">
-        <button type="button" className="tx-section-toggle" onClick={() => setShowIncome((s) => !s)} aria-expanded={showIncome}>
-          <span>Income</span>
-          <span className="tx-section-count">
-            {income.length > 0 && <span className="tx-income-total">+${incomeTotal.toFixed(2)}</span>} {income.length} {showIncome ? '▴' : '▾'}
-          </span>
-        </button>
-        {showIncome && (
-          <>
-            <p className="module-note">
-              Every deposit and other money coming in, in one place — paychecks, refunds, reimbursements, transfers in.
-              Review them here without scanning the whole list.
-            </p>
-            <TxList
-              transactions={income}
-              categories={budgetState.categories}
-              incomeCategories={budgetState.incomeCategories}
-              onRecategorize={handleRecategorize}
-              onConfirmReviewed={confirmReviewed}
-              onSplit={splitTransaction}
-              onDelete={deleteTransaction}
-              onToggleExcluded={setExcluded}
-              onSetTaxCategory={setTaxCategory}
-              onSendToReview={setNeedsReview}
-              taxLabels={budgetState.taxLabels}
-              showReceiptLookup
-              flat
-              emptyLabel="No income recorded yet — deposits will show up here."
-            />
-          </>
-        )}
-      </section>
-
-      <section className="card">
         <button type="button" className="tx-section-toggle" onClick={() => setShowAi((s) => !s)} aria-expanded={showAi}>
           <span>AI Reviewed</span>
           <span className="tx-section-count">{aiReviewed.length} {showAi ? '▴' : '▾'}</span>
@@ -576,6 +547,39 @@ export default function Transactions({ budgetState, setBudgetState, transactions
             flat
             emptyLabel="Nothing hidden."
           />
+        )}
+      </section>
+
+      <section className="card">
+        <button type="button" className="tx-section-toggle" onClick={() => setShowIncome((s) => !s)} aria-expanded={showIncome}>
+          <span>Income</span>
+          <span className="tx-section-count">
+            {income.length > 0 && <span className="tx-income-total">+${incomeTotal.toFixed(2)}</span>} {income.length} {showIncome ? '▴' : '▾'}
+          </span>
+        </button>
+        {showIncome && (
+          <>
+            <p className="module-note">
+              Every deposit and other money coming in, in one place — paychecks, reimbursements, transfers in. A refund
+              you credit back to a spending envelope drops out of here and shows under that category instead.
+            </p>
+            <TxList
+              transactions={income}
+              categories={budgetState.categories}
+              incomeCategories={budgetState.incomeCategories}
+              onRecategorize={handleRecategorize}
+              onConfirmReviewed={confirmReviewed}
+              onSplit={splitTransaction}
+              onDelete={deleteTransaction}
+              onToggleExcluded={setExcluded}
+              onSetTaxCategory={setTaxCategory}
+              onSendToReview={setNeedsReview}
+              taxLabels={budgetState.taxLabels}
+              showReceiptLookup
+              flat
+              emptyLabel="No income recorded yet — deposits will show up here."
+            />
+          </>
         )}
       </section>
     </>
