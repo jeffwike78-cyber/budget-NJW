@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { todayStr } from '../lib/storage';
 import { netSpentByCategory, spendingCategoryIds } from '../lib/spending';
+import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth } from '../lib/budgetMath';
 import BarChart from '../components/BarChart';
 import Analysis from './Analysis';
 
@@ -128,7 +129,33 @@ export default function Summary({ budgetState, setBudgetState, transactions }) {
     const income = incomeOf(monthTx, creditIds);
     const expenses = expensesOf(monthTx, creditIds);
     const net = income - expenses;
-    const rows = categoryRows(monthTx);
+
+    // Budgeted vs actual. Budget plan for this month: the base plan with any
+    // per-month overrides applied (same figures the Budget page uses).
+    const budgetable = (budgetState.categories || []).filter((c) => c.id !== 'needs-review');
+    const planIncome = monthlyIncomeTotal(budgetState);
+    const baseBudgets = computeCategoryBudgets(budgetable, planIncome);
+    const effBudgets = effectiveBudgetsForMonth(budgetable, baseBudgets, selMonth);
+    const spentMap = netSpentByCategory(monthTx, creditIds);
+
+    // One row per category that has a budget or any activity this month. diff =
+    // budget − actual: positive is under budget (room left), negative is over.
+    // Sort most-over first so the categories to adjust are right at the top.
+    const bvaRows = budgetable
+      .map((c) => ({ id: c.id, name: c.name, budget: Number(effBudgets[c.id] || 0), actual: Number(spentMap[c.id] || 0) }))
+      .filter((r) => r.budget > 0.005 || Math.abs(r.actual) > 0.005)
+      .map((r) => ({ ...r, diff: r.budget - r.actual }))
+      .sort((a, b) => a.diff - b.diff);
+
+    // Spending that didn't land in a budget category (uncategorized / needs
+    // review), so the actual total still reconciles with "Money out".
+    const budgetableIds = new Set(budgetable.map((c) => c.id));
+    const otherActual = Object.entries(spentMap)
+      .filter(([id]) => !budgetableIds.has(id))
+      .reduce((s, [, v]) => s + v, 0);
+
+    const totalBudget = bvaRows.reduce((s, r) => s + r.budget, 0);
+    const incDiff = income - planIncome; // positive = more income than planned
 
     return (
       <>
@@ -155,41 +182,100 @@ export default function Summary({ budgetState, setBudgetState, transactions }) {
           </div>
         </section>
 
+        {/* Income: budgeted vs actual */}
+        <section className="card">
+          <div className="card-header"><h2>Income — budgeted vs actual</h2></div>
+          <div className="bva-row bva-head">
+            <span className="bva-name"></span>
+            <span className="bva-num">Budgeted</span>
+            <span className="bva-num">Actual</span>
+            <span className="bva-num">+ / −</span>
+          </div>
+          <div className="bva-row">
+            <span className="bva-name">Income</span>
+            <span className="bva-num">{usd(planIncome)}</span>
+            <span className="bva-num">{usd(income)}</span>
+            <span className={`bva-num ${incDiff >= 0 ? 'good' : 'bad'}`}>
+              {incDiff >= 0 ? `+${usd(incDiff)}` : `-${usd(-incDiff)}`}
+            </span>
+          </div>
+          <p className="module-note">
+            {incDiff >= 0
+              ? `You brought in ${usd(incDiff)} more than planned.`
+              : `Income came in ${usd(-incDiff)} short of plan.`}
+          </p>
+        </section>
+
+        {/* Spending: budgeted vs actual, per category */}
         <section className="card">
           <div className="card-header">
-            <h2>Where it went</h2>
-            {rows.length > 0 && <span className="pill">{rows.length} categories</span>}
+            <h2>Spending — budgeted vs actual</h2>
+            {bvaRows.length > 0 && <span className="pill">{bvaRows.length} categories</span>}
           </div>
-          {rows.length === 0 ? (
-            <p className="module-note">No spending recorded for {monthLabel(selMonth)}.</p>
+          {bvaRows.length === 0 ? (
+            <p className="module-note">No budget or spending recorded for {monthLabel(selMonth)}.</p>
           ) : (
-            <ul className="pnl-cat-list">
-              {rows.map((r) => (
-                <li key={r.id} className="pnl-cat">
-                  <button type="button" className="pnl-cat-head" onClick={() => setOpenCat(openCat === r.id ? null : r.id)} aria-expanded={openCat === r.id}>
-                    <span className="pnl-cat-name">{r.name}</span>
-                    <span className="pnl-cat-amount">{usd(r.amount)}</span>
-                    <span className="pnl-cat-pct">{r.pct.toFixed(0)}%</span>
-                    <span className="pnl-cat-caret">{openCat === r.id ? '▴' : '▾'}</span>
-                  </button>
-                  <div className="pnl-cat-bar"><span style={{ width: `${Math.min(100, r.pct)}%` }} /></div>
-                  {openCat === r.id && (
-                    <ul className="pnl-tx-list">
-                      {monthTx
-                        .filter((t) => t.categoryId === r.id && !t.excluded && Number(t.amount) > 0)
-                        .sort((a, b) => Number(b.amount) - Number(a.amount))
-                        .map((t) => (
-                          <li key={t.id} className="pnl-tx">
-                            <span className="pnl-tx-date">{(t.date || '').slice(5)}</span>
-                            <span className="pnl-tx-desc">{t.description}</span>
-                            <span className="pnl-tx-amt">{usd2(t.amount)}</span>
-                          </li>
-                        ))}
-                    </ul>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <>
+              <div className="bva-row bva-head">
+                <span className="bva-name">Category</span>
+                <span className="bva-num">Budgeted</span>
+                <span className="bva-num">Actual</span>
+                <span className="bva-num">Over / under</span>
+              </div>
+              <ul className="bva-list">
+                {bvaRows.map((r) => {
+                  const over = r.diff < -0.005;
+                  const pct = r.budget > 0 ? Math.min(100, (r.actual / r.budget) * 100) : 100;
+                  return (
+                    <li key={r.id} className="bva-item">
+                      <button type="button" className="bva-row bva-click" onClick={() => setOpenCat(openCat === r.id ? null : r.id)} aria-expanded={openCat === r.id}>
+                        <span className="bva-name">{r.name} <span className="bva-caret">{openCat === r.id ? '▴' : '▾'}</span></span>
+                        <span className="bva-num">{usd(r.budget)}</span>
+                        <span className="bva-num">{usd(r.actual)}</span>
+                        <span className={`bva-num ${over ? 'bad' : 'good'}`}>
+                          {over ? `over ${usd(-r.diff)}` : `${usd(r.diff)} left`}
+                        </span>
+                      </button>
+                      <div className={`bva-bar ${over ? 'over' : ''}`}><span style={{ width: `${pct}%` }} /></div>
+                      {openCat === r.id && (
+                        <ul className="pnl-tx-list">
+                          {monthTx
+                            .filter((t) => t.categoryId === r.id && !t.excluded)
+                            .sort((a, b) => Number(b.amount) - Number(a.amount))
+                            .map((t) => (
+                              <li key={t.id} className="pnl-tx">
+                                <span className="pnl-tx-date">{(t.date || '').slice(5)}</span>
+                                <span className="pnl-tx-desc">{t.description}</span>
+                                <span className={`pnl-tx-amt ${Number(t.amount) < 0 ? 'good' : ''}`}>
+                                  {Number(t.amount) < 0 ? `+${usd2(t.amount)}` : usd2(t.amount)}
+                                </span>
+                              </li>
+                            ))}
+                        </ul>
+                      )}
+                    </li>
+                  );
+                })}
+                {Math.abs(otherActual) > 0.005 && (
+                  <li className="bva-item">
+                    <div className="bva-row">
+                      <span className="bva-name">Uncategorized / needs review</span>
+                      <span className="bva-num">—</span>
+                      <span className="bva-num">{usd(otherActual)}</span>
+                      <span className="bva-num muted">not budgeted</span>
+                    </div>
+                  </li>
+                )}
+              </ul>
+              <div className="bva-row bva-total">
+                <span className="bva-name">Total spending</span>
+                <span className="bva-num">{usd(totalBudget)}</span>
+                <span className="bva-num">{usd(expenses)}</span>
+                <span className={`bva-num ${expenses <= totalBudget ? 'good' : 'bad'}`}>
+                  {expenses <= totalBudget ? `${usd(totalBudget - expenses)} left` : `over ${usd(expenses - totalBudget)}`}
+                </span>
+              </div>
+            </>
           )}
         </section>
       </>

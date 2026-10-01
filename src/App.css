@@ -1643,6 +1643,38 @@ textarea {
 .pnl-tx-date { font-variant-numeric: tabular-nums; }
 .pnl-tx-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pnl-tx-amt { font-variant-numeric: tabular-nums; }
+.pnl-tx-amt.good { color: var(--good); }
+
+/* Budgeted vs actual table (monthly summary) */
+.bva-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; }
+.bva-item { padding: 8px 0; border-top: 1px solid var(--border, #eee); }
+.bva-row {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1.2fr;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text);
+  font-size: 14px;
+}
+.bva-click { cursor: pointer; }
+.bva-head { font-size: 12px; font-weight: 600; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.03em; padding: 4px 0; }
+.bva-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.bva-caret { font-weight: 400; opacity: 0.5; font-size: 12px; }
+.bva-num { text-align: right; font-variant-numeric: tabular-nums; }
+.bva-num.good { color: var(--good); font-weight: 600; }
+.bva-num.bad { color: var(--bad); font-weight: 600; }
+.bva-num.muted { opacity: 0.55; font-weight: 400; }
+.bva-bar { height: 5px; border-radius: 4px; background: var(--surface-2, rgba(127,127,127,0.12)); margin-top: 6px; overflow: hidden; }
+.bva-bar span { display: block; height: 100%; background: var(--good); border-radius: 4px; }
+.bva-bar.over span { background: var(--bad); }
+.bva-total { margin-top: 6px; padding-top: 10px; border-top: 2px solid var(--border, #ddd); font-weight: 700; }
+.bva-head .bva-num, .bva-total .bva-name { font-weight: inherit; }
+
 .audit-row:nth-child(odd) { background: var(--surface-2, rgba(127,127,127,0.06)); }
 .audit-date { color: var(--text); font-variant-numeric: tabular-nums; }
 .audit-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
