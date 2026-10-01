@@ -130,12 +130,22 @@ export default function Summary({ budgetState, setBudgetState, transactions }) {
     const expenses = expensesOf(monthTx, creditIds);
     const net = income - expenses;
 
-    // Budgeted vs actual. Budget plan for this month: the base plan with any
-    // per-month overrides applied (same figures the Budget page uses).
+    // Budgeted vs actual. For a PAST month, use the frozen snapshot of the plan
+    // that month actually had (so editing a later month's budget can't change
+    // this view). For the current month, use the live plan. Fall back to live
+    // for any older month that has no snapshot yet (recorded going forward).
     const budgetable = (budgetState.categories || []).filter((c) => c.id !== 'needs-review');
-    const planIncome = monthlyIncomeTotal(budgetState);
-    const baseBudgets = computeCategoryBudgets(budgetable, planIncome);
-    const effBudgets = effectiveBudgetsForMonth(budgetable, baseBudgets, selMonth);
+    const snap = budgetState.budgetSnapshots?.[selMonth];
+    const usingSnapshot = selMonth < current && snap && snap.budgets;
+    let planIncome, effBudgets;
+    if (usingSnapshot) {
+      planIncome = Number(snap.income || 0);
+      effBudgets = snap.budgets;
+    } else {
+      planIncome = monthlyIncomeTotal(budgetState);
+      const baseBudgets = computeCategoryBudgets(budgetable, planIncome);
+      effBudgets = effectiveBudgetsForMonth(budgetable, baseBudgets, selMonth);
+    }
     const spentMap = netSpentByCategory(monthTx, creditIds);
 
     // One row per category that has a budget or any activity this month. diff =
@@ -212,6 +222,11 @@ export default function Summary({ budgetState, setBudgetState, transactions }) {
             <h2>Spending — budgeted vs actual</h2>
             {bvaRows.length > 0 && <span className="pill">{bvaRows.length} categories</span>}
           </div>
+          {usingSnapshot ? (
+            <p className="module-note">Budgeted figures are the plan saved for {monthLabel(selMonth)}, frozen so later budget changes don’t alter this view.</p>
+          ) : selMonth < current ? (
+            <p className="module-note">No saved budget for {monthLabel(selMonth)} yet, so these reflect your current plan. Months from now on are frozen automatically as you use the app.</p>
+          ) : null}
           {bvaRows.length === 0 ? (
             <p className="module-note">No budget or spending recorded for {monthLabel(selMonth)}.</p>
           ) : (

@@ -26,6 +26,10 @@ const DEFAULT_STATE = {
   // Monthly net-worth snapshots { 'YYYY-MM': number }, recorded as the app is
   // used, so the net-worth trend builds up over time.
   netWorthHistory: {},
+  // Frozen monthly budget plans { 'YYYY-MM': { income, budgets: {catId: amount} } },
+  // recorded as the app is used so the monthly Summary compares actuals against
+  // the plan that month actually had — not whatever the living plan says now.
+  budgetSnapshots: {},
   // The month the envelope ledger starts accruing from (YYYY-MM). Carryover
   // balances = opening balance + budget funded each month since this + spending.
   settings: { startMonth: '2026-09', appName: 'Family Budget' },
@@ -60,6 +64,7 @@ function normalizeBudget(b) {
     adjustments: Array.isArray(b?.adjustments) ? b.adjustments : [],
     analyses: Array.isArray(b?.analyses) ? b.analyses : [],
     netWorthHistory: b?.netWorthHistory && typeof b.netWorthHistory === 'object' ? b.netWorthHistory : {},
+    budgetSnapshots: b?.budgetSnapshots && typeof b.budgetSnapshots === 'object' ? b.budgetSnapshots : {},
     settings: { ...DEFAULT_STATE.settings, ...(b?.settings || {}) },
   };
 }
