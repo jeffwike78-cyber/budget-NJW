@@ -2,7 +2,7 @@ import { useState } from 'react';
 import BarChart from '../components/BarChart';
 import { todayStr, todayLabel } from '../lib/storage';
 import { isPayrollDeposit } from '../lib/income';
-import { netSpentByCategory } from '../lib/spending';
+import { netSpentByCategory, spendingCategoryIds } from '../lib/spending';
 import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, signedBalance } from '../lib/budgetMath';
 import { computeNetWorth } from '../lib/netWorth';
 import { ageOfMoney, ageOfMoneyAdvice, ageOfMoneyStatus } from '../lib/ageOfMoney';
@@ -42,7 +42,10 @@ export default function Overview({ budgetState, transactions, onQuickScan }) {
   const baseBudgets = computeCategoryBudgets(budgetState.categories, income);
   const effectiveBudgets = effectiveBudgetsForMonth(budgetState.categories, baseBudgets, month);
   const totalBudgeted = Object.values(effectiveBudgets).reduce((a, b) => a + b, 0);
-  const totalSpent = Object.values(netSpentByCategory(monthTx)).reduce((a, b) => a + b, 0);
+  // Refunds the user credited back to a spending envelope net against that
+  // envelope and are NOT income (see spending.js).
+  const creditIds = spendingCategoryIds(budgetState);
+  const totalSpent = Object.values(netSpentByCategory(monthTx, creditIds)).reduce((a, b) => a + b, 0);
   const remaining = totalBudgeted - totalSpent;
 
   // Expected (budgeted) income vs. what's actually landed this month. Actual =
@@ -50,7 +53,7 @@ export default function Overview({ budgetState, transactions, onQuickScan }) {
   // payments are auto-excluded, so they don't count as income).
   const expectedIncome = income;
   const actualIncome = monthTx
-    .filter((t) => Number(t.amount) < 0 && !t.excluded)
+    .filter((t) => Number(t.amount) < 0 && !t.excluded && !creditIds.has(t.categoryId))
     .reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
   const incomeAhead = actualIncome - expectedIncome;
 
@@ -85,8 +88,8 @@ export default function Overview({ budgetState, transactions, onQuickScan }) {
   // there is one (stable), falling back to this month early on.
   function monthFinance(key) {
     const tx = transactions.filter((t) => monthKey(t.date) === key);
-    const spending = Object.values(netSpentByCategory(tx)).reduce((s, v) => s + v, 0);
-    const inc = tx.filter((t) => Number(t.amount) < 0 && !t.excluded).reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+    const spending = Object.values(netSpentByCategory(tx, creditIds)).reduce((s, v) => s + v, 0);
+    const inc = tx.filter((t) => Number(t.amount) < 0 && !t.excluded && !creditIds.has(t.categoryId)).reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
     const rate = inc > 0 ? Math.round(((inc - spending) / inc) * 100) : null;
     return { income: inc, spending, rate };
   }
@@ -115,7 +118,7 @@ export default function Overview({ budgetState, transactions, onQuickScan }) {
   const chartMonths = lastNMonths(6);
   const chartData = chartMonths.map((key) => {
     const tx = transactions.filter((t) => monthKey(t.date) === key);
-    const expense = Object.values(netSpentByCategory(tx)).reduce((s, v) => s + v, 0);
+    const expense = Object.values(netSpentByCategory(tx, creditIds)).reduce((s, v) => s + v, 0);
     // Only real paychecks count as income here — Zelle/Venmo/wire transfers
     // the user moves around for investing show up as credits too, but
     // they're not income.

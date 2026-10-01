@@ -20,10 +20,35 @@ function isKnownRefund(description) {
   return REFUND_PATTERNS.some((pattern) => pattern.test(description || ''));
 }
 
-// Net spending per category: purchases add, known refunds/returns subtract,
+function asSet(ids) {
+  if (ids == null) return null;
+  return ids instanceof Set ? ids : new Set(ids);
+}
+
+// The spending-envelope ids (everything the user can budget to, minus the
+// Needs-review bucket). Assigning a refund to one of these is the explicit
+// signal that it reverses a purchase there.
+export function spendingCategoryIds(budgetState) {
+  return new Set((budgetState?.categories || []).map((c) => c.id).filter((id) => id && id !== 'needs-review'));
+}
+
+// A credit the user filed against a spending envelope — a refund/return that
+// reverses a purchase there, not real income. `spendingIds` is the set (or
+// list) from spendingCategoryIds.
+export function isEnvelopeCredit(t, spendingIds) {
+  if (!(Number(t.amount) < 0) || t.excluded) return false;
+  const set = asSet(spendingIds);
+  return !!set && set.has(t.categoryId);
+}
+
+// Net spending per category: purchases add, refunds/returns subtract,
 // everything else negative (income, transfers) is ignored — it was never
-// spending in that category to begin with.
-export function netSpentByCategory(transactions) {
+// spending in that category to begin with. A negative amount counts as a
+// credit against its envelope when the user assigned it to a spending envelope
+// (pass `spendingIds`); without that list it falls back to the known-pattern
+// match, so older callers behave as before.
+export function netSpentByCategory(transactions, spendingIds = null) {
+  const set = asSet(spendingIds);
   const totals = {};
   for (const t of transactions) {
     // Not real household spending: ignored, an AI-flagged business expense, or
@@ -32,8 +57,9 @@ export function netSpentByCategory(transactions) {
     const amount = Number(t.amount);
     if (amount > 0) {
       totals[t.categoryId] = (totals[t.categoryId] || 0) + amount;
-    } else if (isKnownRefund(t.description)) {
-      totals[t.categoryId] = (totals[t.categoryId] || 0) + amount; // negative, nets the total down
+    } else if (amount < 0) {
+      const credit = set ? set.has(t.categoryId) : isKnownRefund(t.description);
+      if (credit) totals[t.categoryId] = (totals[t.categoryId] || 0) + amount; // negative, nets the total down
     }
   }
   return totals;
