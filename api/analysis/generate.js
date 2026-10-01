@@ -26,7 +26,7 @@ export default async function handler(req, res) {
     }
 
     const client = new Anthropic({ apiKey });
-    const model = process.env.ANALYSIS_MODEL || 'claude-opus-5';
+    const model = process.env.ANALYSIS_MODEL || 'claude-opus-5-5';
 
     const system = `You are a sharp, encouraging personal-finance coach reviewing one family's monthly budget. You think like the financially savvy: you care about savings rate, cash flow, lifestyle creep, fixed vs. flexible spending, categories drifting over budget, recurring subscriptions, and building wealth over time — not just this month's totals.
 
@@ -54,15 +54,26 @@ Guidance:
 
     const userText = `Here is the budget data as JSON. Focus month: ${data.monthLabel || data.month}.\n\n${JSON.stringify(data, null, 2)}\n\nWrite the analysis JSON now.`;
 
+    // The current Opus models think by default, and the thinking tokens count
+    // against max_tokens. A small cap (2500) let the thinking eat the whole
+    // budget, so the JSON came back truncated and unparseable — the "could not
+    // be read" error. Give it ample room so the full report always fits.
     const response = await client.messages.create({
       model,
-      max_tokens: 2500,
+      max_tokens: 8000,
       system,
       messages: [{ role: 'user', content: [{ type: 'text', text: userText }] }],
     });
     const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
     const parsed = parseJsonObject(text);
     if (!parsed || !parsed.headline) {
+      // Surface the real reason so a genuine failure isn't a silent "try again".
+      if (response.stop_reason === 'max_tokens') {
+        console.error('analysis generate: response hit max_tokens before finishing JSON.');
+        res.status(502).json({ error: 'The analysis was too long to finish. Please try again.' });
+        return;
+      }
+      console.error('analysis generate: could not parse JSON. stop_reason:', response.stop_reason, 'text head:', text.slice(0, 200));
       res.status(502).json({ error: 'The AI response could not be read. Please try again.' });
       return;
     }
