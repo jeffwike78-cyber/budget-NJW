@@ -2297,4 +2297,5 @@ button, a, label, [role="button"], .sidebar-link, .mobile-tab-link, .quick-acces
   color: var(--text-h);
 }
 .tx-section-count { font-size: 13px; font-weight: 600; color: var(--text); opacity: 0.75; }
+.tx-income-total { color: var(--good); opacity: 1; margin-right: 4px; }
 .tx-delete-btn:hover { color: var(--bad); border-color: var(--bad); }
