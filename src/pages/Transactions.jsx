@@ -444,6 +444,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
               transactions={needsReview}
               categories={budgetState.categories}
               incomeCategories={budgetState.incomeCategories}
+              accounts={budgetState.accounts}
               onRecategorize={handleRecategorize}
               onSplit={splitTransaction}
               onDelete={deleteTransaction}
@@ -475,6 +476,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
               transactions={aiShown}
               categories={budgetState.categories}
               incomeCategories={budgetState.incomeCategories}
+              accounts={budgetState.accounts}
               onRecategorize={handleRecategorize}
               onConfirmReviewed={confirmReviewed}
               onSplit={splitTransaction}
@@ -507,6 +509,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
               transactions={userShown}
               categories={budgetState.categories}
               incomeCategories={budgetState.incomeCategories}
+              accounts={budgetState.accounts}
               onRecategorize={handleRecategorize}
               onSplit={splitTransaction}
               onDelete={deleteTransaction}
@@ -567,6 +570,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
               transactions={income}
               categories={budgetState.categories}
               incomeCategories={budgetState.incomeCategories}
+              accounts={budgetState.accounts}
               onRecategorize={handleRecategorize}
               onConfirmReviewed={confirmReviewed}
               onSplit={splitTransaction}
