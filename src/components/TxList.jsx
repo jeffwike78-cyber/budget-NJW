@@ -3,7 +3,12 @@ import { findReceipt } from '../lib/findReceipt';
 import { uploadReceipt, getReceiptUrl } from '../lib/receiptsClient';
 import { TAX_CATEGORIES, taxLabel } from '../lib/tax';
 
-function TxRow({ t, categories, incomeCategories = [], onRecategorize, onConfirmReviewed, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, taxLabels, showReceiptLookup }) {
+function TxRow({ t, categories, incomeCategories = [], accounts = [], onRecategorize, onConfirmReviewed, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, taxLabels, showReceiptLookup }) {
+  // Which linked account this transaction came from — surfaced so a synced
+  // charge that isn't in the account you're looking at can be traced to the one
+  // it actually belongs to (e.g. a card or a second bank).
+  const account = accounts.find((a) => a.id === t.accountId);
+  const accountName = account?.name || null;
   // Money coming in (negative amount = deposit) gets income labels; money going
   // out gets the budget envelopes.
   const isIncome = Number(t.amount) < 0;
@@ -130,6 +135,7 @@ function TxRow({ t, categories, incomeCategories = [], onRecategorize, onConfirm
       <span className="tx-desc">
         {t.description}
         {t.source === 'plaid' && <span className="pill tx-source-pill">Synced</span>}
+        {accountName && <span className="pill tx-acct-pill" title={accountName}>{accountName}</span>}
         {t.source === 'receipt' && !(t.splitTotal > 0) && <span className="pill tx-receipt-pill">Receipt</span>}
         {/* A piece of a split purchase: show the full amount it came out of. */}
         {t.source === 'split' && t.splitTotal > 0 && (
@@ -326,6 +332,7 @@ export default function TxList({
   transactions,
   categories,
   incomeCategories = [],
+  accounts = [],
   onRecategorize,
   onConfirmReviewed,
   onSplit,
@@ -342,7 +349,7 @@ export default function TxList({
   const active = transactions.filter((t) => !t.excluded);
   const ignored = transactions.filter((t) => t.excluded);
 
-  const rowProps = { categories, incomeCategories, onRecategorize, onConfirmReviewed, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, taxLabels, showReceiptLookup };
+  const rowProps = { categories, incomeCategories, accounts, onRecategorize, onConfirmReviewed, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, taxLabels, showReceiptLookup };
 
   if (transactions.length === 0) {
     return <p className="module-note">{emptyLabel}</p>;
