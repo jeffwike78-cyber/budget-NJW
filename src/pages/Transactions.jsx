@@ -4,6 +4,7 @@ import { categorizeWithAI } from '../lib/aiCategorize';
 import { scanReceipt } from '../lib/receiptsClient';
 import { spendingCategoryIds } from '../lib/spending';
 import { bumpConfidence } from '../lib/merchantTrust';
+import { scanAmazonReceipts } from '../lib/amazonScan';
 import TxList from '../components/TxList';
 
 function normalize(desc) {
@@ -43,6 +44,11 @@ export default function Transactions({ budgetState, setBudgetState, transactions
   const spendingIds = spendingCategoryIds(budgetState);
   const income = transactions.filter((t) => Number(t.amount) < 0 && !t.excluded && !spendingIds.has(t.categoryId));
   const incomeTotal = income.reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+  // Amazon-style charges still missing their item detail — the ones worth
+  // pulling receipts for in bulk from email.
+  const amazonPending = transactions.filter(
+    (t) => !t.excluded && !t.userReviewed && Number(t.amount) > 0 && /amazon|amzn/i.test(t.description || '') && (t.categoryId === 'needs-review' || !t.categoryId || !t.note)
+  ).length;
   const REVIEWED_CAP = 60;
   const [showAi, setShowAi] = useState(false);
   const [showUser, setShowUser] = useState(false);
@@ -66,6 +72,8 @@ export default function Transactions({ budgetState, setBudgetState, transactions
   const [splitParts, setSplitParts] = useState([]);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiStatus, setAiStatus] = useState(null);
+  const [amazonBusy, setAmazonBusy] = useState(false);
+  const [amazonStatus, setAmazonStatus] = useState(null);
   const [scanBusy, setScanBusy] = useState(false);
   const [scanMsg, setScanMsg] = useState(null);
   const [scanMeta, setScanMeta] = useState(null); // { note, receiptPath, date } from a scan awaiting Add
@@ -313,6 +321,30 @@ export default function Transactions({ budgetState, setBudgetState, transactions
     }
   }
 
+  // Pull Amazon receipts from the connected inboxes in bulk and attach the item
+  // detail + best envelope, so Amazon charges don't have to be opened one by one.
+  async function scanAmazon() {
+    if (amazonBusy) return;
+    setAmazonBusy(true);
+    setAmazonStatus(null);
+    try {
+      const data = await scanAmazonReceipts();
+      const applied = data.applied || 0;
+      const scanned = data.scanned || 0;
+      const remaining = data.remaining || 0;
+      let msg =
+        applied === 0
+          ? `Scanned ${scanned} Amazon charge${scanned === 1 ? '' : 's'} but couldn’t match a receipt email — try the 🔎 on one to see why.`
+          : `Pulled receipts onto ${applied} of ${scanned} Amazon charge${scanned === 1 ? '' : 's'} (item details + a suggested envelope).`;
+      if (remaining > 0) msg += ` ${remaining} more left — run it again to continue.`;
+      setAmazonStatus(msg);
+    } catch (err) {
+      setAmazonStatus(err.message || 'Amazon receipt scan failed.');
+    } finally {
+      setAmazonBusy(false);
+    }
+  }
+
   return (
     <>
       <h1 className="page-title">Transactions</h1>
@@ -450,6 +482,14 @@ export default function Transactions({ budgetState, setBudgetState, transactions
             {needsReview.length > 0 ? `${needsReview.length} to review` : 'All caught up'}
           </span>
         </div>
+        {amazonPending > 0 && (
+          <div className="ai-actions">
+            <button type="button" className="secondary-btn" onClick={scanAmazon} disabled={amazonBusy}>
+              {amazonBusy ? 'Scanning inboxes…' : `🛒 Pull Amazon receipts from email (${amazonPending})`}
+            </button>
+            {amazonStatus && <span className="module-note ai-status">{amazonStatus}</span>}
+          </div>
+        )}
         {needsReview.length > 0 ? (
           <>
             <p className="module-note">
