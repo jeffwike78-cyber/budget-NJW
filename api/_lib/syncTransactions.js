@@ -31,9 +31,18 @@ const MAX_RECEIPT_LOOKUPS = 10;
 //   1. a merchant the user has corrected before (merchantMemory) → reuse it
 //   2. otherwise ask the AI (one batched call) and take confident answers
 //   3. anything left over → 'needs-review'
+// Once the user has confirmed a merchant's category this many times, we trust
+// it: future transactions from that merchant are filed straight to the envelope
+// (user_reviewed) instead of waiting in "AI Reviewed" for approval.
+const TRUST_THRESHOLD = 5;
+function merchantKey(txn) {
+  return String(txn.merchant_name || txn.name || '').trim().toLowerCase();
+}
+
 async function assignCategories(supabaseAdmin, changed, categories) {
   const budget = await loadBudget(supabaseAdmin);
   const merchantMemory = budget.merchantMemory || {};
+  const merchantConfidence = budget.merchantConfidence || {};
   const validIds = new Set(categories.map((c) => c.id));
 
   const assignments = {};
@@ -68,7 +77,18 @@ async function assignCategories(supabaseAdmin, changed, categories) {
     }
   }
 
-  return { assignments, businessSet }; // missing assignment → 'needs-review' at upsert
+  // Merchants the user has confirmed enough times get auto-filed (user_reviewed)
+  // so they skip the AI Reviewed queue. Only applies to the established category
+  // the user kept confirming — a fresh AI guess has no confidence record.
+  const trusted = new Set();
+  for (const txn of changed) {
+    const cat = assignments[txn.transaction_id];
+    if (!cat || cat === 'needs-review') continue;
+    const e = merchantConfidence[merchantKey(txn)];
+    if (e && e.categoryId === cat && (e.count || 0) >= TRUST_THRESHOLD) trusted.add(txn.transaction_id);
+  }
+
+  return { assignments, businessSet, trusted }; // missing assignment → 'needs-review' at upsert
 }
 
 function daysApart(aStr, bStr) {
@@ -533,7 +553,7 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
     // without — by writing NULL into the NOT-NULL `business`/`excluded`
     // columns). A MODIFIED row omits a false flag instead, so a re-sync can't
     // clear a `business`/`excluded` flag the user set by hand.
-    const buildRow = (txn, assignments, businessSet, forInsert) => {
+    const buildRow = (txn, assignments, businessSet, forInsert, trusted) => {
       // NEVER auto-hide: only the user may Ignore a transaction. A transfer
       // between the family's own accounts or a credit-card payoff isn't spending,
       // but instead of hiding it automatically we send it to Needs Review so the
@@ -556,8 +576,10 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
       if (forInsert) row.excluded = false; // never auto-hide; only the user ignores
       // Inserted rows all carry user_reviewed so a batched upsert has uniform
       // columns (a NOT-NULL column missing from some rows would write NULL and
-      // fail the batch). A fresh AI-placed row is not user-reviewed.
-      if (forInsert) row.user_reviewed = false;
+      // fail the batch). A fresh AI-placed row is not user-reviewed — UNLESS the
+      // merchant is trusted (confirmed enough times), in which case it's filed
+      // straight to the envelope and skips the AI Reviewed queue.
+      if (forInsert) row.user_reviewed = !!(trusted && trusted.has(txn.transaction_id));
       return row;
     };
 
@@ -598,7 +620,7 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
         if (t.pending_transaction_id) supersededIds.add(t.pending_transaction_id);
         if (!minSeenDate || t.date < minSeenDate) minSeenDate = t.date;
       }
-      const { assignments, businessSet } = await assignCategories(supabaseAdmin, [...pageAdded, ...pageModified], categories);
+      const { assignments, businessSet, trusted } = await assignCategories(supabaseAdmin, [...pageAdded, ...pageModified], categories);
 
       // A charge first imported while PENDING posts later under a NEW id, with
       // pending_transaction_id pointing back at the pending row. Carry that
@@ -618,7 +640,7 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
 
       // New rows share the same columns → one batched upsert per page.
       const insertRows = pageAdded.map((t) => {
-        const row = buildRow(t, assignments, businessSet, true);
+        const row = buildRow(t, assignments, businessSet, true, trusted);
         const pred = t.pending_transaction_id && predMap.get(t.pending_transaction_id);
         if (pred) {
           row.category_id = pred.category_id;
@@ -665,7 +687,7 @@ export async function syncItem(supabaseAdmin, plaid, itemRowId) {
           continue;
         }
         if (!updated || updated.length === 0) {
-          const row = buildRow(t, assignments, businessSet, true);
+          const row = buildRow(t, assignments, businessSet, true, trusted);
           const { error: insErr } = await supabaseAdmin
             .from('budget_transactions')
             .upsert(row, { onConflict: 'plaid_transaction_id' });
