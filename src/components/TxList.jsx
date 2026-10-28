@@ -3,12 +3,24 @@ import { findReceipt } from '../lib/findReceipt';
 import { uploadReceipt, getReceiptUrl } from '../lib/receiptsClient';
 import { TAX_CATEGORIES, taxLabel } from '../lib/tax';
 
+// A compact tag for which account a transaction came from, so it never crowds
+// the amount: prefer the last-4 ("••8359"); fall back to the name after the
+// last "·" (e.g. "CREDIT CARD") when there's no mask.
+function shortAccountLabel(name) {
+  const s = String(name || '').trim();
+  if (!s) return null;
+  const mask = s.match(/(\d{3,})\s*$/);
+  if (mask) return `••${mask[1].slice(-4)}`;
+  return s.split('·').pop().trim() || s;
+}
+
 function TxRow({ t, categories, incomeCategories = [], accounts = [], onRecategorize, onConfirmReviewed, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, taxLabels, showReceiptLookup }) {
   // Which linked account this transaction came from — surfaced so a synced
   // charge that isn't in the account you're looking at can be traced to the one
   // it actually belongs to (e.g. a card or a second bank).
   const account = accounts.find((a) => a.id === t.accountId);
   const accountName = account?.name || null;
+  const accountShort = shortAccountLabel(accountName);
   // Money coming in (negative amount = deposit) gets income labels; money going
   // out gets the budget envelopes.
   const isIncome = Number(t.amount) < 0;
@@ -135,7 +147,7 @@ function TxRow({ t, categories, incomeCategories = [], accounts = [], onRecatego
       <span className="tx-desc">
         {t.description}
         {t.source === 'plaid' && <span className="pill tx-source-pill">Synced</span>}
-        {accountName && <span className="pill tx-acct-pill" title={accountName}>{accountName}</span>}
+        {accountShort && <span className="pill tx-acct-pill" title={accountName}>{accountShort}</span>}
         {t.source === 'receipt' && !(t.splitTotal > 0) && <span className="pill tx-receipt-pill">Receipt</span>}
         {/* A piece of a split purchase: show the full amount it came out of. */}
         {t.source === 'split' && t.splitTotal > 0 && (

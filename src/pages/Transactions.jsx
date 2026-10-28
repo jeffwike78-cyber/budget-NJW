@@ -3,6 +3,7 @@ import { todayStr } from '../lib/storage';
 import { categorizeWithAI } from '../lib/aiCategorize';
 import { scanReceipt } from '../lib/receiptsClient';
 import { spendingCategoryIds } from '../lib/spending';
+import { bumpConfidence } from '../lib/merchantTrust';
 import TxList from '../components/TxList';
 
 function normalize(desc) {
@@ -242,7 +243,28 @@ export default function Transactions({ budgetState, setBudgetState, transactions
     // Only teach the merchant→envelope memory from a real envelope pick; setting
     // a vendor back to Uncategorized (null) shouldn't wipe out what we learned.
     if (tx && categoryId) {
-      setBudgetState((prev) => ({ ...prev, merchantMemory: { ...prev.merchantMemory, [normalize(tx.description)]: categoryId } }));
+      // Picking a category for a merchant both teaches the memory and counts as
+      // a confirmation toward auto-trusting that merchant on future imports.
+      setBudgetState((prev) => ({
+        ...prev,
+        merchantMemory: { ...prev.merchantMemory, [normalize(tx.description)]: categoryId },
+        merchantConfidence: bumpConfidence(prev.merchantConfidence, tx.description, categoryId),
+      }));
+    }
+  }
+
+  // Tapping "✓ Correct" affirms the AI's guess. Count it as a confirmation
+  // (reinforcing memory + confidence) so a merchant confirmed enough times is
+  // auto-filed on future imports, then mark the row reviewed.
+  async function confirmCorrect(txId) {
+    const tx = transactions.find((t) => t.id === txId);
+    await confirmReviewed(txId);
+    if (tx && tx.categoryId && tx.categoryId !== 'needs-review') {
+      setBudgetState((prev) => ({
+        ...prev,
+        merchantMemory: { ...prev.merchantMemory, [normalize(tx.description)]: tx.categoryId },
+        merchantConfidence: bumpConfidence(prev.merchantConfidence, tx.description, tx.categoryId),
+      }));
     }
   }
 
@@ -478,7 +500,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
               incomeCategories={budgetState.incomeCategories}
               accounts={budgetState.accounts}
               onRecategorize={handleRecategorize}
-              onConfirmReviewed={confirmReviewed}
+              onConfirmReviewed={confirmCorrect}
               onSplit={splitTransaction}
               onDelete={deleteTransaction}
               onToggleExcluded={setExcluded}
@@ -572,7 +594,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
               incomeCategories={budgetState.incomeCategories}
               accounts={budgetState.accounts}
               onRecategorize={handleRecategorize}
-              onConfirmReviewed={confirmReviewed}
+              onConfirmReviewed={confirmCorrect}
               onSplit={splitTransaction}
               onDelete={deleteTransaction}
               onToggleExcluded={setExcluded}

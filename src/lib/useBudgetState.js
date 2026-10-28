@@ -16,6 +16,10 @@ const DEFAULT_STATE = {
   incomeSources: DEFAULT_INCOME_SOURCES,
   income: DEFAULT_INCOME, // legacy fallback
   merchantMemory: {}, // { normalizedDescription: categoryId } — learned from past corrections
+  // { normalizedDescription: { categoryId, count } } — how many times the user
+  // has confirmed a merchant's category. At/over the trust threshold, future
+  // transactions from that merchant are auto-filed without needing approval.
+  merchantConfidence: {},
   // Manual envelope adjustments / money moves — not spending or income, just
   // earmarking cash between envelopes (e.g. cover an overspend, top up a fund).
   // Each: { id, moveId, month, categoryId, amount (+ into envelope / − out), note, from }
@@ -61,6 +65,7 @@ function normalizeBudget(b) {
     sinkingFunds: nonEmpty(b?.sinkingFunds, DEFAULT_STATE.sinkingFunds),
     incomeSources: nonEmpty(b?.incomeSources, DEFAULT_STATE.incomeSources),
     merchantMemory: b?.merchantMemory || {},
+    merchantConfidence: b?.merchantConfidence && typeof b.merchantConfidence === 'object' ? b.merchantConfidence : {},
     adjustments: Array.isArray(b?.adjustments) ? b.adjustments : [],
     analyses: Array.isArray(b?.analyses) ? b.analyses : [],
     netWorthHistory: b?.netWorthHistory && typeof b.netWorthHistory === 'object' ? b.netWorthHistory : {},
