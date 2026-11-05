@@ -67,9 +67,13 @@ export default function Summary({ budgetState, setBudgetState, transactions, set
       .sort((a, b) => b.amount - a.amount);
   }
 
+  // The printed heading should name what's actually on screen, so a printed
+  // spending summary and a printed AI analysis aren't both titled "Summary".
+  const pageTitle = mode === 'insights' ? 'AI Analysis' : mode === 'audit' ? 'Audit' : 'Spending Summary';
+
   return (
     <>
-      <h1 className="page-title">Summary</h1>
+      <h1 className="page-title">{pageTitle}</h1>
       <p className="page-intro no-print">
         A plain profit-and-loss view of your money: what came in, what went out, and where it went. Switch between a
         single month and a full year to spot patterns and learn from them. Built from every transaction on record.
