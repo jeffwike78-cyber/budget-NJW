@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { todayStr } from '../lib/storage';
 import { netSpentByCategory, spendingCategoryIds } from '../lib/spending';
 import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth } from '../lib/budgetMath';
+import { findSplitDoubleCounts, findDuplicateCharges, findUncategorized } from '../lib/audit';
 import BarChart from '../components/BarChart';
 import Analysis from './Analysis';
 
@@ -29,8 +30,8 @@ function expensesOf(txns, creditIds) {
   return Object.values(netSpentByCategory(txns, creditIds)).reduce((a, b) => a + b, 0);
 }
 
-export default function Summary({ budgetState, setBudgetState, transactions }) {
-  const [mode, setMode] = useState('month'); // 'month' | 'year' | 'insights'
+export default function Summary({ budgetState, setBudgetState, transactions, setExcluded }) {
+  const [mode, setMode] = useState('month'); // 'month' | 'year' | 'insights' | 'audit'
   const current = monthKey();
   const currentYear = current.slice(0, 4);
 
@@ -86,6 +87,9 @@ export default function Summary({ budgetState, setBudgetState, transactions }) {
             <button type="button" role="tab" aria-selected={mode === 'insights'} className={`summary-mode-btn${mode === 'insights' ? ' active' : ''}`} onClick={() => setMode('insights')}>
               Insights
             </button>
+            <button type="button" role="tab" aria-selected={mode === 'audit'} className={`summary-mode-btn${mode === 'audit' ? ' active' : ''}`} onClick={() => setMode('audit')}>
+              Audit
+            </button>
           </div>
           {mode === 'month' && (
             <label className="analysis-month">
@@ -117,11 +121,135 @@ export default function Summary({ budgetState, setBudgetState, transactions }) {
         <Analysis budgetState={budgetState} setBudgetState={setBudgetState} transactions={transactions} embedded />
       ) : mode === 'month' ? (
         <MonthPnl />
+      ) : mode === 'audit' ? (
+        <Audit />
       ) : (
         <YearReview />
       )}
     </>
   );
+
+  // ---------- Audit ----------
+  function Audit() {
+    const doubles = findSplitDoubleCounts(transactions);
+    const dups = findDuplicateCharges(transactions);
+    const uncategorized = findUncategorized(transactions).filter((t) => t.categoryId !== 'needs-review');
+    const needsReview = transactions.filter((t) => t.categoryId === 'needs-review' && !t.excluded && Number(t.amount) > 0);
+    const recon = monthsWithData.slice(0, 4).map((m) => {
+      const tx = transactions.filter((t) => (t.date || '').slice(0, 7) === m);
+      return { m, income: incomeOf(tx, creditIds), out: expensesOf(tx, creditIds) };
+    });
+    const issues = doubles.length + dups.length;
+
+    return (
+      <>
+        <section className={`card summary-pnl ${issues === 0 ? 'summary-pos' : 'summary-neg'}`}>
+          <div className="card-header">
+            <h2>Audit</h2>
+            <span className={`pill ${issues === 0 ? 'pill-good' : 'pill-bad'}`}>
+              {issues === 0 ? 'Nothing double-counted' : `${issues} to check`}
+            </span>
+          </div>
+          <p className="module-note">
+            Automatic checks for money counted twice, duplicate imports, and anything still unsorted — so nothing slips
+            through the cracks.
+          </p>
+        </section>
+
+        <section className="card">
+          <div className="card-header"><h2>Money in vs out</h2></div>
+          <div className="bva-row bva-head">
+            <span className="bva-name">Month</span>
+            <span className="bva-num">In</span>
+            <span className="bva-num">Out</span>
+            <span className="bva-num">Net</span>
+          </div>
+          {recon.map((r) => {
+            const net = r.income - r.out;
+            return (
+              <div className="bva-row" key={r.m}>
+                <span className="bva-name">{monthLabel(r.m)}</span>
+                <span className="bva-num good">{usd(r.income)}</span>
+                <span className="bva-num">{usd(r.out)}</span>
+                <span className={`bva-num ${net >= 0 ? 'good' : 'bad'}`}>{net >= 0 ? usd(net) : `-${usd(-net)}`}</span>
+              </div>
+            );
+          })}
+        </section>
+
+        {doubles.length > 0 && (
+          <section className="card">
+            <div className="card-header">
+              <h2>Possible double-count</h2>
+              <span className="pill pill-bad">{doubles.length}</span>
+            </div>
+            <p className="module-note">
+              A split purchase whose raw bank charge is still counted too. Ignore the raw charge so only the split pieces
+              count toward your envelopes.
+            </p>
+            <ul className="audit-flag-list">
+              {doubles.map((d) => (
+                <li key={d.charge.id} className="audit-flag">
+                  <span className="audit-flag-main">
+                    {d.description} · {usd(d.total)}
+                    <span className="audit-flag-sub">
+                      split {d.pieces} way{d.pieces === 1 ? '' : 's'} on {(d.date || '').slice(5)}, and a{' '}
+                      {usd(Math.abs(d.charge.amount))} charge on {(d.charge.date || '').slice(5)} is also counted
+                    </span>
+                  </span>
+                  {setExcluded && (
+                    <button type="button" className="secondary-btn" onClick={() => setExcluded(d.charge.id, true)}>
+                      Ignore raw charge
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {dups.length > 0 && (
+          <section className="card">
+            <div className="card-header">
+              <h2>Possible duplicate imports</h2>
+              <span className="pill pill-warn">{dups.length}</span>
+            </div>
+            <p className="module-note">Same merchant, amount and card within a few days — likely imported twice.</p>
+            <ul className="audit-flag-list">
+              {dups.map((c, i) => (
+                <li key={c[0].id || i} className="audit-flag">
+                  <span className="audit-flag-main">
+                    {c[0].description} · {usd(Math.abs(c[0].amount))}
+                    <span className="audit-flag-sub">{c.length} charges on {c.map((x) => (x.date || '').slice(5)).join(', ')}</span>
+                  </span>
+                  {setExcluded && (
+                    <button type="button" className="secondary-btn" onClick={() => setExcluded(c[c.length - 1].id, true)}>
+                      Ignore one
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        <section className="card">
+          <div className="card-header"><h2>Still to sort</h2></div>
+          <div className="bva-row">
+            <span className="bva-name">Needs review</span>
+            <span className="bva-num">{needsReview.length}</span>
+          </div>
+          <div className="bva-row">
+            <span className="bva-name">Uncategorized (money out)</span>
+            <span className="bva-num">{uncategorized.length}</span>
+          </div>
+          {needsReview.length === 0 && uncategorized.length === 0 && (
+            <p className="module-note">Everything's categorized ✓</p>
+          )}
+        </section>
+      </>
+    );
+  }
 
   // ---------- Month P&L ----------
   function MonthPnl() {
