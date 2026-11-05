@@ -224,40 +224,48 @@ export function useBudgetTransactions() {
 
   // Add a transaction that's split across several envelopes in one step (used by
   // the receipt-scan / add form). Each part becomes its own counted row sharing
-  // the vendor/date/account. For a scanned receipt: if the bank already imported
-  // the charge, exclude that bank row so it doesn't double-count with the split;
-  // otherwise drop a single full-total, excluded "anchor" row (source='receipt')
-  // so the charge reconciles when it posts — see mergeReceiptMatches in
-  // syncTransactions.
+  // the vendor/date/account. EVERY split (scanned receipt or not) leaves a
+  // reconciliation anchor so the real bank charge is excluded instead of
+  // double-counting: if the matching charge already imported, hide it now;
+  // otherwise drop a single full-total, excluded "anchor" row that the sync
+  // reconciles when the charge posts — see mergeReceiptMatches in
+  // syncTransactions. (Without this, splitting a purchase that wasn't a scanned
+  // receipt left its bank charge counted twice.)
   async function addSplitTransaction(base, parts) {
     try {
       const isReceipt = !!base.receiptPath;
       const total = parts.reduce((s, p) => s + Number(p.amount), 0);
       const grossTotal = Math.abs(total); // the full purchase, for the split labels
+      // Bank charge already here (e.g. a receipt split uploaded after the sync)?
+      // Hide it now. We only match an existing charge for a scanned receipt,
+      // where the charge is known to correspond; a plain split anchors instead,
+      // so an unrelated like-amount charge is never hidden by mistake.
+      let matchedExisting = false;
       if (isReceipt) {
-        // Bank charge already here (split-uploaded after the sync)? Hide it and
-        // mark it as the split source so it reads "Split · Ignored".
         const match = await findMatchingBankCharge(total, base.date);
         if (match) {
           const exErr = await updateRowResilient(match.id, { excluded: true, split_total: grossTotal });
           if (exErr) return { message: describeError(exErr) };
-        } else {
-          // No charge yet — leave an anchor for the sync to reconcile against.
-          const anchor = {
-            date: base.date,
-            description: base.description,
-            amount: total,
-            category_id: null,
-            account_id: base.accountId,
-            source: 'receipt',
-            excluded: true,
-            receipt_path: base.receiptPath,
-            split_total: grossTotal,
-          };
-          if (base.note) anchor.note = base.note;
-          const anchorErr = await insertRowsResilient([anchor]);
-          if (anchorErr) return { message: describeError(anchorErr) };
+          matchedExisting = true;
         }
+      }
+      if (!matchedExisting) {
+        // Leave an excluded anchor for the sync to reconcile the posting charge
+        // against — so the raw total is hidden and only the split pieces count.
+        const anchor = {
+          date: base.date,
+          description: base.description,
+          amount: total,
+          category_id: null,
+          account_id: base.accountId,
+          source: 'receipt',
+          excluded: true,
+          split_total: grossTotal,
+        };
+        if (base.receiptPath) anchor.receipt_path = base.receiptPath;
+        if (base.note) anchor.note = base.note;
+        const anchorErr = await insertRowsResilient([anchor]);
+        if (anchorErr) return { message: describeError(anchorErr) };
       }
       const rows = parts.map((p, i) => {
         const row = {
