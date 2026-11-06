@@ -55,6 +55,7 @@ export default function Summary({
   transactions,
   recategorize,
   setExcluded,
+  setBusiness,
   setNeedsReview,
   splitTransaction,
   deleteTransaction,
@@ -336,10 +337,21 @@ export default function Summary({
     const incomeTx = monthTx.filter(
       (t) => Number(t.amount) < 0 && !t.excluded && !t.business && !creditIds.has(t.categoryId),
     );
-    const incomeRecon = reconcileIncome(budgetState.incomeSources, incomeTx, selMonth);
+    // Deposits that don't count as income right now — flagged business or
+    // ignored — so the reconciliation can flag a paycheck that got mis-tagged.
+    const hiddenIncomeTx = monthTx
+      .filter((t) => Number(t.amount) < 0 && !creditIds.has(t.categoryId) && (t.excluded || t.business))
+      .map((t) => ({ ...t, _hiddenReason: t.business && t.excluded ? 'business & ignored' : t.business ? 'business' : 'ignored' }));
+    const incomeRecon = reconcileIncome(budgetState.incomeSources, incomeTx, selMonth, hiddenIncomeTx);
     const incomeFlags = incomeRecon.perSource.filter(
-      (s) => s.status === 'missing' || s.status === 'partial' || s.status === 'under',
+      (s) => s.status === 'missing' || s.status === 'partial' || s.status === 'under' || s.candidates.length > 0,
     ).length;
+    // Bring a mis-tagged deposit back into income: clear the business flag and
+    // un-ignore it so it counts. Leaves its category alone.
+    const countAsIncome = (tx) => {
+      if (tx.business && setBusiness) setBusiness(tx.id, false);
+      if (tx.excluded && setExcluded) setExcluded(tx.id, false);
+    };
     // Every deposit that hit this month — including ones currently ignored or
     // filed under a spending category — so a misplaced paycheck can be found
     // and re-filed from here.
@@ -423,6 +435,27 @@ export default function Summary({
                           ))
                       )}
                     </ul>
+                  )}
+                  {s.candidates.length > 0 && (
+                    <div className="income-candidate no-print">
+                      <p className="income-candidate-head">
+                        ⚠ A deposit that looks like this source isn’t being counted as income:
+                      </p>
+                      {s.candidates
+                        .sort((a, b) => (a.date < b.date ? -1 : 1))
+                        .map((d) => (
+                          <div key={d.id} className="income-candidate-row">
+                            <span className="pnl-tx-date">{(d.date || '').slice(5)}</span>
+                            <span className="pnl-tx-desc">
+                              {d.description} <span className="income-candidate-tag">{d._hiddenReason}</span>
+                            </span>
+                            <span className="pnl-tx-amt">+{usd2(d.amount)}</span>
+                            <button type="button" className="secondary-btn income-candidate-btn" onClick={() => countAsIncome(d)}>
+                              Count as income
+                            </button>
+                          </div>
+                        ))}
+                    </div>
                   )}
                 </li>
               );

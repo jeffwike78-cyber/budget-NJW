@@ -38,7 +38,26 @@ function matchScore(srcTok, depTok, perPayment, depAmt) {
   return sc;
 }
 
-export function reconcileIncome(incomeSources, deposits, month) {
+// Pick the best-matching source for a deposit; null if nothing scores.
+function bestSourceFor(srcTok, d) {
+  const depTok = tokenize(d.description);
+  let best = null;
+  let bestScore = 0;
+  for (const s of srcTok) {
+    const sc = matchScore(s.tok, depTok, s.perPayment, d.amount);
+    if (sc > bestScore) {
+      bestScore = sc;
+      best = s;
+    }
+  }
+  return best && bestScore >= 1 ? best : null;
+}
+
+// Reconcile a month's budgeted income against the deposits that landed.
+// `deposits` are the deposits that count as income. `hiddenDeposits` are
+// deposits that DON'T currently count — ones flagged business or ignored — so
+// we can point out a paycheck that got mis-tagged and reads as "missing".
+export function reconcileIncome(incomeSources, deposits, month, hiddenDeposits = []) {
   const sources = (incomeSources || []).filter((s) => Number(s.amount || 0) > 0);
   const from = `${month}-01`;
   const to = lastDayOfMonth(month);
@@ -46,7 +65,7 @@ export function reconcileIncome(incomeSources, deposits, month) {
 
   const expected = new Map();
   for (const s of sources) {
-    expected.set(s.name, { name: s.name, perPayment: Number(s.amount), expectedCount: 0, expectedTotal: 0, received: [], receivedTotal: 0 });
+    expected.set(s.name, { name: s.name, perPayment: Number(s.amount), expectedCount: 0, expectedTotal: 0, received: [], receivedTotal: 0, candidates: [] });
   }
   for (const e of events) {
     const x = expected.get(e.name);
@@ -58,23 +77,23 @@ export function reconcileIncome(incomeSources, deposits, month) {
   const srcTok = sources.map((s) => ({ name: s.name, perPayment: Number(s.amount), tok: tokenize(s.name) }));
   const other = [];
   for (const d of deposits || []) {
-    const depTok = tokenize(d.description);
-    let best = null;
-    let bestScore = 0;
-    for (const s of srcTok) {
-      const sc = matchScore(s.tok, depTok, s.perPayment, d.amount);
-      if (sc > bestScore) {
-        bestScore = sc;
-        best = s;
-      }
-    }
-    if (best && bestScore >= 1) {
+    const best = bestSourceFor(srcTok, d);
+    if (best) {
       const x = expected.get(best.name);
       x.received.push(d);
       x.receivedTotal += Math.abs(Number(d.amount));
     } else {
       other.push(d);
     }
+  }
+
+  // Deposits that aren't counted as income (business-flagged or ignored): if
+  // one matches a budgeted source, attach it so the UI can offer to count it.
+  const hiddenUnmatched = [];
+  for (const d of hiddenDeposits || []) {
+    const best = bestSourceFor(srcTok, d);
+    if (best) expected.get(best.name).candidates.push(d);
+    else hiddenUnmatched.push(d);
   }
 
   const perSource = [...expected.values()]
@@ -88,8 +107,8 @@ export function reconcileIncome(incomeSources, deposits, month) {
       else status = variance > 0 ? 'over' : 'under';
       return { ...x, variance, status };
     })
-    .filter((x) => x.expectedCount > 0 || x.receivedTotal > 0);
+    .filter((x) => x.expectedCount > 0 || x.receivedTotal > 0 || x.candidates.length > 0);
 
   const otherTotal = other.reduce((s, d) => s + Math.abs(Number(d.amount)), 0);
-  return { perSource, other, otherTotal };
+  return { perSource, other, otherTotal, hiddenUnmatched };
 }
