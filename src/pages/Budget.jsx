@@ -14,6 +14,7 @@ import {
   INCOME_FREQUENCIES,
 } from '../lib/budgetMath';
 import TxList from '../components/TxList';
+import { DEDUCTIBLE_DEFAULT_KEYS, DEFAULT_TAX_LABELS } from '../lib/tax';
 
 function monthKey(dateStr = todayStr()) {
   return dateStr.slice(0, 7);
@@ -469,6 +470,19 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                           />
                           Autopay
                         </label>
+                        <select
+                          className="category-kind-select"
+                          value={c.taxDefault || ''}
+                          onChange={(e) => updateCategory(c.id, 'taxDefault', e.target.value || undefined)}
+                          title="Auto-tag every transaction in this envelope for the year-end tax report (you can still mark a single one 'not deductible'). Business buckets stay per-transaction."
+                        >
+                          <option value="">Tax: not deductible</option>
+                          {DEDUCTIBLE_DEFAULT_KEYS.map((k) => (
+                            <option key={k} value={k}>
+                              Tax: {DEFAULT_TAX_LABELS[k]}
+                            </option>
+                          ))}
+                        </select>
                         <button
                           type="button"
                           className="reorder-btn"

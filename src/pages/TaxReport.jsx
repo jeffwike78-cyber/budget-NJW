@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { todayStr } from '../lib/storage';
 import { getReceiptUrl } from '../lib/receiptsClient';
 import { scanCharity } from '../lib/charityScan';
-import { TAX_CATEGORIES, DEFAULT_TAX_LABELS, taxLabel } from '../lib/tax';
+import { TAX_CATEGORIES, DEFAULT_TAX_LABELS, taxLabel, TAX_NONE, effectiveTaxCategory, categoryTaxDefaults } from '../lib/tax';
 
 function money(n) {
   return `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -59,10 +59,16 @@ export default function TaxReport({ budgetState, setBudgetState, transactions, a
     setApplied((prev) => new Set(prev).add(donationKey(d)));
   }
 
+  // Envelopes can auto-tag every transaction in them (e.g. Tithe → Charitable),
+  // so group by each transaction's EFFECTIVE bucket: its own tag, or its
+  // envelope's default when it has none.
+  const catTaxDefaults = categoryTaxDefaults(budgetState.categories);
   const inYear = transactions.filter((t) => !t.excluded && Number(t.amount) > 0 && t.date.startsWith(year));
   const byCategory = {};
   for (const key of TAX_CATEGORIES) {
-    byCategory[key] = inYear.filter((t) => t.taxCategory === key).sort((a, b) => a.date.localeCompare(b.date));
+    byCategory[key] = inYear
+      .filter((t) => effectiveTaxCategory(t, catTaxDefaults) === key)
+      .sort((a, b) => a.date.localeCompare(b.date));
   }
   const grandTotal = TAX_CATEGORIES.reduce(
     (sum, key) => sum + byCategory[key].reduce((s, t) => s + Number(t.amount), 0),
@@ -142,9 +148,10 @@ export default function TaxReport({ budgetState, setBudgetState, transactions, a
           </tbody>
         </table>
         <p className="module-note no-print">
-          Tag transactions on the Transactions page using the <strong>Tax</strong> dropdown. (Your Giving
-          envelopes aren&apos;t counted here — they&apos;re personal gifts, not deductions.) Rename the
-          business buckets below.
+          Tag individual transactions with the <strong>Tax</strong> dropdown on the Transactions page, or set a
+          whole envelope to a tax bucket on the <strong>Budget</strong> page (e.g. Tithe → Charitable, 529 →
+          529 / Education) so every transaction in it counts automatically — you can still mark a single one
+          &ldquo;not deductible&rdquo; to exclude it. Rename the business buckets below.
         </p>
         <div className="tax-label-editors no-print">
           {['business-1', 'business-2'].map((key) => (
@@ -226,7 +233,7 @@ export default function TaxReport({ budgetState, setBudgetState, transactions, a
                       )}
                     </td>
                     <td className="no-print">
-                      <button type="button" className="link-btn danger" onClick={() => setTaxCategory(t.id, '')}>
+                      <button type="button" className="link-btn danger" onClick={() => setTaxCategory(t.id, TAX_NONE)} title="Mark this one as not deductible (overrides its envelope's tax default)">
                         remove
                       </button>
                     </td>
