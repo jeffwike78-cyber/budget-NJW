@@ -1682,6 +1682,7 @@ textarea {
 .bva-head { font-size: 12px; font-weight: 600; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.03em; padding: 4px 0; }
 .bva-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 .bva-caret { font-weight: 400; opacity: 0.5; font-size: 12px; }
+.bva-sub { display: block; font-weight: 400; font-size: 12px; opacity: 0.6; margin-top: 2px; }
 .bva-num { text-align: right; font-variant-numeric: tabular-nums; }
 .bva-num.good { color: var(--good); font-weight: 600; }
 .bva-num.bad { color: var(--bad); font-weight: 600; }

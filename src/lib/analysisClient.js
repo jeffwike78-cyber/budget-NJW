@@ -1,5 +1,6 @@
 import { netSpentByCategory, spendingCategoryIds, isEnvelopeCredit } from './spending';
 import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth } from './budgetMath';
+import { reconcileIncome } from './incomeReview';
 
 function monthKey(dateStr) {
   return (dateStr || '').slice(0, 7);
@@ -79,12 +80,31 @@ export function buildAnalysisData(budgetState, transactions, month, monthsBack =
     .map((a) => ({ month: a.month, headline: a.report?.headline }))
     .filter((a) => a.headline);
 
+  // Per-source income reconciliation so the AI can confirm each budgeted
+  // paycheck actually landed, not just that the monthly total matched.
+  const creditIds = spendingCategoryIds(budgetState);
+  const incomeTx = transactions.filter(
+    (t) => monthKey(t.date) === month && Number(t.amount) < 0 && !t.excluded && !t.business && !isEnvelopeCredit(t, creditIds),
+  );
+  const recon = reconcileIncome(budgetState.incomeSources, incomeTx, month);
+  const incomeSources = recon.perSource.map((s) => ({
+    name: s.name,
+    perPayment: round(s.perPayment),
+    expectedPayments: s.expectedCount,
+    receivedPayments: s.received.length,
+    expected: round(s.expectedTotal),
+    received: round(s.receivedTotal),
+    variance: round(s.variance),
+    status: s.status,
+  }));
+  const otherIncome = round(recon.otherTotal);
+
   const monthLabel = new Date(`${month}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   return {
     month,
     monthLabel,
     currency: 'USD',
-    income: { expected: focus.expectedIncome, actual: focus.actualIncome },
+    income: { expected: focus.expectedIncome, actual: focus.actualIncome, bySource: incomeSources, otherIncome },
     spending: { budgeted: round(focus.byCategory.reduce((s, c) => s + c.budget, 0)), actual: focus.spending },
     savingsRate: focus.savingsRate,
     categories: focus.byCategory,
