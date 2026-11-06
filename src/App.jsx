@@ -132,7 +132,7 @@ function App() {
             <Accounts budgetState={budgetState} setBudgetState={setBudgetState} />
           )}
           {(view === 'summary' || view === 'analysis') && (
-            <Summary budgetState={budgetState} setBudgetState={setBudgetState} transactions={transactions} setExcluded={setExcluded} />
+            <Summary budgetState={budgetState} setBudgetState={setBudgetState} transactions={transactions} {...txActions} />
           )}
           {view === 'settings' && (
             <Settings budgetState={budgetState} setBudgetState={setBudgetState} setView={setView} />
