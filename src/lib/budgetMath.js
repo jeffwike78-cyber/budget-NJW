@@ -50,6 +50,32 @@ export function includeInCashOnHand(a) {
   return a?.type === 'checking' || a?.type === 'savings';
 }
 
+// True cash reconciliation: can the cash you actually hold cover what you've
+// set aside in envelopes, AFTER earmarking this month's unpaid bills and the
+// credit-card balance you'll pay off? The plain "assigned vs cash on hand"
+// check overstates free cash because card spending already drew down envelopes
+// but the cash hasn't left checking yet, and unpaid bills are spoken for.
+//   availableCash = included accounts − credit-card balances − unpaid bills
+//   assigned      = carryover envelopes (sinking + transfer) running balances
+//   freeToAssign  = availableCash − assigned  (negative ⇒ over-assigned)
+export function cashReconciliation(budgetState, balances, effectiveBudgets, monthSpent) {
+  const accounts = budgetState?.accounts || [];
+  const includedCash = accounts.filter(includeInCashOnHand).reduce((s, a) => s + signedBalance(a), 0);
+  const cardOwed = accounts
+    .filter((a) => a?.type === 'credit')
+    .reduce((s, a) => s + Number(a?.balance || 0), 0);
+  const cats = (budgetState?.categories || []).filter((c) => c.id !== 'needs-review');
+  const unpaidBills = cats
+    .filter((c) => c.kind === 'bill')
+    .reduce((s, c) => s + Math.max(0, Number(effectiveBudgets[c.id] || 0) - Number(monthSpent[c.id] || 0)), 0);
+  const availableCash = includedCash - cardOwed - unpaidBills;
+  const assigned = cats
+    .filter((c) => isCarryover(c.kind))
+    .reduce((s, c) => s + (balances[c.id]?.available ?? 0), 0);
+  const freeToAssign = availableCash - assigned;
+  return { includedCash, cardOwed, unpaidBills, availableCash, assigned, freeToAssign, overAssigned: freeToAssign < -1 };
+}
+
 // Count of months from a 'YYYY-MM' start to a 'YYYY-MM' end, inclusive
 // (both the start and current month count as funded). Never less than 1.
 export function monthsInclusive(startMonth, currentMonth) {
