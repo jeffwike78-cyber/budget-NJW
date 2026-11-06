@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { todayStr } from '../lib/storage';
 import { netSpentByCategory, spendingCategoryIds } from '../lib/spending';
-import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, envelopeBalances, adjustmentMaps, isCarryover, signedBalance, includeInCashOnHand } from '../lib/budgetMath';
+import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, envelopeBalances, adjustmentMaps, cashReconciliation } from '../lib/budgetMath';
 import { computeSinkingEnvelope, advanceDueDate, dueLabel } from '../lib/sinkingFunds';
 import TxList from '../components/TxList';
 
@@ -95,20 +95,34 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
   const spendBudget = spending.reduce((s, e) => s + e.budget, 0);
   const spendSpent = spending.reduce((s, e) => s + e.spent, 0);
 
-  // Reconciliation: the money "assigned" to carryover envelopes (sinking +
-  // spending + transfer keep a running balance; bills reset monthly and don't)
-  // should be backed by real cash sitting in checking + savings. If assigned
-  // exceeds cash on hand, some envelopes are funded on paper but not with actual
-  // dollars yet — the usual cause of "how is $6k in envelopes when checking is
-  // $3k?".
-  const assigned = budgetable
-    .filter((c) => isCarryover(c.kind))
-    .reduce((s, c) => s + (balances[c.id]?.available ?? 0), 0);
-  const cashOnHand = (budgetState.accounts || [])
-    .filter(includeInCashOnHand)
-    .reduce((s, a) => s + signedBalance(a), 0);
-  const reconcileDiff = assigned - cashOnHand;
-  const overAssigned = reconcileDiff > 1;
+  // True reconciliation: can the cash you hold cover what you've set aside,
+  // after earmarking this month's unpaid bills and the card balance you'll pay
+  // off? (A card charge already drew down its envelope but the cash hasn't left
+  // checking, so it isn't free; neither are bills still due this month.)
+  const recon = cashReconciliation(budgetState, balances, effectiveBudgets, monthSpent);
+  const { availableCash, assigned, freeToAssign, overAssigned } = recon;
+
+  // "Catch up" suggestions: when there's free cash, which funds need it most?
+  // Overdue first, then the funds furthest behind their due-date target.
+  const catchUp = computed
+    .filter((f) => f.projectedShort > 0.5 || f.displayStatus === 'overdue')
+    .map((f) => ({
+      id: f.envelope.id,
+      name: f.envelope.name,
+      status: f.displayStatus,
+      short: Math.max(f.projectedShort, f.displayStatus === 'overdue' ? Math.max(0, Number(f.envelope.targetAmount || 0) - f.live) : 0),
+    }))
+    .filter((f) => f.short > 0.5)
+    .sort((a, b) => (a.status === 'overdue' && b.status !== 'overdue' ? -1 : b.status === 'overdue' && a.status !== 'overdue' ? 1 : b.short - a.short));
+  const surplus = Math.max(0, freeToAssign);
+
+  function topUp(categoryId, amount) {
+    const amt = Math.round(Number(amount) * 100) / 100;
+    if (!(amt > 0)) return;
+    const entry = { id: crypto.randomUUID(), moveId: crypto.randomUUID(), month, categoryId, amount: amt, note: 'Surplus catch-up', from: null, createdAt: new Date().toISOString() };
+    setBudgetState((prev) => ({ ...prev, adjustments: [...(prev.adjustments || []), entry] }));
+    setMoveMsg(`Added ${money(amt)} to ${nameOf(categoryId)} from your surplus ✓`);
+  }
 
   // A page-specific display order (settings.envelopeOrder) that's independent of
   // the Budget page — so the most-used envelopes can sit at the top here without
@@ -271,35 +285,65 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
       <section className={`card reconcile-banner ${overAssigned ? 'reconcile-warn' : 'reconcile-ok'}`}>
         <div className="reconcile-row">
           <div className="reconcile-fig">
-            <span className="reconcile-label">Assigned to envelopes</span>
-            <span className="reconcile-value">{money(assigned)}</span>
+            <span className="reconcile-label">Available cash</span>
+            <span className="reconcile-value">{money(availableCash)}</span>
+            <span className="reconcile-sub">checking − card − bills left</span>
           </div>
           <span className="reconcile-op">vs</span>
           <div className="reconcile-fig">
-            <span className="reconcile-label">Cash on hand</span>
-            <span className="reconcile-value">{money(cashOnHand)}</span>
-            <span className="reconcile-sub">included accounts — choose which in Accounts</span>
+            <span className="reconcile-label">Set aside in envelopes</span>
+            <span className="reconcile-value">{money(assigned)}</span>
+            <span className="reconcile-sub">sinking + transfer balances</span>
           </div>
           <span className={`pill ${overAssigned ? 'pill-bad' : 'pill-good'}`}>
-            {overAssigned ? `Over-assigned ${money(reconcileDiff)}` : `${money(-reconcileDiff)} unassigned`}
+            {overAssigned ? `Over-assigned ${money(-freeToAssign)}` : `${money(freeToAssign)} free`}
           </span>
+        </div>
+        <div className="reconcile-breakdown">
+          <span>Checking (incl. accounts) {money(recon.includedCash)}</span>
+          <span>− card owed {money(recon.cardOwed)}</span>
+          <span>− bills still due {money(recon.unpaidBills)}</span>
+          <span className="reconcile-breakdown-eq">= {money(availableCash)} available</span>
         </div>
         <p className="module-note">
           {overAssigned ? (
             <>
-              Your envelopes hold <strong>{money(reconcileDiff)}</strong> more than your accounts actually contain —
-              that much is set aside on paper but isn&apos;t backed by real cash yet. Lower some opening balances or
-              monthly set-asides, or move cash into checking/savings, until these two line up. (Envelope balances are
-              an accounting overlay — assigning money doesn&apos;t move it; it just earmarks cash you already have.)
+              You&apos;ve set aside <strong>{money(-freeToAssign)}</strong> more than your available cash covers. That
+              much is earmarked on paper but isn&apos;t backed by spendable dollars once this month&apos;s bills and
+              your card payoff are accounted for. Either that money is sitting in a savings account you&apos;ve excluded
+              (mark it included in <strong>Accounts</strong>), or you need to boost checking before those funds are
+              real. Envelope balances are an accounting overlay — assigning money doesn&apos;t move it.
             </>
           ) : (
             <>
-              Your checking + savings cover everything you&apos;ve set aside, with <strong>{money(-reconcileDiff)}</strong>{' '}
-              not yet assigned to an envelope. Envelope balances are money earmarked from the cash you already hold —
-              this is how it should look.
+              After covering this month&apos;s bills and your card payoff, your checking holds everything you&apos;ve set
+              aside plus <strong>{money(freeToAssign)}</strong> of free surplus. Direct it into funds below so it
+              doesn&apos;t just drift (which is fine too — unspent, it ages your money).
             </>
           )}
         </p>
+        {surplus > 0.5 && catchUp.length > 0 && (
+          <div className="catchup">
+            <p className="catchup-head">Funds that could use your {money(surplus)} surplus:</p>
+            <ul className="catchup-list">
+              {catchUp.map((f) => {
+                const give = Math.min(f.short, surplus);
+                return (
+                  <li key={f.id} className="catchup-row">
+                    <span className="catchup-name">
+                      {f.status === 'overdue' ? '⚠ ' : ''}{f.name}
+                      <span className="catchup-sub">{money(f.short)} behind</span>
+                    </span>
+                    <button type="button" className="secondary-btn catchup-btn" onClick={() => topUp(f.id, give)}>
+                      Add {money(give)}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="module-note">Each button records a top-up from the surplus cash you already hold — move the actual dollars to wherever that fund lives.</p>
+          </div>
+        )}
       </section>
 
       <section className="card">

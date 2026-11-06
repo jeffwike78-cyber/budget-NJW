@@ -3,7 +3,7 @@ import BarChart from '../components/BarChart';
 import { todayStr, todayLabel } from '../lib/storage';
 import { isPayrollDeposit } from '../lib/income';
 import { netSpentByCategory, spendingCategoryIds } from '../lib/spending';
-import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, signedBalance } from '../lib/budgetMath';
+import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, signedBalance, envelopeBalances, adjustmentMaps, cashReconciliation } from '../lib/budgetMath';
 import { computeNetWorth } from '../lib/netWorth';
 import { ageOfMoney, ageOfMoneyAdvice, ageOfMoneyStatus } from '../lib/ageOfMoney';
 import { projectCashflow, incomeEvents } from '../lib/cashflow';
@@ -32,7 +32,7 @@ function lastNMonths(n) {
   return out;
 }
 
-export default function Overview({ budgetState, transactions, onQuickScan }) {
+export default function Overview({ budgetState, transactions, onQuickScan, setView }) {
   const [showSchedule, setShowSchedule] = useState(false);
   const today = todayStr();
   const month = monthKey(today);
@@ -45,8 +45,25 @@ export default function Overview({ budgetState, transactions, onQuickScan }) {
   // Refunds the user credited back to a spending envelope net against that
   // envelope and are NOT income (see spending.js).
   const creditIds = spendingCategoryIds(budgetState);
-  const totalSpent = Object.values(netSpentByCategory(monthTx, creditIds)).reduce((a, b) => a + b, 0);
+  const monthSpentMap = netSpentByCategory(monthTx, creditIds);
+  const totalSpent = Object.values(monthSpentMap).reduce((a, b) => a + b, 0);
   const remaining = totalBudgeted - totalSpent;
+
+  // Reconciliation health: does the cash we hold cover what's set aside once
+  // this month's bills and the card payoff are earmarked? Surfaced here so a
+  // drift is caught without opening the Envelopes page.
+  const { all: adjustAllO, month: adjustMonthO } = adjustmentMaps(budgetState.adjustments, month);
+  const reconBalances = envelopeBalances(
+    budgetState.categories,
+    baseBudgets,
+    netSpentByCategory(transactions, creditIds),
+    monthSpentMap,
+    budgetState.settings?.startMonth,
+    month,
+    adjustAllO,
+    adjustMonthO,
+  );
+  const recon = cashReconciliation(budgetState, reconBalances, effectiveBudgets, monthSpentMap);
 
   // Expected (budgeted) income vs. what's actually landed this month. Actual =
   // this month's deposits (amount < 0) that aren't excluded (transfers/card
@@ -158,6 +175,29 @@ export default function Overview({ budgetState, transactions, onQuickScan }) {
   return (
     <>
       <h1 className="page-title">Welcome!</h1>
+
+      {recon.overAssigned && (
+        <section className="card cc-reminder cc-reminder-soon">
+          <div className="cc-reminder-row">
+            <span className="cc-reminder-icon" aria-hidden="true">⚠️</span>
+            <div className="cc-reminder-text">
+              <span className="cc-reminder-title">
+                Envelopes are over-assigned by {usd(-recon.freeToAssign)}
+              </span>
+              <span className="cc-reminder-sub">
+                You&apos;ve set aside more than your checking covers once this month&apos;s bills and card payoff are
+                accounted for. If that money lives in a savings account, mark it included in Accounts; otherwise a fund
+                may need a boost.
+              </span>
+            </div>
+            {setView && (
+              <button type="button" className="secondary-btn" onClick={() => setView('sinking')}>
+                Review envelopes
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       {card.configured && (
         <section className={`card cc-reminder ${card.paid ? 'cc-reminder-paid' : card.dueSoon ? 'cc-reminder-soon' : ''}`}>
