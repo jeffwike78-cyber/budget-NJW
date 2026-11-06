@@ -1704,6 +1704,11 @@ textarea {
 .bva-caret { font-weight: 400; opacity: 0.5; font-size: 12px; }
 .bva-sub { display: block; font-weight: 400; font-size: 12px; opacity: 0.6; margin-top: 2px; }
 
+/* Net-surplus vs surplus-directed-into-envelopes line in the month P&L. */
+.pnl-reallocation { margin: 10px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; color: var(--text); opacity: 0.85; }
+.pnl-reallocation .bad { color: var(--bad); font-weight: 600; }
+.pnl-realloc-arrow { opacity: 0.5; }
+
 /* A deposit that matches a source but isn't counted (business/ignored). */
 .income-candidate { margin: 6px 0 2px; padding: 10px; border-radius: 8px; background: var(--warn-bg, rgba(240,180,0,0.12)); }
 .income-candidate-head { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--warn, #9a6a00); }
