@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { findReceipt } from '../lib/findReceipt';
 import { uploadReceipt, getReceiptUrl } from '../lib/receiptsClient';
-import { TAX_CATEGORIES, taxLabel } from '../lib/tax';
+import { TAX_CATEGORIES, taxLabel, TAX_NONE } from '../lib/tax';
 
 // A compact tag for which account a transaction came from, so it never crowds
 // the amount: prefer the last-4 ("••8359"); fall back to the name after the
@@ -28,6 +28,11 @@ function TxRow({ t, categories, incomeCategories = [], accounts = [], onRecatego
   // minus the Needs-review bucket).
   const spendingCats = categories.filter((c) => c.id !== 'needs-review');
   const options = isIncome && incomeCategories.length > 0 ? incomeCategories : categories;
+  // The envelope may auto-tag its transactions for the tax report. The
+  // effective tax bucket is the transaction's own tag, or the envelope default
+  // when it has none ('none' means the user turned the default off here).
+  const catTaxDefault = (categories.find((c) => c.id === t.categoryId) || {}).taxDefault || null;
+  const effectiveTax = t.taxCategory === TAX_NONE ? null : t.taxCategory || catTaxDefault;
   const [lookupBusy, setLookupBusy] = useState(false);
   const [lookupMsg, setLookupMsg] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -162,7 +167,7 @@ function TxRow({ t, categories, incomeCategories = [], accounts = [], onRecatego
           </span>
         )}
         {isBiz && <span className="pill tx-biz-pill">Business</span>}
-        {t.taxCategory && !isBiz && <span className="pill tx-tax-pill">{taxLabel(t.taxCategory, taxLabels)}</span>}
+        {effectiveTax && !isBiz && <span className="pill tx-tax-pill">{taxLabel(effectiveTax, taxLabels)}</span>}
         {t.note && <span className="tx-note">{t.note}</span>}
         {lookupMsg && <span className="tx-lookup-msg">{lookupMsg}</span>}
       </span>
@@ -210,12 +215,15 @@ function TxRow({ t, categories, incomeCategories = [], accounts = [], onRecatego
             onChange={(e) => onSetTaxCategory(t.id, e.target.value)}
             title="Tag for the CPA tax report (and exclude business from the household budget)"
           >
-            <option value="">Tax: —</option>
+            <option value="">
+              {catTaxDefault ? `Tax: ${taxLabel(catTaxDefault, taxLabels)} (envelope default)` : 'Tax: —'}
+            </option>
             {TAX_CATEGORIES.map((k) => (
               <option key={k} value={k}>
                 {taxLabel(k, taxLabels)}
               </option>
             ))}
+            {catTaxDefault && <option value={TAX_NONE}>Not deductible</option>}
           </select>
         )}
         {showReceiptLookup && (
