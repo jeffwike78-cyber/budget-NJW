@@ -335,7 +335,6 @@ export default function Summary({
       .reduce((s, [, v]) => s + v, 0);
 
     const totalBudget = bvaRows.reduce((s, r) => s + r.budget, 0);
-    const incDiff = income - planIncome; // positive = more income than planned
 
     // Per-source income reconciliation: did every budgeted paycheck land?
     const incomeTx = monthTx.filter(
@@ -359,6 +358,14 @@ export default function Summary({
     const incomeFlags = incomeRecon.perSource.filter(
       (s) => s.status === 'missing' || s.status === 'partial' || s.status === 'under' || s.candidates.length > 0,
     ).length;
+    // Foot the totals to the per-source rows so the columns add up: budgeted is
+    // the pay the schedule placed in THIS month (which can differ from the
+    // smooth monthly plan, planIncome, when a biweekly/semimonthly source lands
+    // a different number of times), and the variance is received − that.
+    const incomeExpectedTotal = incomeRecon.perSource.reduce((s, x) => s + x.expectedTotal, 0);
+    const incomeReceivedTotal =
+      incomeRecon.perSource.reduce((s, x) => s + x.receivedTotal, 0) + incomeRecon.otherTotal;
+    const incomeVariance = incomeReceivedTotal - incomeExpectedTotal;
     // Bring a mis-tagged deposit back into income: clear the business flag and
     // un-ignore it so it counts. Leaves its category alone.
     const countAsIncome = (tx) => {
@@ -519,15 +526,17 @@ export default function Summary({
           )}
           <div className="bva-row bva-total">
             <span className="bva-name">Total income</span>
-            <span className="bva-num">{usd(planIncome)}</span>
-            <span className="bva-num">{usd(income)}</span>
-            <span className={`bva-num ${incDiff >= 0 ? 'good' : 'bad'}`}>
-              {incDiff >= 0 ? `+${usd(incDiff)}` : `-${usd(-incDiff)}`}
+            <span className="bva-num">{usd(incomeExpectedTotal)}</span>
+            <span className="bva-num">{usd(incomeReceivedTotal)}</span>
+            <span className={`bva-num ${incomeVariance >= 0 ? 'good' : 'bad'}`}>
+              {incomeVariance >= 0 ? `+${usd(incomeVariance)}` : `-${usd(-incomeVariance)}`}
             </span>
           </div>
           {!incomeCollapsed && (
             <p className="module-note">
-              Expected payments come from your income schedule; “received” are the deposits that matched each source. A ⚠
+              “Budgeted” is the pay your schedule places in {monthLabel(selMonth)} — so the column totals add up, and
+              it can differ from your average monthly plan of {usd(planIncome)} when a biweekly or semimonthly source
+              lands a different number of times this month. “Received” are the deposits that matched each source; a ⚠
               marks a source still missing a payment, and +/− shows any over/under. Tap a source to see the actual deposits.
             </p>
           )}
