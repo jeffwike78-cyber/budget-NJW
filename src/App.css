@@ -410,6 +410,9 @@
 /* The month's income-payment review drawer sits below the reconciliation. */
 .income-review { margin-top: 12px; border-top: 1px dashed var(--border, #ddd); padding-top: 4px; }
 
+/* Inline transaction editing inside a Summary category drill-down. */
+.bva-tx-edit { margin: 8px 0 2px; padding-top: 8px; border-top: 1px dashed var(--border, #ddd); }
+
 .pill {
   font-size: 12px;
   font-weight: 600;

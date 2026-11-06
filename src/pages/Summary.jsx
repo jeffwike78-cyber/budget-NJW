@@ -608,20 +608,22 @@ export default function Summary({
                       </button>
                       <div className={`bva-bar ${over ? 'over' : ''}`}><span style={{ width: `${pct}%` }} /></div>
                       {openCat === r.id && (
-                        <ul className="pnl-tx-list">
-                          {monthTx
-                            .filter((t) => t.categoryId === r.id && !t.excluded)
-                            .sort((a, b) => Number(b.amount) - Number(a.amount))
-                            .map((t) => (
-                              <li key={t.id} className="pnl-tx">
-                                <span className="pnl-tx-date">{(t.date || '').slice(5)}</span>
-                                <span className="pnl-tx-desc">{t.description}</span>
-                                <span className={`pnl-tx-amt ${Number(t.amount) < 0 ? 'good' : ''}`}>
-                                  {Number(t.amount) < 0 ? `+${usd2(t.amount)}` : usd2(t.amount)}
-                                </span>
-                              </li>
-                            ))}
-                        </ul>
+                        <div className="bva-tx-edit no-print">
+                          <TxList
+                            transactions={monthTx
+                              .filter((t) => t.categoryId === r.id)
+                              .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))}
+                            categories={budgetState.categories}
+                            incomeCategories={budgetState.incomeCategories}
+                            accounts={budgetState.accounts}
+                            onRecategorize={recategorize}
+                            onToggleExcluded={setExcluded}
+                            onSendToReview={setNeedsReview}
+                            onSplit={splitTransaction}
+                            onDelete={deleteTransaction}
+                            emptyLabel="No transactions in this envelope this month."
+                          />
+                        </div>
                       )}
                     </li>
                   );
