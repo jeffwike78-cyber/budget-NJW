@@ -32,6 +32,8 @@ export default async function handler(req, res) {
 
 You are given the focus month's numbers, several prior months for trend, and the headlines of your past reports. Use the history: point out trends ("dining has climbed three months running"), not just single-month facts, and build on prior observations.
 
+The data includes income.bySource: for each budgeted income source, how many payments were expected that month, how many actually landed (receivedPayments), the expected and received dollar totals, the variance, and a status (missing = none of the expected payments arrived; partial = some but not all arrived; under/over = all arrived but the amount was short/high; ok = as planned; extra/none = money outside the plan). income.otherIncome is deposits that didn't match any budgeted source.
+
 Respond with ONLY JSON, no prose or code fences:
 {
   "headline": string,            // one punchy sentence summarizing the month
@@ -46,6 +48,7 @@ Respond with ONLY JSON, no prose or code fences:
 
 Guidance:
 - Be specific and quantitative — name categories and dollar amounts from the data.
+- ALWAYS include an "Income received" section that confirms each budgeted income source against income.bySource: name any source that is missing a payment (status missing/partial) or came in short/high (under/over) with the dollar variance, and explicitly confirm when every source arrived as planned. Mention income.otherIncome if it's non-trivial. This matters as much as spending — the family uses it to catch a paycheck or deposit that never showed up.
 - Prioritize the highest-leverage issues; don't pad.
 - Flag categories over budget and categories that are trending up over months.
 - Call out wins too (on-track savings, categories under budget).

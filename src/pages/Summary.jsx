@@ -3,11 +3,29 @@ import { todayStr } from '../lib/storage';
 import { netSpentByCategory, spendingCategoryIds } from '../lib/spending';
 import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth } from '../lib/budgetMath';
 import { findSplitDoubleCounts, findDuplicateCharges, findUncategorized } from '../lib/audit';
+import { reconcileIncome } from '../lib/incomeReview';
 import BarChart from '../components/BarChart';
 import Analysis from './Analysis';
 
 const usd = (n) => `$${Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 const usd2 = (n) => `$${Math.abs(Number(n || 0)).toFixed(2)}`;
+
+// Per-source income status → a glyph, a variance label, and a color class.
+function incomeStatusIcon(s) {
+  if (s === 'missing' || s === 'partial') return '⚠';
+  if (s === 'over') return '▲';
+  if (s === 'under') return '▼';
+  return '✓';
+}
+function incomeStatusClass(s) {
+  return s === 'missing' || s === 'partial' || s === 'under' ? 'bad' : 'good';
+}
+function incomeVarianceLabel(s) {
+  if (s.status === 'missing') return 'missing';
+  if (s.status === 'partial') return `${s.expectedCount - s.received.length} missing`;
+  if (Math.abs(s.variance) < 1) return 'on plan';
+  return s.variance > 0 ? `+${usd(s.variance)}` : `-${usd(-s.variance)}`;
+}
 
 function monthKey(dateStr = todayStr()) {
   return dateStr.slice(0, 7);
@@ -47,6 +65,7 @@ export default function Summary({ budgetState, setBudgetState, transactions, set
   const [selMonth, setSelMonth] = useState(current);
   const [selYear, setSelYear] = useState(currentYear);
   const [openCat, setOpenCat] = useState(null);
+  const [openIncome, setOpenIncome] = useState(null);
 
   // Refunds credited to a spending envelope net against it and aren't income.
   const creditIds = spendingCategoryIds(budgetState);
@@ -299,6 +318,15 @@ export default function Summary({ budgetState, setBudgetState, transactions, set
     const totalBudget = bvaRows.reduce((s, r) => s + r.budget, 0);
     const incDiff = income - planIncome; // positive = more income than planned
 
+    // Per-source income reconciliation: did every budgeted paycheck land?
+    const incomeTx = monthTx.filter(
+      (t) => Number(t.amount) < 0 && !t.excluded && !t.business && !creditIds.has(t.categoryId),
+    );
+    const incomeRecon = reconcileIncome(budgetState.incomeSources, incomeTx, selMonth);
+    const incomeFlags = incomeRecon.perSource.filter(
+      (s) => s.status === 'missing' || s.status === 'partial' || s.status === 'under',
+    ).length;
+
     return (
       <>
         <section className={`card summary-pnl ${net >= 0 ? 'summary-pos' : 'summary-neg'}`}>
@@ -324,17 +352,82 @@ export default function Summary({ budgetState, setBudgetState, transactions, set
           </div>
         </section>
 
-        {/* Income: budgeted vs actual */}
+        {/* Income: did every budgeted payment come in? */}
         <section className="card">
-          <div className="card-header"><h2>Income — budgeted vs actual</h2></div>
+          <div className="card-header">
+            <h2>Income — did it all come in?</h2>
+            <span className={`pill ${incomeFlags === 0 ? 'pill-good' : 'pill-warn'}`}>
+              {incomeFlags === 0 ? 'All received' : `${incomeFlags} to check`}
+            </span>
+          </div>
           <div className="bva-row bva-head">
-            <span className="bva-name"></span>
+            <span className="bva-name">Source</span>
             <span className="bva-num">Budgeted</span>
-            <span className="bva-num">Actual</span>
+            <span className="bva-num">Received</span>
             <span className="bva-num">+ / −</span>
           </div>
-          <div className="bva-row">
-            <span className="bva-name">Income</span>
+          <ul className="bva-list">
+            {incomeRecon.perSource.map((s) => {
+              const open = openIncome === s.name;
+              return (
+                <li key={s.name} className="bva-item">
+                  <button type="button" className="bva-row bva-click" onClick={() => setOpenIncome(open ? null : s.name)} aria-expanded={open}>
+                    <span className="bva-name">
+                      {incomeStatusIcon(s.status)} {s.name} <span className="bva-caret">{open ? '▴' : '▾'}</span>
+                      <span className="bva-sub">{s.received.length} of {s.expectedCount} expected payment{s.expectedCount === 1 ? '' : 's'}</span>
+                    </span>
+                    <span className="bva-num">{usd(s.expectedTotal)}</span>
+                    <span className="bva-num">{usd(s.receivedTotal)}</span>
+                    <span className={`bva-num ${incomeStatusClass(s.status)}`}>{incomeVarianceLabel(s)}</span>
+                  </button>
+                  {open && (
+                    <ul className="pnl-tx-list">
+                      {s.received.length === 0 ? (
+                        <li className="pnl-tx"><span className="pnl-tx-desc">No deposit matched this source for {monthLabel(selMonth)}.</span></li>
+                      ) : (
+                        s.received
+                          .sort((a, b) => (a.date < b.date ? -1 : 1))
+                          .map((d) => (
+                            <li key={d.id} className="pnl-tx">
+                              <span className="pnl-tx-date">{(d.date || '').slice(5)}</span>
+                              <span className="pnl-tx-desc">{d.description}</span>
+                              <span className="pnl-tx-amt good">+{usd2(d.amount)}</span>
+                            </li>
+                          ))
+                      )}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
+            {incomeRecon.otherTotal > 0.005 && (
+              <li className="bva-item">
+                <button type="button" className="bva-row bva-click" onClick={() => setOpenIncome(openIncome === '__other__' ? null : '__other__')} aria-expanded={openIncome === '__other__'}>
+                  <span className="bva-name">
+                    Other income (not budgeted) <span className="bva-caret">{openIncome === '__other__' ? '▴' : '▾'}</span>
+                  </span>
+                  <span className="bva-num muted">—</span>
+                  <span className="bva-num good">{usd(incomeRecon.otherTotal)}</span>
+                  <span className="bva-num muted">extra</span>
+                </button>
+                {openIncome === '__other__' && (
+                  <ul className="pnl-tx-list">
+                    {incomeRecon.other
+                      .sort((a, b) => (a.date < b.date ? -1 : 1))
+                      .map((d) => (
+                        <li key={d.id} className="pnl-tx">
+                          <span className="pnl-tx-date">{(d.date || '').slice(5)}</span>
+                          <span className="pnl-tx-desc">{d.description}</span>
+                          <span className="pnl-tx-amt good">+{usd2(d.amount)}</span>
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </li>
+            )}
+          </ul>
+          <div className="bva-row bva-total">
+            <span className="bva-name">Total income</span>
             <span className="bva-num">{usd(planIncome)}</span>
             <span className="bva-num">{usd(income)}</span>
             <span className={`bva-num ${incDiff >= 0 ? 'good' : 'bad'}`}>
@@ -342,9 +435,8 @@ export default function Summary({ budgetState, setBudgetState, transactions, set
             </span>
           </div>
           <p className="module-note">
-            {incDiff >= 0
-              ? `You brought in ${usd(incDiff)} more than planned.`
-              : `Income came in ${usd(-incDiff)} short of plan.`}
+            Expected payments come from your income schedule; “received” are the deposits that matched each source. A ⚠
+            marks a source still missing a payment, and +/− shows any over/under. Tap a source to see the actual deposits.
           </p>
         </section>
 
