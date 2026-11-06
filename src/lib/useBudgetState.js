@@ -67,6 +67,9 @@ function normalizeBudget(b) {
     merchantMemory: b?.merchantMemory || {},
     merchantConfidence: b?.merchantConfidence && typeof b.merchantConfidence === 'object' ? b.merchantConfidence : {},
     adjustments: Array.isArray(b?.adjustments) ? b.adjustments : [],
+    // Normalized descriptions the user said are NOT income, so the income
+    // reconciliation stops offering them as missing-payment candidates.
+    incomeNotCounted: Array.isArray(b?.incomeNotCounted) ? b.incomeNotCounted : [],
     analyses: Array.isArray(b?.analyses) ? b.analyses : [],
     netWorthHistory: b?.netWorthHistory && typeof b.netWorthHistory === 'object' ? b.netWorthHistory : {},
     budgetSnapshots: b?.budgetSnapshots && typeof b.budgetSnapshots === 'object' ? b.budgetSnapshots : {},

@@ -28,6 +28,10 @@ function incomeVarianceLabel(s) {
   return s.variance > 0 ? `+${usd(s.variance)}` : `-${usd(-s.variance)}`;
 }
 
+// Merchant key for the "not income" learning list — same normalization the
+// transactions page uses for its merchant memory.
+const normDesc = (s) => String(s || '').trim().toLowerCase();
+
 function monthKey(dateStr = todayStr()) {
   return dateStr.slice(0, 7);
 }
@@ -339,8 +343,17 @@ export default function Summary({
     );
     // Deposits that don't count as income right now — flagged business or
     // ignored — so the reconciliation can flag a paycheck that got mis-tagged.
+    // Descriptions the user has marked "not income" are left out so the prompt
+    // doesn't keep coming back.
+    const incomeDismissed = new Set((budgetState.incomeNotCounted || []).map(normDesc));
     const hiddenIncomeTx = monthTx
-      .filter((t) => Number(t.amount) < 0 && !creditIds.has(t.categoryId) && (t.excluded || t.business))
+      .filter(
+        (t) =>
+          Number(t.amount) < 0 &&
+          !creditIds.has(t.categoryId) &&
+          (t.excluded || t.business) &&
+          !incomeDismissed.has(normDesc(t.description)),
+      )
       .map((t) => ({ ...t, _hiddenReason: t.business && t.excluded ? 'business & ignored' : t.business ? 'business' : 'ignored' }));
     const incomeRecon = reconcileIncome(budgetState.incomeSources, incomeTx, selMonth, hiddenIncomeTx);
     const incomeFlags = incomeRecon.perSource.filter(
@@ -351,6 +364,17 @@ export default function Summary({
     const countAsIncome = (tx) => {
       if (tx.business && setBusiness) setBusiness(tx.id, false);
       if (tx.excluded && setExcluded) setExcluded(tx.id, false);
+    };
+    // "Not income": remember this merchant so the prompt stops coming back for
+    // it, this month and in future months. Leaves the transaction as-is.
+    const dismissCandidate = (tx) => {
+      const key = normDesc(tx.description);
+      if (!key) return;
+      setBudgetState((prev) => {
+        const list = prev.incomeNotCounted || [];
+        if (list.includes(key)) return prev;
+        return { ...prev, incomeNotCounted: [...list, key] };
+      });
     };
     // Every deposit that hit this month — including ones currently ignored or
     // filed under a spending category — so a misplaced paycheck can be found
@@ -450,9 +474,14 @@ export default function Summary({
                               {d.description} <span className="income-candidate-tag">{d._hiddenReason}</span>
                             </span>
                             <span className="pnl-tx-amt">+{usd2(d.amount)}</span>
-                            <button type="button" className="secondary-btn income-candidate-btn" onClick={() => countAsIncome(d)}>
-                              Count as income
-                            </button>
+                            <span className="income-candidate-actions">
+                              <button type="button" className="secondary-btn income-candidate-btn" onClick={() => countAsIncome(d)}>
+                                Count as income
+                              </button>
+                              <button type="button" className="link-btn income-candidate-dismiss" onClick={() => dismissCandidate(d)}>
+                                Not income
+                              </button>
+                            </span>
                           </div>
                         ))}
                     </div>
