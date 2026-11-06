@@ -299,6 +299,13 @@ export default function Summary({
     const income = incomeOf(monthTx, creditIds);
     const expenses = expensesOf(monthTx, creditIds);
     const net = income - expenses;
+    // Surplus you've actively directed into envelopes this month — money moved
+    // from cash (no "from" envelope) via the Move money / catch-up tools. Lets
+    // the net surplus and the re-allocation show side by side.
+    const directedToEnvelopes = (budgetState.adjustments || [])
+      .filter((a) => a.month === selMonth && !a.from && Number(a.amount) > 0)
+      .reduce((s, a) => s + Number(a.amount), 0);
+    const cushionLeft = net - directedToEnvelopes;
 
     // Budgeted vs actual. For a PAST month, use the frozen snapshot of the plan
     // that month actually had (so editing a later month's budget can't change
@@ -413,6 +420,19 @@ export default function Summary({
               <span className={`pnl-value ${net >= 0 ? 'good' : 'bad'}`}>{net >= 0 ? usd(net) : `-${usd(-net)}`}</span>
             </div>
           </div>
+          {directedToEnvelopes > 0.5 && (
+            <p className="pnl-reallocation">
+              <span>Net {net >= 0 ? usd(net) : `-${usd(-net)}`}</span>
+              <span className="pnl-realloc-arrow">→</span>
+              <span>{usd(directedToEnvelopes)} directed into envelopes</span>
+              <span className="pnl-realloc-arrow">·</span>
+              <span className={cushionLeft < -0.5 ? 'bad' : ''}>
+                {cushionLeft >= 0
+                  ? `${usd(cushionLeft)} left as free cushion`
+                  : `${usd(-cushionLeft)} pulled from prior cushion`}
+              </span>
+            </p>
+          )}
         </section>
 
         {/* Income: did every budgeted payment come in? */}

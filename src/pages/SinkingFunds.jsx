@@ -293,7 +293,7 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
           <div className="reconcile-fig">
             <span className="reconcile-label">Set aside in envelopes</span>
             <span className="reconcile-value">{money(assigned)}</span>
-            <span className="reconcile-sub">sinking + transfer balances</span>
+            <span className="reconcile-sub">sinking fund balances</span>
           </div>
           <span className={`pill ${overAssigned ? 'pill-bad' : 'pill-good'}`}>
             {overAssigned ? `Over-assigned ${money(-freeToAssign)}` : `${money(freeToAssign)} free`}

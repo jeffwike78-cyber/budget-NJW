@@ -7,13 +7,15 @@
 //               (gas, groceries); resets each month, does NOT accumulate
 //   sinking   — saved up over time toward an irregular/larger expense;
 //               leftover carries forward and the balance grows
-//   transfer  — money moved out to another account (Jeff/Kari spending,
-//               retirement, savings); carries forward
+//   transfer  — money moved out to another account each month (retirement,
+//               529, savings, Jeff/Kari spending); like a bill, it resets each
+//               month — the app only tracks that the budgeted amount went out,
+//               not a running balance (the money lives in the external account)
 export const ENVELOPE_KINDS = [
   { value: 'bill', label: 'Monthly bill', carryover: false },
   { value: 'spending', label: 'Monthly spending', carryover: false },
   { value: 'sinking', label: 'Sinking fund', carryover: true },
-  { value: 'transfer', label: 'Transfer to account', carryover: true },
+  { value: 'transfer', label: 'Transfer to account', carryover: false },
 ];
 
 const KIND_CARRYOVER = Object.fromEntries(ENVELOPE_KINDS.map((k) => [k.value, k.carryover]));
@@ -56,7 +58,7 @@ export function includeInCashOnHand(a) {
 // check overstates free cash because card spending already drew down envelopes
 // but the cash hasn't left checking yet, and unpaid bills are spoken for.
 //   availableCash = included accounts − credit-card balances − unpaid bills
-//   assigned      = carryover envelopes (sinking + transfer) running balances
+//   assigned      = carryover envelopes (sinking funds) running balances
 //   freeToAssign  = availableCash − assigned  (negative ⇒ over-assigned)
 export function cashReconciliation(budgetState, balances, effectiveBudgets, monthSpent) {
   const accounts = budgetState?.accounts || [];

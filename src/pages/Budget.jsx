@@ -363,7 +363,7 @@ export default function Budget({ budgetState, setBudgetState, transactions, reca
                           className="category-kind-select"
                           value={c.kind || 'spending'}
                           onChange={(e) => updateCategory(c.id, 'kind', e.target.value)}
-                          title="Bills reset each month; spending, sinking, and transfer envelopes keep their balance"
+                          title="Sinking funds keep a running balance that grows month to month; bills, spending, and transfers reset each month"
                         >
                           {ENVELOPE_KINDS.map((k) => (
                             <option key={k.value} value={k.value}>
