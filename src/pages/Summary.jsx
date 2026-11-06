@@ -5,6 +5,7 @@ import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth } 
 import { findSplitDoubleCounts, findDuplicateCharges, findUncategorized } from '../lib/audit';
 import { reconcileIncome } from '../lib/incomeReview';
 import BarChart from '../components/BarChart';
+import TxList from '../components/TxList';
 import Analysis from './Analysis';
 
 const usd = (n) => `$${Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -48,7 +49,17 @@ function expensesOf(txns, creditIds) {
   return Object.values(netSpentByCategory(txns, creditIds)).reduce((a, b) => a + b, 0);
 }
 
-export default function Summary({ budgetState, setBudgetState, transactions, setExcluded }) {
+export default function Summary({
+  budgetState,
+  setBudgetState,
+  transactions,
+  recategorize,
+  setExcluded,
+  setBusiness,
+  setNeedsReview,
+  splitTransaction,
+  deleteTransaction,
+}) {
   const [mode, setMode] = useState('month'); // 'month' | 'year' | 'insights' | 'audit'
   const current = monthKey();
   const currentYear = current.slice(0, 4);
@@ -66,6 +77,10 @@ export default function Summary({ budgetState, setBudgetState, transactions, set
   const [selYear, setSelYear] = useState(currentYear);
   const [openCat, setOpenCat] = useState(null);
   const [openIncome, setOpenIncome] = useState(null);
+  // Income card: collapse the per-source detail (keeps printouts short), and a
+  // separate drawer to review/edit every deposit for the month.
+  const [incomeCollapsed, setIncomeCollapsed] = useState(false);
+  const [showIncomeTx, setShowIncomeTx] = useState(false);
 
   // Refunds credited to a spending envelope net against it and aren't income.
   const creditIds = spendingCategoryIds(budgetState);
@@ -322,10 +337,27 @@ export default function Summary({ budgetState, setBudgetState, transactions, set
     const incomeTx = monthTx.filter(
       (t) => Number(t.amount) < 0 && !t.excluded && !t.business && !creditIds.has(t.categoryId),
     );
-    const incomeRecon = reconcileIncome(budgetState.incomeSources, incomeTx, selMonth);
+    // Deposits that don't count as income right now — flagged business or
+    // ignored — so the reconciliation can flag a paycheck that got mis-tagged.
+    const hiddenIncomeTx = monthTx
+      .filter((t) => Number(t.amount) < 0 && !creditIds.has(t.categoryId) && (t.excluded || t.business))
+      .map((t) => ({ ...t, _hiddenReason: t.business && t.excluded ? 'business & ignored' : t.business ? 'business' : 'ignored' }));
+    const incomeRecon = reconcileIncome(budgetState.incomeSources, incomeTx, selMonth, hiddenIncomeTx);
     const incomeFlags = incomeRecon.perSource.filter(
-      (s) => s.status === 'missing' || s.status === 'partial' || s.status === 'under',
+      (s) => s.status === 'missing' || s.status === 'partial' || s.status === 'under' || s.candidates.length > 0,
     ).length;
+    // Bring a mis-tagged deposit back into income: clear the business flag and
+    // un-ignore it so it counts. Leaves its category alone.
+    const countAsIncome = (tx) => {
+      if (tx.business && setBusiness) setBusiness(tx.id, false);
+      if (tx.excluded && setExcluded) setExcluded(tx.id, false);
+    };
+    // Every deposit that hit this month — including ones currently ignored or
+    // filed under a spending category — so a misplaced paycheck can be found
+    // and re-filed from here.
+    const monthDeposits = monthTx
+      .filter((t) => Number(t.amount) < 0)
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
     return (
       <>
@@ -354,12 +386,19 @@ export default function Summary({ budgetState, setBudgetState, transactions, set
 
         {/* Income: did every budgeted payment come in? */}
         <section className="card">
-          <div className="card-header">
-            <h2>Income — did it all come in?</h2>
+          <button
+            type="button"
+            className="card-header card-collapse"
+            onClick={() => setIncomeCollapsed((c) => !c)}
+            aria-expanded={!incomeCollapsed}
+          >
+            <h2>Income — did it all come in? <span className="bva-caret">{incomeCollapsed ? '▾' : '▴'}</span></h2>
             <span className={`pill ${incomeFlags === 0 ? 'pill-good' : 'pill-warn'}`}>
               {incomeFlags === 0 ? 'All received' : `${incomeFlags} to check`}
             </span>
-          </div>
+          </button>
+          {!incomeCollapsed && (
+          <>
           <div className="bva-row bva-head">
             <span className="bva-name">Source</span>
             <span className="bva-num">Budgeted</span>
@@ -397,6 +436,27 @@ export default function Summary({ budgetState, setBudgetState, transactions, set
                       )}
                     </ul>
                   )}
+                  {s.candidates.length > 0 && (
+                    <div className="income-candidate no-print">
+                      <p className="income-candidate-head">
+                        ⚠ A deposit that looks like this source isn’t being counted as income:
+                      </p>
+                      {s.candidates
+                        .sort((a, b) => (a.date < b.date ? -1 : 1))
+                        .map((d) => (
+                          <div key={d.id} className="income-candidate-row">
+                            <span className="pnl-tx-date">{(d.date || '').slice(5)}</span>
+                            <span className="pnl-tx-desc">
+                              {d.description} <span className="income-candidate-tag">{d._hiddenReason}</span>
+                            </span>
+                            <span className="pnl-tx-amt">+{usd2(d.amount)}</span>
+                            <button type="button" className="secondary-btn income-candidate-btn" onClick={() => countAsIncome(d)}>
+                              Count as income
+                            </button>
+                          </div>
+                        ))}
+                    </div>
+                  )}
                 </li>
               );
             })}
@@ -426,6 +486,8 @@ export default function Summary({ budgetState, setBudgetState, transactions, set
               </li>
             )}
           </ul>
+          </>
+          )}
           <div className="bva-row bva-total">
             <span className="bva-name">Total income</span>
             <span className="bva-num">{usd(planIncome)}</span>
@@ -434,10 +496,50 @@ export default function Summary({ budgetState, setBudgetState, transactions, set
               {incDiff >= 0 ? `+${usd(incDiff)}` : `-${usd(-incDiff)}`}
             </span>
           </div>
-          <p className="module-note">
-            Expected payments come from your income schedule; “received” are the deposits that matched each source. A ⚠
-            marks a source still missing a payment, and +/− shows any over/under. Tap a source to see the actual deposits.
-          </p>
+          {!incomeCollapsed && (
+            <p className="module-note">
+              Expected payments come from your income schedule; “received” are the deposits that matched each source. A ⚠
+              marks a source still missing a payment, and +/− shows any over/under. Tap a source to see the actual deposits.
+            </p>
+          )}
+
+          {/* Review & edit every deposit for the month — find a paycheck that
+              got ignored or filed under the wrong category and re-file it. */}
+          {!incomeCollapsed && (
+            <div className="no-print income-review">
+              <button
+                type="button"
+                className="tx-section-toggle"
+                onClick={() => setShowIncomeTx((s) => !s)}
+                aria-expanded={showIncomeTx}
+              >
+                <span>Review all income payments</span>
+                <span className="tx-section-count">{monthDeposits.length} {showIncomeTx ? '▴' : '▾'}</span>
+              </button>
+              {showIncomeTx && (
+                <>
+                  <p className="module-note">
+                    Every deposit that landed in {monthLabel(selMonth)}. If a source above shows a payment missing,
+                    look here — a paycheck that was accidentally ignored shows under <strong>Show ignored</strong>, and
+                    one filed under the wrong category can be set back to the right income source. Edits here update the
+                    review above instantly.
+                  </p>
+                  <TxList
+                    transactions={monthDeposits}
+                    categories={budgetState.categories}
+                    incomeCategories={budgetState.incomeCategories}
+                    accounts={budgetState.accounts}
+                    onRecategorize={recategorize}
+                    onToggleExcluded={setExcluded}
+                    onSendToReview={setNeedsReview}
+                    onSplit={splitTransaction}
+                    onDelete={deleteTransaction}
+                    emptyLabel={`No deposits recorded for ${monthLabel(selMonth)}.`}
+                  />
+                </>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Spending: budgeted vs actual, per category */}
