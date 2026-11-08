@@ -77,7 +77,16 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
 
   const totalSaved = computed.reduce((s, f) => s + f.live, 0);
   const totalTarget = computed.reduce((s, f) => s + Number(f.envelope.targetAmount || 0), 0);
-  const requiredMonthly = computed.reduce((s, f) => s + (f.requiredMonthly || 0), 0);
+  // Catch-up pace is strictly about hitting DATED funds' deadlines, so only
+  // sum those. (Overspent undated funds have no deadline — sweeping their
+  // refill in here used to balloon this number; those are a separate concern,
+  // surfaced below as "overspent".)
+  const dated = computed.filter((f) => f.nextDueDate && Number(f.envelope.targetAmount || 0) > 0);
+  const requiredMonthly = dated.reduce((s, f) => s + (f.requiredMonthly || 0), 0);
+  // Envelopes that have gone negative (spent more than funded) — money you owe
+  // these funds now, independent of any deadline.
+  const overspent = computed.filter((f) => f.live < -0.5).sort((a, b) => a.live - b.live);
+  const overspentTotal = overspent.reduce((s, f) => s + f.live, 0);
 
   const upcoming = computed
     .filter((f) => f.nextDueDate && Number(f.envelope.targetAmount || 0) > 0)
@@ -510,15 +519,30 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
           <div className="sf-summary-figure">
             <span className="sf-summary-label">Catch-up pace</span>
             <span className="sf-summary-value">{money(requiredMonthly)}/mo</span>
-            <span className="sf-summary-sub">extra set-aside to make every deadline on time</span>
+            <span className="sf-summary-sub">extra set-aside to make every dated deadline on time</span>
           </div>
         </div>
+        {overspent.length > 0 && (
+          <div className="sf-overspent">
+            <span className="sf-overspent-head">
+              ⚠ {overspent.length} fund{overspent.length === 1 ? '' : 's'} overspent by {money(-overspentTotal)} total
+            </span>
+            <span className="sf-overspent-sub">
+              {overspent.slice(0, 4).map((f) => `${f.envelope.name} ${money(f.live)}`).join(' · ')}
+              {overspent.length > 4 ? ` · +${overspent.length - 4} more` : ''}
+            </span>
+            <span className="sf-overspent-sub">
+              These are separate from the deadline pace — cover them with Move money (from a fund with room) or budget more to them.
+            </span>
+          </div>
+        )}
         <p className="module-note">
           <strong>Saved right now</strong> is the real cash across all your sinking envelopes — including
           funds you keep topped up with no deadline, which is why it can be higher than the combined target.
           <strong> Combined target</strong> only counts funds that have a target amount and a due date.
-          <strong> Catch-up pace</strong> is how much to budget per month, across those dated funds, to have
-          each one fully funded by its due date — if it&apos;s $0, you&apos;re on schedule everywhere. Balances
+          <strong> Catch-up pace</strong> is how much to budget per month, across those dated funds only, to
+          have each one fully funded by its due date — if it&apos;s $0, you&apos;re on schedule everywhere. An
+          overspent envelope with no deadline isn&apos;t counted here (it&apos;s shown above instead). Balances
           update automatically as you budget and spend; change a fund&apos;s monthly amount on the Budget page.
         </p>
       </section>
