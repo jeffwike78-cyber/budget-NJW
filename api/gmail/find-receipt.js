@@ -46,9 +46,11 @@ export default async function handler(req, res) {
 
     if (result.found && tx.id) {
       const update = {};
-      if (result.detail) update.note = String(result.detail).slice(0, 500);
-      if (result.categoryId && categories.some((c) => c.id === result.categoryId)) update.category_id = result.categoryId;
-      if (result.business) update.business = true;
+      // Detail becomes a note either way; category/business only auto-apply on a
+      // high-confidence match so an uncertain Amazon match doesn't mis-file it.
+      if (result.detail) update.note = result.confident ? String(result.detail).slice(0, 500) : `?? ${String(result.detail).slice(0, 497)}`;
+      if (result.confident && result.categoryId && categories.some((c) => c.id === result.categoryId)) update.category_id = result.categoryId;
+      if (result.confident && result.business) update.business = true;
       if (Object.keys(update).length > 0) {
         await admin.from('budget_transactions').update(update).eq('id', tx.id);
       }
