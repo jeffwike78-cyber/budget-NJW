@@ -69,9 +69,14 @@ export default async function handler(req, res) {
             if (!r.found) return;
             matched += 1;
             const update = {};
-            if (r.detail) update.note = String(r.detail).slice(0, 500);
-            if (r.categoryId && categories.some((c) => c.id === r.categoryId)) update.category_id = r.categoryId;
-            if (r.business) update.business = true;
+            // Always keep the detail as a note (a hint the user can verify), but
+            // only auto-apply the category/business flag on a high-confidence
+            // match — a low-confidence Amazon match often attached the wrong
+            // category (a wall light tagged "snacks"). Low-confidence ones stay
+            // uncategorized for the user to confirm.
+            if (r.detail) update.note = r.confident ? String(r.detail).slice(0, 500) : `?? ${String(r.detail).slice(0, 497)}`;
+            if (r.confident && r.categoryId && categories.some((c) => c.id === r.categoryId)) update.category_id = r.categoryId;
+            if (r.confident && r.business) update.business = true;
             if (Object.keys(update).length > 0) {
               await admin.from('budget_transactions').update(update).eq('id', tx.id);
               applied += 1;

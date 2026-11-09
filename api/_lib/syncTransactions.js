@@ -248,9 +248,12 @@ async function autoLookupReceipts(supabaseAdmin, needsReviewPlaidIds, categories
       const r = await lookupReceiptForTx(supabaseAdmin, t, categories);
       if (!r.found) continue;
       const update = {};
-      if (r.detail) update.note = String(r.detail).slice(0, 500);
-      if (r.categoryId && categories.some((c) => c.id === r.categoryId)) update.category_id = r.categoryId;
-      if (r.business) update.business = true;
+      // Keep the detail as a note always; only auto-apply category/business on
+      // a high-confidence match (low-confidence Amazon matches often picked the
+      // wrong order's category). Low-confidence ones stay for the user.
+      if (r.detail) update.note = r.confident ? String(r.detail).slice(0, 500) : `?? ${String(r.detail).slice(0, 497)}`;
+      if (r.confident && r.categoryId && categories.some((c) => c.id === r.categoryId)) update.category_id = r.categoryId;
+      if (r.confident && r.business) update.business = true;
       if (Object.keys(update).length > 0) {
         await supabaseAdmin.from('budget_transactions').update(update).eq('id', t.id);
       }

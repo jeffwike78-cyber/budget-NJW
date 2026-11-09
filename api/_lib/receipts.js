@@ -59,20 +59,21 @@ export async function lookupReceiptForTx(admin, tx, categories, { apiKey, model 
   const splitNote = splitShipment
     ? `
 
-IMPORTANT — this is an Amazon-style merchant that CHARGES PER SHIPMENT, not per order. A single order often posts as SEVERAL separate bank charges (one per shipment), so the order total will usually be LARGER than this one charge. Do NOT require an email total to equal the amount. Instead:
-- Prefer a shipment/dispatch email ("your package has shipped", "shipped", "out for delivery") whose shipment total matches the amount.
-- Otherwise use the order-confirmation email: read its itemized list (item names with individual prices), and find the single item or SUBSET of items whose prices — plus a proportional share of tax and shipping — sum to within about $2 of the amount. That subset is what this charge paid for.
-- Only claim found=true when the item names and prices are actually present in an email and their sum is genuinely close to the amount. If several different subsets could match, or the items/prices aren't shown, say found=false rather than guessing.
-- In "detail", name the SPECIFIC item(s) this charge covers (not the whole order), e.g. "Amazon: USB-C cable + phone case (1 of 3 shipments, $${Number(tx.amount).toFixed(2)})".`
+IMPORTANT — this is an Amazon-style merchant that CHARGES PER SHIPMENT, not per order. A single order often posts as SEVERAL separate bank charges (one per shipment), so the order total is usually LARGER than this one charge, and MULTIPLE unrelated orders in the window can each contain a subset of items that happens to sum near this amount. A near-sum is NOT proof — matching the wrong order's items is the main failure here, and it produces absurd results (a wall light tagged "snacks"). Be conservative:
+- STRONGLY PREFER a shipment/dispatch email ("your package has shipped", "shipped", "out for delivery", "dispatched") whose shipment total matches the amount within ~$1 AND that lists the exact items in that shipment. Read the items from THAT shipment. This is the only high-confidence path.
+- Only fall back to subset-matching an order-confirmation's itemized list when exactly one subset of items (plus its share of tax/shipping) matches within ~$1 AND no other email in the window could plausibly produce this amount. This is at best low confidence.
+- If more than one email/order/subset could match, if the items and their prices are not actually listed, or you are inferring, set found=false. Do NOT guess — leaving it for the person to categorize is far better than a wrong category.
+- "detail" names the SPECIFIC item(s) this charge covers (not the whole order), e.g. "Amazon: USB-C cable + phone case (1 of 3 shipments, $${Number(tx.amount).toFixed(2)})".`
     : '';
 
   const system = `You match a bank transaction to its email receipt and explain what it was for.
-Given the transaction and some candidate emails, find the one that is the receipt / order confirmation for this exact charge (its total should match the amount, and its date should be near the transaction date). If none match, say found=false.${splitNote}
+Given the transaction and some candidate emails, find the one that is genuinely the receipt / order confirmation for THIS exact charge (its total matches the amount and its date is near the transaction date). If nothing clearly matches, say found=false — a false match is worse than no match.${splitNote}
 Respond with ONLY JSON, no prose or code fences:
-{"found": boolean, "detail": string, "categoryId": string or null, "business": boolean, "emailSubject": string or null}
-- "detail": a short human summary of what was purchased, e.g. "Apple: iCloud+ 2TB storage (monthly)" or "Amazon: HDMI cable + phone case".
-- "categoryId": the best-fitting envelope id from the list, or null if unclear.
-- "business": true ONLY if the receipt shows a clear business or rental-property expense; otherwise false.`;
+{"found": boolean, "detail": string, "categoryId": string or null, "business": boolean, "confidence": "high" | "low", "emailSubject": string or null}
+- "detail": a short human summary of the ACTUAL items on the matched receipt, e.g. "Apple: iCloud+ 2TB storage (monthly)" or "Amazon: HDMI cable + phone case".
+- "categoryId": the envelope id whose name best fits what was ACTUALLY purchased (read the item names — a wall light is not a snack). If the items don't clearly fit one envelope, or you're unsure what the items are, use null rather than force-fitting.
+- "business": true ONLY if the receipt shows a clear business or rental-property expense; otherwise false.
+- "confidence": "high" only when this email is unmistakably this charge's receipt (e.g. an exact shipment-total match with the items plainly listed) AND the category clearly fits those items. Otherwise "low". When unsure between two possible orders, that is "low".`;
 
   const userMsg = `Transaction: amount=$${tx.amount}, date=${tx.date}, description=${JSON.stringify(tx.description)}\n\nEnvelopes:\n${catList}\n\nCandidate emails:\n${emailList}\n\nReturn the JSON now.`;
 
@@ -90,6 +91,10 @@ Respond with ONLY JSON, no prose or code fences:
     detail: result.detail || null,
     categoryId: result.categoryId || null,
     business: !!result.business,
+    // "high" only when the match and category are unmistakable; anything else
+    // is "low" so callers can keep the detail as a hint but not auto-apply the
+    // category (which is where wrong Amazon matches did real damage).
+    confident: result.confidence === 'high',
     emailSubject: result.emailSubject || null,
   };
 }
