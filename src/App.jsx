@@ -28,7 +28,7 @@ function App() {
   const [pendingScanFile, setPendingScanFile] = useState(null);
   const { session, loading: authLoading, recovery, clearRecovery } = useAuth();
   const [budgetState, setBudgetState, budgetLoading, budgetConflict, clearBudgetConflict] = useBudgetState();
-  const { transactions, addTransaction, addSplitTransaction, splitTransaction, deleteTransaction, recategorize, confirmReviewed, setNeedsReview, setExcluded, setBusiness, setTaxCategory } =
+  const { transactions, addTransaction, addSplitTransaction, splitTransaction, deleteTransaction, recategorize, confirmReviewed, setNeedsReview, setExcluded, setBusiness, setTaxCategory, flipDirection } =
     useBudgetTransactions();
 
   // Record this month's net worth so the Overview trend builds over time (only
@@ -62,7 +62,7 @@ function App() {
   // Net worth: credit-card balances count against the total, not toward it.
   const totalBalance = budgetState.accounts.reduce((sum, a) => sum + signedBalance(a), 0);
 
-  const txActions = { recategorize, confirmReviewed, setNeedsReview, setExcluded, setBusiness, setTaxCategory, splitTransaction, deleteTransaction };
+  const txActions = { recategorize, confirmReviewed, setNeedsReview, setExcluded, setBusiness, setTaxCategory, splitTransaction, deleteTransaction, flipDirection };
 
   return (
     <div className="app-shell">

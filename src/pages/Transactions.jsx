@@ -20,7 +20,7 @@ function accountIdForLast4(accounts, last4) {
   return match ? match.id : null;
 }
 
-export default function Transactions({ budgetState, setBudgetState, transactions, addTransaction, addSplitTransaction, recategorize, confirmReviewed, setNeedsReview, setExcluded, setTaxCategory, splitTransaction, deleteTransaction, pendingScanFile, onScanConsumed }) {
+export default function Transactions({ budgetState, setBudgetState, transactions, addTransaction, addSplitTransaction, recategorize, confirmReviewed, setNeedsReview, setExcluded, setTaxCategory, splitTransaction, deleteTransaction, flipDirection, pendingScanFile, onScanConsumed }) {
   // Needs Review is for unclear spending, not unclear deposits — money coming
   // in (amount < 0, the reverse of "positive = expense") never belongs here,
   // even if it somehow got flagged that way. Ignoring one moves it out of here
@@ -511,6 +511,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
               onSplit={splitTransaction}
               onDelete={deleteTransaction}
               onToggleExcluded={setExcluded}
+              onFlipDirection={flipDirection}
               onSetTaxCategory={setTaxCategory}
               taxLabels={budgetState.taxLabels}
               showReceiptLookup
@@ -544,6 +545,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
               onSplit={splitTransaction}
               onDelete={deleteTransaction}
               onToggleExcluded={setExcluded}
+              onFlipDirection={flipDirection}
               onSetTaxCategory={setTaxCategory}
               onSendToReview={setNeedsReview}
               taxLabels={budgetState.taxLabels}
@@ -576,6 +578,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
               onSplit={splitTransaction}
               onDelete={deleteTransaction}
               onToggleExcluded={setExcluded}
+              onFlipDirection={flipDirection}
               onSetTaxCategory={setTaxCategory}
               onSendToReview={setNeedsReview}
               taxLabels={budgetState.taxLabels}
@@ -606,6 +609,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
             onSplit={splitTransaction}
             onDelete={deleteTransaction}
             onToggleExcluded={setExcluded}
+            onFlipDirection={flipDirection}
             onSetTaxCategory={setTaxCategory}
             taxLabels={budgetState.taxLabels}
             showReceiptLookup
@@ -638,6 +642,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
               onSplit={splitTransaction}
               onDelete={deleteTransaction}
               onToggleExcluded={setExcluded}
+              onFlipDirection={flipDirection}
               onSetTaxCategory={setTaxCategory}
               onSendToReview={setNeedsReview}
               taxLabels={budgetState.taxLabels}

@@ -14,7 +14,7 @@ function shortAccountLabel(name) {
   return s.split('·').pop().trim() || s;
 }
 
-function TxRow({ t, categories, incomeCategories = [], accounts = [], onRecategorize, onConfirmReviewed, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, taxLabels, showReceiptLookup }) {
+function TxRow({ t, categories, incomeCategories = [], accounts = [], onRecategorize, onConfirmReviewed, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, onFlipDirection, taxLabels, showReceiptLookup }) {
   // Which linked account this transaction came from — surfaced so a synced
   // charge that isn't in the account you're looking at can be traced to the one
   // it actually belongs to (e.g. a card or a second bank).
@@ -271,6 +271,18 @@ function TxRow({ t, categories, incomeCategories = [], accounts = [], onRecatego
             ↩ Needs review
           </button>
         )}
+        {onFlipDirection && (
+          <button
+            type="button"
+            className="tx-tag-btn"
+            title={isIncome
+              ? 'This is actually money going out — flip it to an expense.'
+              : 'This is actually money coming in (e.g. a transfer or refund) — flip it to income so you can pick an income category.'}
+            onClick={() => onFlipDirection(t.id, t.amount)}
+          >
+            {isIncome ? '⇄ To expense' : '⇄ To income'}
+          </button>
+        )}
         <button
           type="button"
           className="tx-tag-btn"
@@ -360,6 +372,7 @@ export default function TxList({
   onToggleExcluded,
   onSetTaxCategory,
   onSendToReview,
+  onFlipDirection,
   taxLabels,
   showReceiptLookup = false,
   emptyLabel = 'Nothing here yet.',
@@ -369,7 +382,7 @@ export default function TxList({
   const active = transactions.filter((t) => !t.excluded);
   const ignored = transactions.filter((t) => t.excluded);
 
-  const rowProps = { categories, incomeCategories, accounts, onRecategorize, onConfirmReviewed, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, taxLabels, showReceiptLookup };
+  const rowProps = { categories, incomeCategories, accounts, onRecategorize, onConfirmReviewed, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, onFlipDirection, taxLabels, showReceiptLookup };
 
   if (transactions.length === 0) {
     return <p className="module-note">{emptyLabel}</p>;
