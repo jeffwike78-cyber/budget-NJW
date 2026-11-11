@@ -370,6 +370,11 @@ export function useBudgetTransactions() {
 
   const setBusiness = (id, value) => setFlag(id, 'business', value);
   const setTaxCategory = (id, value) => setFlag(id, 'tax_category', value || null);
+  // Flip a transaction between money-out (expense) and money-in (income) by
+  // negating its amount — for a deposit a sync mis-signed as a charge (e.g. a
+  // savings-to-checking transfer that should count as income), so the income
+  // categories become selectable.
+  const flipDirection = (id, currentAmount) => setFlag(id, 'amount', -Number(currentAmount || 0));
 
-  return { transactions, loading, addTransaction, addSplitTransaction, splitTransaction, deleteTransaction, recategorize, confirmReviewed, setNeedsReview, setExcluded, setBusiness, setTaxCategory };
+  return { transactions, loading, addTransaction, addSplitTransaction, splitTransaction, deleteTransaction, recategorize, confirmReviewed, setNeedsReview, setExcluded, setBusiness, setTaxCategory, flipDirection };
 }
