@@ -14,6 +14,16 @@ function shortAccountLabel(name) {
   return s.split('·').pop().trim() || s;
 }
 
+// Does the bank description look like a credit-card payoff or a transfer
+// between your own accounts? Those aren't income or spending (the card
+// purchases were already counted), so the row nudges you to Ignore it. The
+// sync routes these to Needs Review on purpose rather than auto-hiding, so
+// this is just a clearer prompt — the user still taps Ignore.
+const TRANSFER_HINT_RE = /\b(automatic\s*payment|auto[\s-]*pay|online\s*payment|mobile\s*payment|card\s*payment|payment\s*[-–—]?\s*thank|thank\s*you.{0,20}payment|e[\s-]*payment|bill\s*pay|\bach\b|online\s*transfer|wire\s*transfer|funds?\s*transfer|\btransfer\b|\bxfer\b)/i;
+function looksLikeTransfer(desc) {
+  return TRANSFER_HINT_RE.test(String(desc || ''));
+}
+
 function TxRow({ t, categories, incomeCategories = [], accounts = [], onRecategorize, onConfirmReviewed, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, onFlipDirection, taxLabels, showReceiptLookup }) {
   // Which linked account this transaction came from — surfaced so a synced
   // charge that isn't in the account you're looking at can be traced to the one
@@ -165,6 +175,16 @@ function TxRow({ t, categories, incomeCategories = [], accounts = [], onRecatego
           <span className="pill tx-split-ignored-pill" title="The full purchase that was split across envelopes — ignored so the split pieces are what count">
             Split · Ignored
           </span>
+        )}
+        {onToggleExcluded && !t.excluded && (t.categoryId === 'needs-review' || !t.categoryId) && looksLikeTransfer(t.description) && (
+          <button
+            type="button"
+            className="pill tx-transfer-hint"
+            title="This looks like a credit-card payoff or a transfer between your own accounts — not income or spending. Tap to Ignore it (the purchases it pays for were already counted)."
+            onClick={() => onToggleExcluded(t.id, true)}
+          >
+            💳 Looks like a transfer — Ignore?
+          </button>
         )}
         {isBiz && <span className="pill tx-biz-pill">Business</span>}
         {effectiveTax && !isBiz && <span className="pill tx-tax-pill">{taxLabel(effectiveTax, taxLabels)}</span>}
