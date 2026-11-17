@@ -782,14 +782,27 @@ textarea {
 }
 
 .tx-desc {
-  flex: 1;
-  min-width: 100px;
+  /* Lay the description text and its pills (Synced, Split · Ignored, account,
+     etc.) out as wrapping flex items with their own gaps. JSX collapses the
+     whitespace between them, so as plain inline content they can't break and
+     overrun the amount — flex wrapping is what keeps them on their own line. */
+  flex: 1 1 140px;
+  min-width: 0;
   color: var(--text-h);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
 }
+.tx-desc > .pill,
+.tx-desc > .tx-transfer-hint { margin-left: 0; }
+.tx-desc > .tx-note,
+.tx-desc > .tx-lookup-msg { flex-basis: 100%; }
 
 .tx-amount {
   font-weight: 700;
   width: 80px;
+  flex-shrink: 0;
   text-align: right;
   color: var(--text-h);
 }
