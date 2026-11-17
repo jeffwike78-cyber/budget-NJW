@@ -2298,6 +2298,12 @@ button, a, label, [role="button"], .sidebar-link, .mobile-tab-link, .quick-acces
 .catchup-sub { font-weight: 400; font-size: 12px; opacity: 0.6; }
 .catchup-btn { padding: 4px 12px; font-size: 13px; white-space: nowrap; }
 
+/* "Over budget this month" cover rows */
+.overspend-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 0; border-top: 1px dashed var(--border, #ddd); }
+.overspend-row:first-child { border-top: none; }
+.overspend-row .catchup-name { flex: 1 1 140px; min-width: 0; }
+.overspend-source { flex: 1 1 150px; min-width: 0; font-size: 13px; padding: 6px 8px; min-height: 36px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-h); }
+
 /* Overspent-funds callout in the sinking-funds summary */
 .sf-overspent { display: flex; flex-direction: column; gap: 3px; margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--warn-bg, rgba(240,180,0,0.12)); }
 .sf-overspent-head { font-weight: 600; font-size: 14px; color: var(--warn, #9a6a00); }

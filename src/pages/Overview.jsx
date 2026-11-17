@@ -3,7 +3,7 @@ import BarChart from '../components/BarChart';
 import { todayStr, todayLabel } from '../lib/storage';
 import { isPayrollDeposit } from '../lib/income';
 import { netSpentByCategory, spendingCategoryIds } from '../lib/spending';
-import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, signedBalance, envelopeBalances, adjustmentMaps, cashReconciliation } from '../lib/budgetMath';
+import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, signedBalance, envelopeBalances, adjustmentMaps, cashReconciliation, isCarryover } from '../lib/budgetMath';
 import { computeNetWorth } from '../lib/netWorth';
 import { ageOfMoney, ageOfMoneyAdvice, ageOfMoneyStatus } from '../lib/ageOfMoney';
 import { projectCashflow, incomeEvents } from '../lib/cashflow';
@@ -64,6 +64,16 @@ export default function Overview({ budgetState, transactions, onQuickScan, setVi
     adjustMonthO,
   );
   const recon = cashReconciliation(budgetState, reconBalances, effectiveBudgets, monthSpentMap);
+
+  // Resetting envelopes (bill/spending/transfer) that have gone over budget
+  // this month. They reset next month, so an overspend left uncovered quietly
+  // drains cash reserves — surfaced here so it can't slip by.
+  const overBudget = (budgetState.categories || [])
+    .filter((c) => c.id !== 'needs-review' && !isCarryover(c.kind))
+    .map((c) => ({ name: c.name, over: Math.max(0, -(reconBalances[c.id]?.available ?? 0)) }))
+    .filter((x) => x.over > 0.5)
+    .sort((a, b) => b.over - a.over);
+  const overBudgetTotal = overBudget.reduce((s, x) => s + x.over, 0);
 
   // Expected (budgeted) income vs. what's actually landed this month. Actual =
   // this month's deposits (amount < 0) that aren't excluded (transfers/card
@@ -175,6 +185,29 @@ export default function Overview({ budgetState, transactions, onQuickScan, setVi
   return (
     <>
       <h1 className="page-title">Welcome!</h1>
+
+      {overBudgetTotal > 0.5 && (
+        <section className="card cc-reminder cc-reminder-soon">
+          <div className="cc-reminder-row">
+            <span className="cc-reminder-icon" aria-hidden="true">⚠️</span>
+            <div className="cc-reminder-text">
+              <span className="cc-reminder-title">
+                {usd(overBudgetTotal)} over budget this month ({overBudget.length} envelope{overBudget.length === 1 ? '' : 's'})
+              </span>
+              <span className="cc-reminder-sub">
+                {overBudget.slice(0, 3).map((o) => `${o.name} ${usd(o.over)}`).join(' · ')}
+                {overBudget.length > 3 ? ` · +${overBudget.length - 3} more` : ''}. These reset next month, so cover the
+                overspend from a fund with room before it quietly drains your cash reserve.
+              </span>
+            </div>
+            {setView && (
+              <button type="button" className="secondary-btn" onClick={() => setView('sinking')}>
+                Cover it
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       {recon.overAssigned && (
         <section className="card cc-reminder cc-reminder-soon">
