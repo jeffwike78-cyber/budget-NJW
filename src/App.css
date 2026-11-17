@@ -782,14 +782,27 @@ textarea {
 }
 
 .tx-desc {
-  flex: 1;
-  min-width: 100px;
+  /* Lay the description text and its pills (Synced, Split · Ignored, account,
+     etc.) out as wrapping flex items with their own gaps. JSX collapses the
+     whitespace between them, so as plain inline content they can't break and
+     overrun the amount — flex wrapping is what keeps them on their own line. */
+  flex: 1 1 140px;
+  min-width: 0;
   color: var(--text-h);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
 }
+.tx-desc > .pill,
+.tx-desc > .tx-transfer-hint { margin-left: 0; }
+.tx-desc > .tx-note,
+.tx-desc > .tx-lookup-msg { flex-basis: 100%; }
 
 .tx-amount {
   font-weight: 700;
   width: 80px;
+  flex-shrink: 0;
   text-align: right;
   color: var(--text-h);
 }
@@ -1543,6 +1556,17 @@ textarea {
 .tx-confirm-btn:hover { border-color: var(--good); }
 .tx-biz-pill { background: var(--warn-bg); color: var(--warn); margin-left: 6px; }
 .tx-tax-pill { background: var(--accent-bg); color: var(--accent); margin-left: 6px; }
+.tx-transfer-hint {
+  background: var(--warn-bg);
+  color: var(--warn, #9a6a00);
+  margin-left: 6px;
+  border: 1px solid var(--warn, #9a6a00);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+}
+.tx-transfer-hint:hover { filter: brightness(0.97); text-decoration: underline; }
 .tx-row-business { opacity: 0.7; }
 
 /* Split-purchase labels: a colored tag so a split piece is never mistaken for a
