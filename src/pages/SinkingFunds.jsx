@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { todayStr } from '../lib/storage';
 import { netSpentByCategory, spendingCategoryIds } from '../lib/spending';
-import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, envelopeBalances, adjustmentMaps, cashReconciliation } from '../lib/budgetMath';
+import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, envelopeBalances, adjustmentMaps, cashReconciliation, isCarryover } from '../lib/budgetMath';
 import { computeSinkingEnvelope, advanceDueDate, dueLabel } from '../lib/sinkingFunds';
 import TxList from '../components/TxList';
 
@@ -41,6 +41,9 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
   const [showMove, setShowMove] = useState(false);
   const [move, setMove] = useState({ from: '', to: '', amount: '', note: '' });
   const [moveMsg, setMoveMsg] = useState(null);
+  // Chosen source per overspent envelope for the "Cover overspending" tool
+  // ('' = from general cash/cushion, otherwise another envelope's id).
+  const [coverFrom, setCoverFrom] = useState({});
   // Which envelope cards have their transaction list expanded.
   const [expandedTx, setExpandedTx] = useState(() => new Set());
   const month = monthKey();
@@ -131,6 +134,38 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
     const entry = { id: crypto.randomUUID(), moveId: crypto.randomUUID(), month, categoryId, amount: amt, note: 'Surplus catch-up', from: null, createdAt: new Date().toISOString() };
     setBudgetState((prev) => ({ ...prev, adjustments: [...(prev.adjustments || []), entry] }));
     setMoveMsg(`Added ${money(amt)} to ${nameOf(categoryId)} from your surplus ✓`);
+  }
+
+  // Overspent resetting envelopes (bill / spending / transfer): they reset to
+  // their budget next month, so an overspend silently drains real cash unless
+  // it's covered. List them so it can't slip by, and offer a one-tap "cover"
+  // that moves the overspend from a source you choose (another envelope, a
+  // sinking fund, or your cushion) before the reset erases it.
+  const overBudget = budgetable
+    .filter((c) => !isCarryover(c.kind))
+    .map((c) => ({ id: c.id, name: c.name, over: Math.max(0, -(balances[c.id]?.available ?? 0)) }))
+    .filter((x) => x.over > 0.5)
+    .sort((a, b) => b.over - a.over);
+  const overBudgetTotal = overBudget.reduce((s, x) => s + x.over, 0);
+  // Envelopes you could pull from to cover an overspend (anything with a
+  // positive available balance), newest-order; plus the implicit "cash" source.
+  const coverSources = budgetable
+    .map((c) => ({ id: c.id, name: c.name, avail: balances[c.id]?.available ?? 0 }))
+    .filter((c) => c.avail > 0.5)
+    .sort((a, b) => b.avail - a.avail);
+
+  function coverOverspend(envId, over) {
+    const amt = Math.round(Number(over) * 100) / 100;
+    if (!(amt > 0)) return;
+    const fromId = coverFrom[envId] || null;
+    const moveId = crypto.randomUUID();
+    const stamp = new Date().toISOString();
+    const entries = [{ id: crypto.randomUUID(), moveId, month, categoryId: envId, amount: amt, note: 'Cover overspend', from: fromId, createdAt: stamp }];
+    if (fromId) entries.push({ id: crypto.randomUUID(), moveId, month, categoryId: fromId, amount: -amt, note: 'Cover overspend', from: null, createdAt: stamp });
+    setBudgetState((prev) => ({ ...prev, adjustments: [...(prev.adjustments || []), ...entries] }));
+    setMoveMsg(fromId
+      ? `Covered ${money(amt)} overspend in ${nameOf(envId)} from ${nameOf(fromId)} ✓`
+      : `Covered ${money(amt)} overspend in ${nameOf(envId)} from cash on hand ✓`);
   }
 
   // A page-specific display order (settings.envelopeOrder) that's independent of
@@ -354,6 +389,48 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
           </div>
         )}
       </section>
+
+      {overBudget.length > 0 && (
+        <section className="card reconcile-banner reconcile-warn">
+          <div className="card-header">
+            <h2>Over budget this month</h2>
+            <span className="pill pill-bad">{money(overBudgetTotal)} over</span>
+          </div>
+          <p className="module-note">
+            These envelopes have spent more than their budget. They reset next month, so the overspend quietly comes out
+            of your cash reserves unless you cover it. Pick where each should pull from, then tap <strong>Cover</strong> —
+            it moves the money so you see exactly which bucket absorbed it.
+          </p>
+          <ul className="catchup-list">
+            {overBudget.map((o) => (
+              <li key={o.id} className="overspend-row">
+                <span className="catchup-name">
+                  {o.name}
+                  <span className="catchup-sub">{money(o.over)} over budget</span>
+                </span>
+                <select
+                  className="overspend-source"
+                  value={coverFrom[o.id] || ''}
+                  onChange={(e) => setCoverFrom((m) => ({ ...m, [o.id]: e.target.value }))}
+                >
+                  <option value="">from cash on hand</option>
+                  {coverSources
+                    .filter((c) => c.id !== o.id)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        from {c.name} ({money(c.avail)})
+                      </option>
+                    ))}
+                </select>
+                <button type="button" className="secondary-btn catchup-btn" onClick={() => coverOverspend(o.id, o.over)}>
+                  Cover {money(o.over)}
+                </button>
+              </li>
+            ))}
+          </ul>
+          {moveMsg && <p className="module-note form-ok" role="status">{moveMsg}</p>}
+        </section>
+      )}
 
       <section className="card">
         <button type="button" className="tx-section-toggle" onClick={() => setShowMove((s) => !s)} aria-expanded={showMove}>
