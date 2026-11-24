@@ -2303,6 +2303,8 @@ button, a, label, [role="button"], .sidebar-link, .mobile-tab-link, .quick-acces
 .overspend-row:first-child { border-top: none; }
 .overspend-row .catchup-name { flex: 1 1 140px; min-width: 0; }
 .overspend-source { flex: 1 1 150px; min-width: 0; font-size: 13px; padding: 6px 8px; min-height: 36px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-h); }
+.surplus-any { margin-top: 4px; }
+.surplus-any .budget-input { width: 90px; flex: 0 0 auto; }
 
 /* Overspent-funds callout in the sinking-funds summary */
 .sf-overspent { display: flex; flex-direction: column; gap: 3px; margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--warn-bg, rgba(240,180,0,0.12)); }
