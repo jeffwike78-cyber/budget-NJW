@@ -1,4 +1,4 @@
-import { OverviewIcon, TransactionsIcon, BudgetIcon, SinkingFundsIcon, AccountsIcon, ReportIcon } from './icons';
+import { OverviewIcon, TransactionsIcon, BudgetIcon, SinkingFundsIcon, AccountsIcon, ReportIcon, FamilyIcon } from './icons';
 import { signedBalance } from '../lib/budgetMath';
 
 // Tax Report isn't a daily tab — it's reached from Settings (used once a year).
@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { key: 'budget', label: 'Budget', Icon: BudgetIcon },
   { key: 'sinking', label: 'Envelopes', Icon: SinkingFundsIcon },
   { key: 'summary', label: 'Summary', Icon: ReportIcon },
+  { key: 'reimbursements', label: 'Family', Icon: FamilyIcon },
   { key: 'accounts', label: 'Accounts', Icon: AccountsIcon },
 ];
 

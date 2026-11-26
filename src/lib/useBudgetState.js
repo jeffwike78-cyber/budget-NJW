@@ -5,6 +5,7 @@ import {
   DEFAULT_INCOME_SOURCES,
   DEFAULT_INCOME,
   DEFAULT_INCOME_CATEGORIES,
+  DEFAULT_REIMBURSE_PEOPLE,
 } from '../data/budgetDefaults';
 import { useSupabaseState } from './supabaseState';
 
@@ -12,6 +13,9 @@ const DEFAULT_STATE = {
   accounts: DEFAULT_ACCOUNTS,
   categories: DEFAULT_CATEGORIES,
   incomeCategories: DEFAULT_INCOME_CATEGORIES,
+  // Family members a purchase can be owed by / reimbursed from (Family
+  // Reimbursement page). Editable in Settings.
+  reimbursePeople: DEFAULT_REIMBURSE_PEOPLE,
   sinkingFunds: DEFAULT_SINKING_FUNDS,
   incomeSources: DEFAULT_INCOME_SOURCES,
   income: DEFAULT_INCOME, // legacy fallback
@@ -62,6 +66,7 @@ function normalizeBudget(b) {
     accounts: nonEmpty(b?.accounts, DEFAULT_STATE.accounts),
     categories,
     incomeCategories: nonEmpty(b?.incomeCategories, DEFAULT_STATE.incomeCategories),
+    reimbursePeople: nonEmpty(b?.reimbursePeople, DEFAULT_STATE.reimbursePeople),
     sinkingFunds: nonEmpty(b?.sinkingFunds, DEFAULT_STATE.sinkingFunds),
     incomeSources: nonEmpty(b?.incomeSources, DEFAULT_STATE.incomeSources),
     merchantMemory: b?.merchantMemory || {},

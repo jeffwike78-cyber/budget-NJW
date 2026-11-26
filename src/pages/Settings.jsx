@@ -185,11 +185,24 @@ export default function Settings({ budgetState, setBudgetState, setView }) {
           <h2>Income categories</h2>
         </div>
         <p className="module-note">
-          Labels for money coming in (paycheck, a one-off extra, a reimbursement…). These don&apos;t affect your
-          budget or envelopes — they&apos;re just how a deposit gets tagged, so you can tell expected income from
-          extra. Pick one on any deposit in Transactions.
+          Labels for money coming in (paycheck, a one-off extra, a gift…). These don&apos;t affect your budget or
+          envelopes — they&apos;re just how a deposit gets tagged, so you can tell expected income from extra. Pick one
+          on any deposit in Transactions. (A refund or reimbursement isn&apos;t income — credit it back to its envelope,
+          or tag it on the Family page.)
         </p>
         <IncomeCategoriesEditor budgetState={budgetState} setBudgetState={setBudgetState} />
+      </section>
+
+      <section className="card">
+        <div className="card-header">
+          <h2>Family members</h2>
+        </div>
+        <p className="module-note">
+          People a purchase can be “owed by” on the Family Reimbursement page — for charges a family member makes on
+          your account that they&apos;ll pay back. Keep “Other” for the rare case of fronting money for someone outside
+          the family.
+        </p>
+        <ReimbursePeopleEditor budgetState={budgetState} setBudgetState={setBudgetState} />
       </section>
 
       <section className="card">
@@ -377,6 +390,54 @@ function BudgetHistory({ setBudgetState }) {
         </ul>
       )}
     </>
+  );
+}
+
+function ReimbursePeopleEditor({ budgetState, setBudgetState }) {
+  const people = budgetState.reimbursePeople || [];
+  const [name, setName] = useState('');
+
+  function rename(i, value) {
+    setBudgetState((prev) => ({
+      ...prev,
+      reimbursePeople: (prev.reimbursePeople || []).map((p, idx) => (idx === i ? value : p)),
+    }));
+  }
+  function remove(i) {
+    setBudgetState((prev) => ({
+      ...prev,
+      reimbursePeople: (prev.reimbursePeople || []).filter((_, idx) => idx !== i),
+    }));
+  }
+  function add(e) {
+    e.preventDefault();
+    const n = name.trim();
+    if (!n) return;
+    setBudgetState((prev) => {
+      const list = prev.reimbursePeople || [];
+      if (list.some((p) => p.toLowerCase() === n.toLowerCase())) return prev;
+      return { ...prev, reimbursePeople: [...list, n] };
+    });
+    setName('');
+  }
+
+  return (
+    <div className="income-cat-editor">
+      {people.map((p, i) => (
+        <div className="income-cat-row" key={`${p}-${i}`}>
+          <input value={p} onChange={(e) => rename(i, e.target.value)} />
+          <button type="button" className="link-btn danger" onClick={() => remove(i)}>
+            Remove
+          </button>
+        </div>
+      ))}
+      <form className="add-inline-form" onSubmit={add}>
+        <input placeholder="Add a family member" value={name} onChange={(e) => setName(e.target.value)} />
+        <button type="submit" className="secondary-btn">
+          + Add
+        </button>
+      </form>
+    </div>
   );
 }
 

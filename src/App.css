@@ -1566,6 +1566,26 @@ textarea {
   font-weight: 600;
   white-space: nowrap;
 }
+.tx-reimburse-pill,
+.tx-reimbursed-pill {
+  margin-left: 6px;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tx-reimburse-pill { background: var(--warn-bg); color: var(--warn); }
+.tx-reimbursed-pill { background: var(--good-bg); color: var(--good); }
+.tx-reimburse-select {
+  font-size: 11px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  color: var(--text);
+  max-width: 150px;
+}
 .tx-transfer-hint {
   background: var(--warn-bg);
   color: var(--warn, #9a6a00);
@@ -2466,3 +2486,83 @@ button, a, label, [role="button"], .sidebar-link, .mobile-tab-link, .quick-acces
 .tx-section-count { font-size: 13px; font-weight: 600; color: var(--text); opacity: 0.75; }
 .tx-income-total { color: var(--good); opacity: 1; margin-right: 4px; }
 .tx-delete-btn:hover { color: var(--bad); border-color: var(--bad); }
+
+/* ---------- Family Reimbursement page ---------- */
+.reimb-summary { display: flex; flex-direction: column; gap: 10px; }
+.reimb-summary-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.reimb-summary-label { font-weight: 600; color: var(--text-h); }
+.reimb-summary-value { font-size: 26px; font-weight: 700; color: var(--text); }
+.reimb-summary-value.owed { color: var(--warn); }
+.reimb-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.reimb-chip {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.reimb-chip.owed { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+
+.reimb-person-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+.reimb-person-name { font-size: 18px; margin: 0; color: var(--text-h); }
+.reimb-person-owed { font-weight: 700; color: var(--good); white-space: nowrap; }
+.reimb-person-owed.owed { color: var(--warn); }
+.reimb-crosscheck { font-size: 12.5px; color: var(--text); opacity: 0.85; margin: 0 0 10px; }
+.reimb-crosscheck-warn { color: var(--bad); font-weight: 600; opacity: 1; }
+
+.reimb-group { margin-top: 10px; }
+.reimb-group-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 700;
+  color: var(--text);
+  opacity: 0.7;
+  margin-bottom: 4px;
+}
+.reimb-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.reimb-line-date { font-size: 12px; color: var(--text); opacity: 0.7; width: 42px; flex-shrink: 0; }
+.reimb-line-desc { flex: 1 1 140px; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.reimb-line-note { font-size: 12px; color: var(--text); opacity: 0.7; }
+.reimb-line-amt { font-weight: 600; color: var(--text-h); flex-shrink: 0; }
+.reimb-line-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
+.reimb-btn { font-size: 12px; padding: 4px 9px; }
+.reimb-person-select {
+  font-size: 12px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+}
+.reimb-paid-tag { font-size: 11px; color: var(--accent); font-weight: 600; }
+.reimb-paid-tag.done { color: var(--good); }
+.reimb-history { margin-top: 10px; }
+.reimb-history > summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  opacity: 0.85;
+  padding: 4px 0;
+}
+.reimb-idle { margin-top: 10px; }

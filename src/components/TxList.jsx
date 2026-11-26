@@ -24,7 +24,7 @@ function looksLikeTransfer(desc) {
   return TRANSFER_HINT_RE.test(String(desc || ''));
 }
 
-function TxRow({ t, categories, incomeCategories = [], accounts = [], onRecategorize, onConfirmReviewed, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, onFlipDirection, taxLabels, showReceiptLookup }) {
+function TxRow({ t, categories, incomeCategories = [], accounts = [], reimbursePeople = [], onRecategorize, onConfirmReviewed, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, onFlipDirection, onSetReimburse, taxLabels, showReceiptLookup }) {
   // Which linked account this transaction came from — surfaced so a synced
   // charge that isn't in the account you're looking at can be traced to the one
   // it actually belongs to (e.g. a card or a second bank).
@@ -44,12 +44,17 @@ function TxRow({ t, categories, incomeCategories = [], accounts = [], onRecatego
     (c) => c.id !== 'inc-reimbursement' && !/reimburs/i.test(c.name || ''),
   );
   const options = isIncome && incomeChoices.length > 0 ? incomeChoices : categories;
-  // This deposit is a refund/reimbursement the user credited back to a spending
-  // envelope: it restores that envelope and is excluded from income. Surface it
-  // on the row so that's visible at a glance (not just inside the dropdown).
-  const refundToCat = isIncome && !t.excluded && t.categoryId
+  // This deposit is a refund the user credited back to a spending envelope: it
+  // restores that envelope and is excluded from income. Surface it on the row so
+  // that's visible at a glance (not just inside the dropdown). A reimbursable
+  // transaction (tracked per person) shows its own pill instead.
+  const refundToCat = isIncome && !t.excluded && t.categoryId && !t.reimburseFrom
     ? spendingCats.find((c) => c.id === t.categoryId)
     : null;
+  // Reimbursement tag: a purchase owed back by a family member (money out) or a
+  // payback deposit from them (money in). Kept out of spending and income; lives
+  // on the Family Reimbursement page. `reimbursedAt` marks a purchase settled.
+  const reimbursePerson = t.reimburseFrom || null;
   // The envelope may auto-tag its transactions for the tax report. The
   // effective tax bucket is the transaction's own tag, or the envelope default
   // when it has none ('none' means the user turned the default off here).
@@ -206,6 +211,24 @@ function TxRow({ t, categories, incomeCategories = [], accounts = [], onRecatego
             ↩ Refund → {refundToCat.name} · not income
           </span>
         )}
+        {reimbursePerson && (
+          <span
+            className={`pill ${t.reimbursedAt ? 'tx-reimbursed-pill' : 'tx-reimburse-pill'}`}
+            title={
+              isIncome
+                ? `Payback from ${reimbursePerson} — recorded as a reimbursement, not income.`
+                : t.reimbursedAt
+                  ? `Reimbursed by ${reimbursePerson} on ${String(t.reimbursedAt).slice(0, 10)} — not household spending.`
+                  : `Owed by ${reimbursePerson} — not household spending. Mark it reimbursed on the Family page when paid back.`
+            }
+          >
+            {isIncome
+              ? `⇄ Reimbursement ← ${reimbursePerson}`
+              : t.reimbursedAt
+                ? `✓ Reimbursed · ${reimbursePerson}`
+                : `⏳ Owed by ${reimbursePerson}`}
+          </span>
+        )}
         {isBiz && <span className="pill tx-biz-pill">Business</span>}
         {effectiveTax && !isBiz && <span className="pill tx-tax-pill">{taxLabel(effectiveTax, taxLabels)}</span>}
         {t.note && <span className="tx-note">{t.note}</span>}
@@ -264,6 +287,23 @@ function TxRow({ t, categories, incomeCategories = [], accounts = [], onRecatego
               </option>
             ))}
             {catTaxDefault && <option value={TAX_NONE}>Not deductible</option>}
+          </select>
+        )}
+        {onSetReimburse && reimbursePeople.length > 0 && (
+          <select
+            className="tx-reimburse-select"
+            value={reimbursePerson || ''}
+            onChange={(e) => onSetReimburse(t.id, e.target.value)}
+            title={isIncome
+              ? 'Tag this deposit as a payback from a family member (keeps it out of income).'
+              : 'Someone owes this purchase back? Tag who — it leaves household spending and shows on the Family Reimbursement page.'}
+          >
+            <option value="">{isIncome ? 'Reimburse: —' : 'Owed by: —'}</option>
+            {reimbursePeople.map((p) => (
+              <option key={p} value={p}>
+                {isIncome ? `Payback from ${p}` : `Owed by ${p}`}
+              </option>
+            ))}
           </select>
         )}
         {showReceiptLookup && (
@@ -405,6 +445,7 @@ export default function TxList({
   categories,
   incomeCategories = [],
   accounts = [],
+  reimbursePeople = [],
   onRecategorize,
   onConfirmReviewed,
   onSplit,
@@ -413,6 +454,7 @@ export default function TxList({
   onSetTaxCategory,
   onSendToReview,
   onFlipDirection,
+  onSetReimburse,
   taxLabels,
   showReceiptLookup = false,
   emptyLabel = 'Nothing here yet.',
@@ -422,7 +464,7 @@ export default function TxList({
   const active = transactions.filter((t) => !t.excluded);
   const ignored = transactions.filter((t) => t.excluded);
 
-  const rowProps = { categories, incomeCategories, accounts, onRecategorize, onConfirmReviewed, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, onFlipDirection, taxLabels, showReceiptLookup };
+  const rowProps = { categories, incomeCategories, accounts, reimbursePeople, onRecategorize, onConfirmReviewed, onSplit, onDelete, onToggleExcluded, onSetTaxCategory, onSendToReview, onFlipDirection, onSetReimburse, taxLabels, showReceiptLookup };
 
   if (transactions.length === 0) {
     return <p className="module-note">{emptyLabel}</p>;

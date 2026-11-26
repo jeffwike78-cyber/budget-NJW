@@ -158,3 +158,10 @@ export const DEFAULT_INCOME_CATEGORIES = [
   { id: 'inc-misc', name: 'Miscellaneous Income' },
   { id: 'inc-gift', name: 'Gift / Other' },
 ];
+
+// Family members a purchase can be owed by / reimbursed from. A reimbursable
+// purchase isn't household spending and the payback isn't income — it's a
+// short-term IOU tracked per person on the Family Reimbursement page. "Other"
+// covers the occasional case of fronting money for someone outside the family.
+// Editable in Settings.
+export const DEFAULT_REIMBURSE_PEOPLE = ['Jeff', 'Kari', 'Noah', 'Caleb', 'Jude', 'Other'];
