@@ -59,6 +59,25 @@ export function findCardPayment(accountId, dueDate, transactions = [], today = n
   return best;
 }
 
+// The most recent actual payment posted to the card (newest payment-like credit
+// on or before today), as positive dollars — used to size the recurring card
+// payment in the cashflow forecast ("what really left checking last cycle").
+// Returns null if no payment is on record for the account.
+export function recentCardPaymentAmount(accountId, transactions = [], today = new Date()) {
+  if (!accountId) return null;
+  const t0 = startOfDay(today);
+  let best = null;
+  for (const t of transactions) {
+    if (t.accountId !== accountId) continue;
+    if (!(Number(t.amount) < 0)) continue; // a credit to the card = a payment
+    if (!CARD_PAYMENT_RE.test(String(t.description || ''))) continue;
+    const d = startOfDay(new Date(`${t.date}T00:00:00`));
+    if (Number.isNaN(d.getTime()) || d > t0) continue;
+    if (!best || d > best.date) best = { date: d, amount: Math.abs(Number(t.amount)) };
+  }
+  return best ? best.amount : null;
+}
+
 // Everything the UI needs about the everyday credit card's cycle. Returns
 // { configured:false } until the user picks a card and days on the Accounts page.
 export function creditCardStatus(settings, accounts = [], transactions = [], today = new Date()) {
