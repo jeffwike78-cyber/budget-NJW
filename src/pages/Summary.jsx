@@ -46,7 +46,7 @@ function shortMonthLabel(m) {
 // app's convention) that aren't excluded transfers/card payments or business.
 function incomeOf(txns, creditIds) {
   return txns
-    .filter((t) => Number(t.amount) < 0 && !t.excluded && !t.business && !(creditIds && creditIds.has(t.categoryId)))
+    .filter((t) => Number(t.amount) < 0 && !t.excluded && !t.business && !t.reimburseFrom && !(creditIds && creditIds.has(t.categoryId)))
     .reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
 }
 function expensesOf(txns, creditIds) {
@@ -345,7 +345,7 @@ export default function Summary({
 
     // Per-source income reconciliation: did every budgeted paycheck land?
     const incomeTx = monthTx.filter(
-      (t) => Number(t.amount) < 0 && !t.excluded && !t.business && !creditIds.has(t.categoryId),
+      (t) => Number(t.amount) < 0 && !t.excluded && !t.business && !t.reimburseFrom && !creditIds.has(t.categoryId),
     );
     // Deposits that don't count as income right now — flagged business or
     // ignored — so the reconciliation can flag a paycheck that got mis-tagged.

@@ -11,6 +11,7 @@ const Budget = lazy(() => import('./pages/Budget'));
 const SinkingFunds = lazy(() => import('./pages/SinkingFunds'));
 const Accounts = lazy(() => import('./pages/Accounts'));
 const Summary = lazy(() => import('./pages/Summary'));
+const Reimbursements = lazy(() => import('./pages/Reimbursements'));
 const TaxReport = lazy(() => import('./pages/TaxReport'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Login = lazy(() => import('./pages/Login'));
@@ -28,7 +29,7 @@ function App() {
   const [pendingScanFile, setPendingScanFile] = useState(null);
   const { session, loading: authLoading, recovery, clearRecovery } = useAuth();
   const [budgetState, setBudgetState, budgetLoading, budgetConflict, clearBudgetConflict] = useBudgetState();
-  const { transactions, addTransaction, addSplitTransaction, splitTransaction, deleteTransaction, recategorize, confirmReviewed, setNeedsReview, setExcluded, setBusiness, setTaxCategory, flipDirection } =
+  const { transactions, addTransaction, addSplitTransaction, splitTransaction, deleteTransaction, recategorize, confirmReviewed, setNeedsReview, setExcluded, setBusiness, setTaxCategory, flipDirection, setReimburseFrom, setReimbursed } =
     useBudgetTransactions();
 
   // Record this month's net worth so the Overview trend builds over time (only
@@ -62,7 +63,7 @@ function App() {
   // Net worth: credit-card balances count against the total, not toward it.
   const totalBalance = budgetState.accounts.reduce((sum, a) => sum + signedBalance(a), 0);
 
-  const txActions = { recategorize, confirmReviewed, setNeedsReview, setExcluded, setBusiness, setTaxCategory, splitTransaction, deleteTransaction, flipDirection };
+  const txActions = { recategorize, confirmReviewed, setNeedsReview, setExcluded, setBusiness, setTaxCategory, splitTransaction, deleteTransaction, flipDirection, setReimburseFrom, setReimbursed };
 
   return (
     <div className="app-shell">
@@ -133,6 +134,9 @@ function App() {
           )}
           {(view === 'summary' || view === 'analysis') && (
             <Summary budgetState={budgetState} setBudgetState={setBudgetState} transactions={transactions} {...txActions} />
+          )}
+          {view === 'reimbursements' && (
+            <Reimbursements budgetState={budgetState} setBudgetState={setBudgetState} transactions={transactions} {...txActions} />
           )}
           {view === 'settings' && (
             <Settings budgetState={budgetState} setBudgetState={setBudgetState} setView={setView} />

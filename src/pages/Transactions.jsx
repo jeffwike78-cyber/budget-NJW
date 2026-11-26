@@ -20,7 +20,7 @@ function accountIdForLast4(accounts, last4) {
   return match ? match.id : null;
 }
 
-export default function Transactions({ budgetState, setBudgetState, transactions, addTransaction, addSplitTransaction, recategorize, confirmReviewed, setNeedsReview, setExcluded, setTaxCategory, splitTransaction, deleteTransaction, flipDirection, pendingScanFile, onScanConsumed }) {
+export default function Transactions({ budgetState, setBudgetState, transactions, addTransaction, addSplitTransaction, recategorize, confirmReviewed, setNeedsReview, setExcluded, setTaxCategory, splitTransaction, deleteTransaction, flipDirection, setReimburseFrom, pendingScanFile, onScanConsumed }) {
   // Needs Review is for unclear spending, not unclear deposits — money coming
   // in (amount < 0, the reverse of "positive = expense") never belongs here,
   // even if it somehow got flagged that way. Ignoring one moves it out of here
@@ -42,7 +42,7 @@ export default function Transactions({ budgetState, setBudgetState, transactions
   // credited back to a spending envelope — those aren't income, they belong
   // under their category (they still show in that category's own list).
   const spendingIds = spendingCategoryIds(budgetState);
-  const income = transactions.filter((t) => Number(t.amount) < 0 && !t.excluded && !spendingIds.has(t.categoryId));
+  const income = transactions.filter((t) => Number(t.amount) < 0 && !t.excluded && !spendingIds.has(t.categoryId) && !t.reimburseFrom);
   const incomeTotal = income.reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
   // Amazon-style charges still missing their item detail — the ones worth
   // pulling receipts for in bulk from email.
@@ -513,6 +513,8 @@ export default function Transactions({ budgetState, setBudgetState, transactions
               onToggleExcluded={setExcluded}
               onFlipDirection={flipDirection}
               onSetTaxCategory={setTaxCategory}
+              reimbursePeople={budgetState.reimbursePeople}
+              onSetReimburse={setReimburseFrom}
               taxLabels={budgetState.taxLabels}
               showReceiptLookup
               flat
@@ -537,6 +539,8 @@ export default function Transactions({ budgetState, setBudgetState, transactions
             </p>
             <TxList
               transactions={aiShown}
+              reimbursePeople={budgetState.reimbursePeople}
+              onSetReimburse={setReimburseFrom}
               categories={budgetState.categories}
               incomeCategories={budgetState.incomeCategories}
               accounts={budgetState.accounts}
@@ -571,6 +575,8 @@ export default function Transactions({ budgetState, setBudgetState, transactions
           <>
             <TxList
               transactions={userShown}
+              reimbursePeople={budgetState.reimbursePeople}
+              onSetReimburse={setReimburseFrom}
               categories={budgetState.categories}
               incomeCategories={budgetState.incomeCategories}
               accounts={budgetState.accounts}
@@ -603,6 +609,8 @@ export default function Transactions({ budgetState, setBudgetState, transactions
         {showHidden && (
           <TxList
             transactions={hidden}
+            reimbursePeople={budgetState.reimbursePeople}
+            onSetReimburse={setReimburseFrom}
             categories={budgetState.categories}
             incomeCategories={budgetState.incomeCategories}
             onRecategorize={handleRecategorize}
@@ -634,6 +642,8 @@ export default function Transactions({ budgetState, setBudgetState, transactions
             </p>
             <TxList
               transactions={income}
+              reimbursePeople={budgetState.reimbursePeople}
+              onSetReimburse={setReimburseFrom}
               categories={budgetState.categories}
               incomeCategories={budgetState.incomeCategories}
               accounts={budgetState.accounts}

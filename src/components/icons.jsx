@@ -93,6 +93,18 @@ export function UserIcon(props) {
   );
 }
 
+// Two figures — the Family Reimbursement tab (who owes what).
+export function FamilyIcon(props) {
+  return (
+    <Icon {...props}>
+      <circle cx="8" cy="8" r="3" />
+      <path d="M2 20c0-3.3 2.7-5 6-5s6 1.7 6 5" />
+      <circle cx="17" cy="9" r="2.5" />
+      <path d="M15.5 14.2c3 .2 5.5 1.9 5.5 5.3" />
+    </Icon>
+  );
+}
+
 export function HelpIcon(props) {
   return (
     <Icon {...props}>

@@ -48,6 +48,12 @@ function rowToTx(row) {
     // the single ignored total the split came out of). Drives the "Split from
     // $x.xx" / "Split · Ignored" labels in the transaction list.
     splitTotal: row.split_total != null ? Number(row.split_total) : null,
+    // Family reimbursement: who owes this purchase back (or who a deposit is a
+    // payback from), and when the purchase was marked reimbursed. A tagged
+    // transaction is kept out of household spending and income — it's an IOU
+    // tracked on the Family Reimbursement page instead.
+    reimburseFrom: row.reimburse_from || null,
+    reimbursedAt: row.reimbursed_at || null,
   };
 }
 
@@ -368,6 +374,51 @@ export function useBudgetTransactions() {
     }
   }
 
+  // Tag (or clear) a transaction as owed-by / reimbursed-from a family member.
+  // Pass a name string, or null/'' to clear. Reloads so the exclusion from
+  // spending/income and the Family Reimbursement page update immediately.
+  async function setReimburseFrom(id, person) {
+    try {
+      const { error } = await supabase
+        .from('budget_transactions')
+        .update({ reimburse_from: person || null })
+        .eq('id', id);
+      if (error) {
+        if (error.code === '42703') {
+          return { message: 'The reimbursement columns aren’t in the database yet — run the reimbursements migration SQL, then try again.' };
+        }
+        console.error('Failed to set reimburse_from:', error);
+        return { message: describeError(error) };
+      }
+      await reload();
+      return null;
+    } catch (err) {
+      return { message: describeError(err) };
+    }
+  }
+
+  // Mark a reimbursable purchase settled (stamps reimbursed_at = now) or reopen
+  // it (clears the stamp). Driven from the Family Reimbursement page.
+  async function setReimbursed(id, reimbursed) {
+    try {
+      const { error } = await supabase
+        .from('budget_transactions')
+        .update({ reimbursed_at: reimbursed ? new Date().toISOString() : null })
+        .eq('id', id);
+      if (error) {
+        if (error.code === '42703') {
+          return { message: 'The reimbursement columns aren’t in the database yet — run the reimbursements migration SQL, then try again.' };
+        }
+        console.error('Failed to set reimbursed_at:', error);
+        return { message: describeError(error) };
+      }
+      await reload();
+      return null;
+    } catch (err) {
+      return { message: describeError(err) };
+    }
+  }
+
   const setBusiness = (id, value) => setFlag(id, 'business', value);
   const setTaxCategory = (id, value) => setFlag(id, 'tax_category', value || null);
   // Flip a transaction between money-out (expense) and money-in (income) by
@@ -376,5 +427,5 @@ export function useBudgetTransactions() {
   // categories become selectable.
   const flipDirection = (id, currentAmount) => setFlag(id, 'amount', -Number(currentAmount || 0));
 
-  return { transactions, loading, addTransaction, addSplitTransaction, splitTransaction, deleteTransaction, recategorize, confirmReviewed, setNeedsReview, setExcluded, setBusiness, setTaxCategory, flipDirection };
+  return { transactions, loading, addTransaction, addSplitTransaction, splitTransaction, deleteTransaction, recategorize, confirmReviewed, setNeedsReview, setExcluded, setBusiness, setTaxCategory, flipDirection, setReimburseFrom, setReimbursed };
 }

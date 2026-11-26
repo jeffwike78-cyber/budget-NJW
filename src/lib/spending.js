@@ -41,6 +41,14 @@ export function isEnvelopeCredit(t, spendingIds) {
   return !!set && set.has(t.categoryId);
 }
 
+// A transaction tied to a family member for reimbursement: a purchase someone
+// owes back, or a payback deposit from them. These are IOUs, not household
+// spending or income — they're tracked per person on the Family Reimbursement
+// page and must be left out of envelope spending and income totals.
+export function isReimbursable(t) {
+  return !!(t && t.reimburseFrom);
+}
+
 // Net spending per category: purchases add, refunds/returns subtract,
 // everything else negative (income, transfers) is ignored — it was never
 // spending in that category to begin with. A negative amount counts as a
@@ -51,9 +59,10 @@ export function netSpentByCategory(transactions, spendingIds = null) {
   const set = asSet(spendingIds);
   const totals = {};
   for (const t of transactions) {
-    // Not real household spending: ignored, an AI-flagged business expense, or
-    // tagged to a business tax bucket (tracked elsewhere).
-    if (t.excluded || t.business || t.taxCategory === 'business-1' || t.taxCategory === 'business-2') continue;
+    // Not real household spending: ignored, an AI-flagged business expense, a
+    // business tax bucket (tracked elsewhere), or a reimbursable IOU owed back
+    // by a family member (tracked on the Family Reimbursement page).
+    if (t.excluded || t.business || t.taxCategory === 'business-1' || t.taxCategory === 'business-2' || t.reimburseFrom) continue;
     const amount = Number(t.amount);
     if (amount > 0) {
       totals[t.categoryId] = (totals[t.categoryId] || 0) + amount;
