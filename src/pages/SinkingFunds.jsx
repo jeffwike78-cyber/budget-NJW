@@ -44,6 +44,9 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
   // Chosen source per overspent envelope for the "Cover overspending" tool
   // ('' = from general cash/cushion, otherwise another envelope's id).
   const [coverFrom, setCoverFrom] = useState({});
+  // Free-choice surplus top-up: apply surplus to any fund, not just the ones
+  // flagged behind.
+  const [surplusPick, setSurplusPick] = useState({ to: '', amt: '' });
   // Which envelope cards have their transaction list expanded.
   const [expandedTx, setExpandedTx] = useState(() => new Set());
   const month = monthKey();
@@ -366,25 +369,66 @@ export default function SinkingFunds({ budgetState, setBudgetState, transactions
             </>
           )}
         </p>
-        {surplus > 0.5 && catchUp.length > 0 && (
+        {surplus > 0.5 && (
           <div className="catchup">
-            <p className="catchup-head">Funds that could use your {money(surplus)} surplus:</p>
-            <ul className="catchup-list">
-              {catchUp.map((f) => {
-                const give = Math.min(f.short, surplus);
-                return (
-                  <li key={f.id} className="catchup-row">
-                    <span className="catchup-name">
-                      {f.status === 'overdue' ? '⚠ ' : ''}{f.name}
-                      <span className="catchup-sub">{money(f.short)} behind</span>
-                    </span>
-                    <button type="button" className="secondary-btn catchup-btn" onClick={() => topUp(f.id, give)}>
-                      Add {money(give)}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+            {catchUp.length > 0 && (
+              <>
+                <p className="catchup-head">Funds that could use your {money(surplus)} surplus:</p>
+                <ul className="catchup-list">
+                  {catchUp.map((f) => {
+                    const give = Math.min(f.short, surplus);
+                    return (
+                      <li key={f.id} className="catchup-row">
+                        <span className="catchup-name">
+                          {f.status === 'overdue' ? '⚠ ' : ''}{f.name}
+                          <span className="catchup-sub">{money(f.short)} behind</span>
+                        </span>
+                        <button type="button" className="secondary-btn catchup-btn" onClick={() => topUp(f.id, give)}>
+                          Add {money(give)}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
+            {/* Apply surplus to ANY fund, even one that isn't flagged behind. */}
+            <div className="overspend-row surplus-any">
+              <span className="catchup-name">
+                {catchUp.length > 0 ? 'Or add to any fund' : `Add your ${money(surplus)} surplus to a fund`}
+              </span>
+              <select
+                className="overspend-source"
+                value={surplusPick.to}
+                onChange={(e) => setSurplusPick((p) => ({ ...p, to: e.target.value }))}
+              >
+                <option value="" disabled>Choose a fund…</option>
+                {budgetable.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                className="budget-input"
+                placeholder={String(Math.round(surplus))}
+                value={surplusPick.amt}
+                onChange={(e) => setSurplusPick((p) => ({ ...p, amt: e.target.value }))}
+              />
+              <button
+                type="button"
+                className="secondary-btn catchup-btn"
+                disabled={!surplusPick.to}
+                onClick={() => {
+                  const amt = surplusPick.amt !== '' ? Number(surplusPick.amt) : surplus;
+                  topUp(surplusPick.to, amt);
+                  setSurplusPick({ to: '', amt: '' });
+                }}
+              >
+                Add
+              </button>
+            </div>
             <p className="module-note">Each button records a top-up from the surplus cash you already hold — move the actual dollars to wherever that fund lives.</p>
           </div>
         )}
