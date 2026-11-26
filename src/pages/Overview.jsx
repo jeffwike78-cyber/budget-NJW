@@ -7,10 +7,18 @@ import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, s
 import { computeNetWorth } from '../lib/netWorth';
 import { ageOfMoney, ageOfMoneyAdvice, ageOfMoneyStatus } from '../lib/ageOfMoney';
 import { projectCashflow, incomeEvents } from '../lib/cashflow';
-import { creditCardStatus, formatDueDate } from '../lib/creditCard';
+import { creditCardStatus, formatDueDate, recentCardPaymentAmount, cardBalanceTrend } from '../lib/creditCard';
 
 function shortDate(str) {
   return new Date(str + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+// 1 → "1st", 13 → "13th", 22 → "22nd" (day-of-month for the card due day).
+function ordinal(n) {
+  const v = Number(n);
+  const s = ['th', 'st', 'nd', 'rd'];
+  const r = v % 100;
+  return `${v}${s[(r - 20) % 10] || s[r] || s[0]}`;
 }
 
 function monthKey(dateStr) {
@@ -170,6 +178,27 @@ export default function Overview({ budgetState, transactions, onQuickScan, setVi
     .filter((a) => a.type === 'checking')
     .reduce((s, a) => s + Number(a.balance || 0), 0);
   const covered = checkingBalance >= creditOwed;
+
+  // Credit-card autopay is a big lumpy outflow from checking that the forecast
+  // must include. In card pay mode everyday spending goes on the card and leaves
+  // checking as this payment (not as a smooth daily drain). Size it from what
+  // actually posted last cycle (most accurate to real cash out); if there's no
+  // payment history yet, fall back to a month of everyday spending so the lump
+  // still shows.
+  const cardMode = budgetState.settings?.payMode === 'card';
+  const cc = budgetState.settings?.creditCard;
+  const monthlySpendTotal = budgetState.categories
+    .filter((c) => c.kind === 'spending' && c.id !== 'needs-review')
+    .reduce((s, c) => s + Number(effectiveBudgets[c.id] || 0), 0);
+  const recentPayment = cc?.accountId ? recentCardPaymentAmount(cc.accountId, transactions) : null;
+  const cardPaymentAmount = recentPayment != null ? recentPayment : (cardMode ? monthlySpendTotal : 0);
+  const cardPayment = cc?.dueDay && cardPaymentAmount > 0
+    ? { dueDay: Number(cc.dueDay), amount: cardPaymentAmount, name: `Card payment: ${card.accountName || 'Credit card'}` }
+    : null;
+
+  // Is the card balance climbing or getting paid down? (last 90 days)
+  const cardTrend = cc?.accountId ? cardBalanceTrend(cc.accountId, transactions, { days: 90 }) : null;
+
   const cashflow = projectCashflow({
     startingBalance: checkingBalance,
     sources: budgetState.incomeSources,
@@ -178,6 +207,8 @@ export default function Overview({ budgetState, transactions, onQuickScan, setVi
     // Sinking funds are sinking-kind envelopes now; their due dates + targets
     // drive the outflow side of the timeline.
     sinkingFunds: budgetState.categories.filter((c) => c.kind === 'sinking'),
+    cardPayment,
+    cardMode,
     days: 30,
   });
   const cashflowShort = cashflow.low < 0;
@@ -342,6 +373,20 @@ export default function Overview({ budgetState, transactions, onQuickScan, setVi
               <span className="payoff-value">{usd(checkingBalance)}</span>
             </div>
           </div>
+          {cardTrend && cardTrend.direction !== 'flat' && (
+            <div className={`card-trend card-trend-${cardTrend.direction}`}>
+              <span className="card-trend-head">
+                {cardTrend.direction === 'up'
+                  ? `↑ Balance climbing — about +${usd(cardTrend.netPerMonth)}/mo`
+                  : `↓ Paying it down — about -${usd(Math.abs(cardTrend.netPerMonth))}/mo`}
+              </span>
+              <span className="card-trend-sub">
+                Last 3 months: charged {usd(cardTrend.charges)}, paid {usd(cardTrend.payments)} —
+                {cardTrend.net >= 0 ? ` balance up ${usd(cardTrend.net)}.` : ` balance down ${usd(-cardTrend.net)}.`}
+                {cardTrend.direction === 'up' && ' You’re charging more than you pay off, so the balance (and any interest) keeps growing.'}
+              </span>
+            </div>
+          )}
           <p className="module-note">
             {covered
               ? 'Your checking balance covers the card in full this month. Savings aren’t counted here — they’re shown for reference only.'
@@ -418,9 +463,13 @@ export default function Overview({ budgetState, transactions, onQuickScan, setVi
           )}
           {showSchedule && (
             <p className="module-note">
-              Uses each income source&apos;s pay date, each bill&apos;s due day, scheduled transfer days, and a steady
-              daily draw for everyday spending. Add due days, transfer days, and pay dates on the Budget page to make
-              this complete.
+              Uses each income source&apos;s pay date, each bill&apos;s due day, scheduled transfer days
+              {cardPayment
+                ? cardMode
+                  ? `, and your credit-card autopay on the ${ordinal(cardPayment.dueDay)} (${usd(cardPayment.amount)}, from your last statement payment) — since everyday spending goes on the card, it leaves checking as that payment rather than a daily draw`
+                  : `, a steady daily draw for everyday spending, and your credit-card autopay on the ${ordinal(cardPayment.dueDay)} (${usd(cardPayment.amount)})`
+                : ', and a steady daily draw for everyday spending'}
+              . Add due days, transfer days, and pay dates on the Budget page to make this complete.
             </p>
           )}
         </section>

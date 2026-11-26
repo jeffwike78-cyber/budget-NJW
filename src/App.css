@@ -2566,3 +2566,19 @@ button, a, label, [role="button"], .sidebar-link, .mobile-tab-link, .quick-acces
   padding: 4px 0;
 }
 .reimb-idle { margin-top: 10px; }
+
+/* ---------- Credit-card balance trend (Overview payoff card) ---------- */
+.card-trend {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.card-trend-up { background: var(--bad-bg); }
+.card-trend-down { background: var(--good-bg); }
+.card-trend-head { font-weight: 700; font-size: 14px; }
+.card-trend-up .card-trend-head { color: var(--bad); }
+.card-trend-down .card-trend-head { color: var(--good); }
+.card-trend-sub { font-size: 12.5px; color: var(--text); opacity: 0.9; }

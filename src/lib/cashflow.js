@@ -170,6 +170,22 @@ export function transferEvents(categories, effectiveBudgets, fromStr, toStr) {
   return events;
 }
 
+// Credit-card payment outflows: the autopay that pulls the statement balance
+// out of checking on the card's due day, every month in range. This is the big
+// lumpy cash event a card household lives around — without it the forecast
+// treats card spending as if it leaves checking smoothly, which hides the drop
+// right after the payment posts.
+export function cardPaymentEvents({ dueDay, amount, name = 'Credit card payment' }, fromStr, toStr) {
+  const from = parse(fromStr);
+  const to = parse(toStr);
+  const amt = Number(amount || 0);
+  const day = Number(dueDay || 0);
+  if (!(amt > 0) || !(day >= 1 && day <= 31)) return [];
+  const events = [];
+  monthlyOnDay(day, from, to, (dateStr) => events.push({ date: dateStr, name, amount: -amt, kind: 'card' }));
+  return events;
+}
+
 function daysBetween(a, b) {
   return Math.max(0, Math.round((b - a) / 86400000));
 }
@@ -180,7 +196,7 @@ function daysBetween(a, b) {
 // month, not on one day). Reports the lowest point the balance reaches and the
 // recommended checking buffer — the standing cash to keep so the balance never
 // dips below zero as income catches up.
-export function projectCashflow({ startingBalance, sources, categories, effectiveBudgets, sinkingFunds, days = 45, fromStr = todayStr() }) {
+export function projectCashflow({ startingBalance, sources, categories, effectiveBudgets, sinkingFunds, cardPayment = null, cardMode = false, days = 45, fromStr = todayStr() }) {
   const from = parse(fromStr);
   const to = new Date(from);
   to.setDate(to.getDate() + days);
@@ -191,13 +207,20 @@ export function projectCashflow({ startingBalance, sources, categories, effectiv
     ...billEvents(categories, effectiveBudgets, fromStr, toStr),
     ...transferEvents(categories, effectiveBudgets, fromStr, toStr),
     ...sinkingEvents(sinkingFunds, fromStr, toStr),
+    ...(cardPayment ? cardPaymentEvents(cardPayment, fromStr, toStr) : []),
   ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
   // Everyday-spending drains steadily; spread each spending envelope's monthly
-  // budget over an average month.
-  const monthlySpend = (categories || [])
-    .filter((c) => c.kind === 'spending' && c.id !== 'needs-review')
-    .reduce((s, c) => s + Number(effectiveBudgets[c.id] || 0), 0);
+  // budget over an average month. BUT when everyday spending goes on the credit
+  // card (card pay mode), that money doesn't leave checking as you spend — it
+  // leaves as the card payment above. Draining it here too would double-count,
+  // so in card mode the everyday drain is zeroed and the lumpy card payment
+  // stands in for it.
+  const monthlySpend = cardMode
+    ? 0
+    : (categories || [])
+        .filter((c) => c.kind === 'spending' && c.id !== 'needs-review')
+        .reduce((s, c) => s + Number(effectiveBudgets[c.id] || 0), 0);
   const dailySpend = monthlySpend / 30.44;
 
   const start = Number(startingBalance || 0);
