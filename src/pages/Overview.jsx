@@ -7,7 +7,7 @@ import { monthlyIncomeTotal, computeCategoryBudgets, effectiveBudgetsForMonth, s
 import { computeNetWorth } from '../lib/netWorth';
 import { ageOfMoney, ageOfMoneyAdvice, ageOfMoneyStatus } from '../lib/ageOfMoney';
 import { projectCashflow, incomeEvents } from '../lib/cashflow';
-import { creditCardStatus, formatDueDate, recentCardPaymentAmount } from '../lib/creditCard';
+import { creditCardStatus, formatDueDate, recentCardPaymentAmount, cardBalanceTrend } from '../lib/creditCard';
 
 function shortDate(str) {
   return new Date(str + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -196,6 +196,9 @@ export default function Overview({ budgetState, transactions, onQuickScan, setVi
     ? { dueDay: Number(cc.dueDay), amount: cardPaymentAmount, name: `Card payment: ${card.accountName || 'Credit card'}` }
     : null;
 
+  // Is the card balance climbing or getting paid down? (last 90 days)
+  const cardTrend = cc?.accountId ? cardBalanceTrend(cc.accountId, transactions, { days: 90 }) : null;
+
   const cashflow = projectCashflow({
     startingBalance: checkingBalance,
     sources: budgetState.incomeSources,
@@ -370,6 +373,20 @@ export default function Overview({ budgetState, transactions, onQuickScan, setVi
               <span className="payoff-value">{usd(checkingBalance)}</span>
             </div>
           </div>
+          {cardTrend && cardTrend.direction !== 'flat' && (
+            <div className={`card-trend card-trend-${cardTrend.direction}`}>
+              <span className="card-trend-head">
+                {cardTrend.direction === 'up'
+                  ? `↑ Balance climbing — about +${usd(cardTrend.netPerMonth)}/mo`
+                  : `↓ Paying it down — about -${usd(Math.abs(cardTrend.netPerMonth))}/mo`}
+              </span>
+              <span className="card-trend-sub">
+                Last 3 months: charged {usd(cardTrend.charges)}, paid {usd(cardTrend.payments)} —
+                {cardTrend.net >= 0 ? ` balance up ${usd(cardTrend.net)}.` : ` balance down ${usd(-cardTrend.net)}.`}
+                {cardTrend.direction === 'up' && ' You’re charging more than you pay off, so the balance (and any interest) keeps growing.'}
+              </span>
+            </div>
+          )}
           <p className="module-note">
             {covered
               ? 'Your checking balance covers the card in full this month. Savings aren’t counted here — they’re shown for reference only.'

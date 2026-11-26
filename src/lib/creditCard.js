@@ -78,6 +78,38 @@ export function recentCardPaymentAmount(accountId, transactions = [], today = ne
   return best ? best.amount : null;
 }
 
+// Is the card balance trending up or down? On a credit card, charges raise the
+// balance (positive amounts) and payments/credits lower it (negative), so the
+// sum of every transaction on the card over a window IS the net balance change.
+// Reports charges, payments, the net change, and a per-month pace so the UI can
+// warn when the balance is climbing (charging more than you pay) rather than
+// being paid down. Returns null without an account or any activity.
+export function cardBalanceTrend(accountId, transactions = [], { days = 90 } = {}, today = new Date()) {
+  if (!accountId) return null;
+  const t0 = startOfDay(today);
+  const from = addDays(t0, -days);
+  let charges = 0;
+  let payments = 0;
+  let count = 0;
+  for (const t of transactions) {
+    if (t.accountId !== accountId) continue;
+    const d = startOfDay(new Date(`${t.date}T00:00:00`));
+    if (Number.isNaN(d.getTime()) || d < from || d > t0) continue;
+    const amt = Number(t.amount);
+    if (!amt) continue;
+    if (amt > 0) charges += amt;
+    else payments += -amt;
+    count += 1;
+  }
+  if (count === 0) return null;
+  const net = charges - payments; // >0 = balance grew, <0 = paid down
+  const months = days / 30.44;
+  const netPerMonth = net / months;
+  // A small monthly drift either way is "holding steady".
+  const direction = netPerMonth > 50 ? 'up' : netPerMonth < -50 ? 'down' : 'flat';
+  return { charges, payments, net, netPerMonth, months, direction };
+}
+
 // Everything the UI needs about the everyday credit card's cycle. Returns
 // { configured:false } until the user picks a card and days on the Accounts page.
 export function creditCardStatus(settings, accounts = [], transactions = [], today = new Date()) {
