@@ -37,7 +37,19 @@ function TxRow({ t, categories, incomeCategories = [], accounts = [], onRecatego
   // Spending envelopes a refund can be credited back to (everything budgetable
   // minus the Needs-review bucket).
   const spendingCats = categories.filter((c) => c.id !== 'needs-review');
-  const options = isIncome && incomeCategories.length > 0 ? incomeCategories : categories;
+  // A reimbursement/refund isn't income — it belongs back in its envelope — so
+  // drop any legacy "Reimbursement" label from the income choices and steer
+  // those deposits to the credit-back path instead.
+  const incomeChoices = incomeCategories.filter(
+    (c) => c.id !== 'inc-reimbursement' && !/reimburs/i.test(c.name || ''),
+  );
+  const options = isIncome && incomeChoices.length > 0 ? incomeChoices : categories;
+  // This deposit is a refund/reimbursement the user credited back to a spending
+  // envelope: it restores that envelope and is excluded from income. Surface it
+  // on the row so that's visible at a glance (not just inside the dropdown).
+  const refundToCat = isIncome && !t.excluded && t.categoryId
+    ? spendingCats.find((c) => c.id === t.categoryId)
+    : null;
   // The envelope may auto-tag its transactions for the tax report. The
   // effective tax bucket is the transaction's own tag, or the envelope default
   // when it has none ('none' means the user turned the default off here).
@@ -186,6 +198,14 @@ function TxRow({ t, categories, incomeCategories = [], accounts = [], onRecatego
             💳 Looks like a transfer — Ignore?
           </button>
         )}
+        {refundToCat && (
+          <span
+            className="pill tx-refund-pill"
+            title={`Credited back to ${refundToCat.name} — this restores that envelope and is NOT counted as income.`}
+          >
+            ↩ Refund → {refundToCat.name} · not income
+          </span>
+        )}
         {isBiz && <span className="pill tx-biz-pill">Business</span>}
         {effectiveTax && !isBiz && <span className="pill tx-tax-pill">{taxLabel(effectiveTax, taxLabels)}</span>}
         {t.note && <span className="tx-note">{t.note}</span>}
@@ -200,22 +220,22 @@ function TxRow({ t, categories, incomeCategories = [], accounts = [], onRecatego
         // Clothing instead of counting as generic income).
         <select value={t.categoryId || ''} onChange={(e) => changeCategory(e.target.value)}>
           <option value="">Uncategorized (income)</option>
-          {incomeCategories.length > 0 && (
-            <optgroup label="Income">
-              {incomeCategories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </optgroup>
-          )}
-          <optgroup label="Credit back to envelope">
+          <optgroup label="↩ Refund / reimbursement — credit back to its envelope">
             {spendingCats.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
             ))}
           </optgroup>
+          {incomeChoices.length > 0 && (
+            <optgroup label="New income">
+              {incomeChoices.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
       ) : (
         <select value={t.categoryId || ''} onChange={(e) => changeCategory(e.target.value)}>

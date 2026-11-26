@@ -149,9 +149,12 @@ export const DEFAULT_INCOME = {
 // Labels for money coming IN (deposits). Unlike envelopes, these don't affect
 // any budget — they're just how you tag a deposit (paycheck vs. a one-off extra)
 // for your own reporting. Rename/add/remove them in Settings.
+// Note: there is intentionally no "Reimbursement" label here. A refund or
+// reimbursement isn't new income — it reverses a specific purchase, so it
+// should be credited back to the envelope it came out of (the deposit's
+// "credit back to its envelope" path), not tagged as income.
 export const DEFAULT_INCOME_CATEGORIES = [
   { id: 'inc-paycheck', name: 'Paycheck' },
   { id: 'inc-misc', name: 'Miscellaneous Income' },
-  { id: 'inc-reimbursement', name: 'Reimbursement' },
   { id: 'inc-gift', name: 'Gift / Other' },
 ];
